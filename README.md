@@ -34,6 +34,8 @@ make build                     # pure Go, YARA disabled
 
 ## Install and run live (root)
 
+> **Status: MVP — not yet hardened for unattended root use.** The install and terminal run mode below have open high-severity findings (a user-writable build path is executed as root by `sudo make install`; a sensor started with `sudo` in a terminal can be stopped by the normal account). Read [docs/security/open-findings.md](docs/security/open-findings.md) before running live. The safe path (copy-only installer, LaunchDaemon) is the next milestone.
+
 ```bash
 sudo make install              # or: sudo make install YARA=1  (static YARA build)
 sudo /usr/local/sbin/zaafvesper run --capture /var/log/zaafvesper/session.rcap --json /var/log/zaafvesper/alerts.jsonl
