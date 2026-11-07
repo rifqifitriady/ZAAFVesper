@@ -1,0 +1,34 @@
+name: System or audit logs cleared
+id: fe858ade-745c-4eef-b646-95dea43d277f
+version: 1.0.0
+description: |
+  Apple's system logs (/var/log/system.log, install.log, asl, launchd, ...), the BSM audit
+  trail (/var/audit) or the unified log store were deleted, moved out (e.g.
+  to the Trash), truncated on open, or wiped with `log erase`, `truncate`, `srm` or
+  `shred`. Log rotation by Apple daemons (newsyslog, aslmanager, syslogd, logd, auditd,
+  powerd, crash reporting) is excluded by platform identity. Third-party logs in /var/log
+  are out of scope rather than allow-listed, so no Developer ID gets a pass.
+  The truncate-on-open branch uses evt.arg[open_flag_names] (symbolic fflag bits).
+labels:
+  tactic.id: TA0112
+  tactic.name: Defense Impairment
+  technique.id: T1685.006
+  technique.name: Clear Linux or Mac System Logs
+references:
+  - https://attack.mitre.org/techniques/T1685/006/
+condition: >
+  (
+    (delete_file and file.path imatches system_log_globs)
+    or (rename_file and file.path imatches system_log_globs and not (file.dest imatches system_log_globs))
+    or (open_file and file.path imatches system_log_globs and evt.arg[open_flag_names] icontains 'O_TRUNC')
+    or (spawn_process and ps.exe = '/usr/bin/log' and ps.args = 'erase')
+    or (spawn_process and ps.name in ('truncate', 'gtruncate', 'srm', 'shred', 'gshred') and ps.args imatches system_log_globs)
+  )
+  and not (apple_trusted_process)
+  and not (ps.is_platform = true and ps.signing_id in ('com.apple.powerd', 'com.apple.osanalytics.osanalyticshelper', 'com.apple.ReportCrash', 'com.apple.diagnosticd', 'com.apple.wifivelocityd'))
+output: "%ps.exe (pid %ps.pid, uid %ps.euid, parent %ps.parent.cmdline) cleared logs: %file.path %ps.cmdline"
+severity: high
+action: []
+tests:
+  atomic: [989cc1b1-3642-4260-a809-54f9dd559683, 653d39cd-bae7-499a-898c-9fb96b8b5cd1, 6290f8a8-8ee9-4661-b9cf-390031bf6973, c23bdb88-928d-493e-b46d-df2906a50941, bc8eeb4a-cc3e-45ec-aa6e-41e973da2558, 0208ea60-98f1-4e8c-8052-930dce8f742c, 848e43b3-4c0a-4e4c-b4c9-d1e8cea9651c, 03013b4b-01db-437d-909b-1fdaa5010ee8, 86f0e4d5-3ca7-45fb-829d-4eda32b232bb, b0768a5e-0f32-4e75-ae5b-d036edcf96b6, 810a465f-cd4f-47bc-b43e-d2de3b033ecc, e62f8694-cbc7-468f-862c-b10cd07e1757]
+min-engine-version: 0.1.0

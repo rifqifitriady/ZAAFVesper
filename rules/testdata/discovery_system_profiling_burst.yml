@@ -1,0 +1,26 @@
+match:
+  - desc: 'system_profiler then ls -al /Applications from the same sh (ART T1082 #2)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 5101, ppid: 5100, exe: /usr/sbin/system_profiler, name: system_profiler, cmdline: "system_profiler", args: [system_profiler], uid: 501, euid: 501, signing_id: com.apple.system_profiler, is_platform: true, is_signed: true, parent: {pid: 5100, ppid: 5099, exe: /bin/sh, name: sh, cmdline: "sh -c system_profiler; ls -al /Applications", signing_id: com.apple.sh, is_platform: true, is_signed: true}}
+      - name: CreateProcess
+        proc: {pid: 5102, ppid: 5100, exe: /bin/ls, name: ls, cmdline: "ls -al /Applications", args: [ls, -al, /Applications], uid: 501, euid: 501, signing_id: com.apple.ls, is_platform: true, is_signed: true, parent: {pid: 5100, ppid: 5099, exe: /bin/sh, name: sh, signing_id: com.apple.sh, is_platform: true, is_signed: true}}
+  - desc: stealer-style SPHardwareDataType then sw_vers from an ad-hoc parent
+    events:
+      - name: CreateProcess
+        proc: {pid: 5103, ppid: 5105, exe: /usr/sbin/system_profiler, name: system_profiler, cmdline: "system_profiler SPSoftwareDataType SPHardwareDataType", args: [system_profiler, SPSoftwareDataType, SPHardwareDataType], uid: 501, euid: 501, signing_id: com.apple.system_profiler, is_platform: true, is_signed: true, parent: {pid: 5105, ppid: 1, exe: /Volumes/App/App.app/Contents/MacOS/App, name: App, signing_id: App-55554944, is_platform: false, is_signed: false}}
+      - name: CreateProcess
+        proc: {pid: 5104, ppid: 5105, exe: /usr/bin/sw_vers, name: sw_vers, cmdline: "sw_vers -productVersion", args: [sw_vers, -productVersion], uid: 501, euid: 501, signing_id: com.apple.sw_vers, is_platform: true, is_signed: true, parent: {pid: 5105, ppid: 1, exe: /Volumes/App/App.app/Contents/MacOS/App, name: App, signing_id: App-55554944, is_platform: false, is_signed: false}}
+nomatch:
+  - desc: benign lookalike - Developer ID app (Zoom) runs system_profiler then sysctl for diagnostics
+    events:
+      - name: CreateProcess
+        proc: {pid: 5111, ppid: 5110, exe: /usr/sbin/system_profiler, name: system_profiler, cmdline: "system_profiler SPDisplaysDataType", args: [system_profiler, SPDisplaysDataType], uid: 501, euid: 501, signing_id: com.apple.system_profiler, is_platform: true, is_signed: true, parent: {pid: 5110, ppid: 1, exe: /Applications/zoom.us.app/Contents/MacOS/zoom.us, name: zoom.us, signing_id: us.zoom.xos, team_id: BJ4HAAB9B3, is_platform: false, is_signed: true}}
+      - name: CreateProcess
+        proc: {pid: 5112, ppid: 5110, exe: /usr/sbin/sysctl, name: sysctl, cmdline: "sysctl -n hw.model", args: [sysctl, -n, hw.model], uid: 501, euid: 501, signing_id: com.apple.sysctl, is_platform: true, is_signed: true, parent: {pid: 5110, ppid: 1, exe: /Applications/zoom.us.app/Contents/MacOS/zoom.us, name: zoom.us, signing_id: us.zoom.xos, team_id: BJ4HAAB9B3, is_platform: false, is_signed: true}}
+  - desc: benign lookalike - shell runs system_profiler, and sw_vers comes from a different parent
+    events:
+      - name: CreateProcess
+        proc: {pid: 5113, ppid: 5120, exe: /usr/sbin/system_profiler, name: system_profiler, cmdline: "system_profiler SPPowerDataType", args: [system_profiler, SPPowerDataType], uid: 501, euid: 501, signing_id: com.apple.system_profiler, is_platform: true, is_signed: true, parent: {pid: 5120, ppid: 5119, exe: /bin/zsh, name: zsh, signing_id: com.apple.zsh, is_platform: true, is_signed: true}}
+      - name: CreateProcess
+        proc: {pid: 5114, ppid: 5130, exe: /usr/bin/sw_vers, name: sw_vers, cmdline: "sw_vers", args: [sw_vers], uid: 501, euid: 501, signing_id: com.apple.sw_vers, is_platform: true, is_signed: true, parent: {pid: 5130, ppid: 5129, exe: /bin/bash, name: bash, signing_id: com.apple.bash, is_platform: true, is_signed: true}}

@@ -1,0 +1,20 @@
+match:
+  - desc: socketfilterfw --setglobalstate off
+    events:
+      - name: CreateProcess
+        proc: {pid: 3601, ppid: 3600, exe: /usr/libexec/ApplicationFirewall/socketfilterfw, name: socketfilterfw, cmdline: "socketfilterfw --setglobalstate off", args: [socketfilterfw, --setglobalstate, "off"], uid: 0, euid: 0, signing_id: com.apple.socketfilterfw, is_platform: true, is_signed: true}
+  - desc: pfctl -d
+    events:
+      - name: CreateProcess
+        proc: {pid: 3602, ppid: 3600, exe: /sbin/pfctl, name: pfctl, cmdline: "pfctl -d", args: [pfctl, -d], uid: 0, euid: 0, signing_id: com.apple.pfctl, is_platform: true, is_signed: true}
+nomatch:
+  - desc: benign lookalike - socketfilterfw turns the firewall on / reads state
+    events:
+      - name: CreateProcess
+        proc: {pid: 3611, ppid: 3610, exe: /usr/libexec/ApplicationFirewall/socketfilterfw, name: socketfilterfw, cmdline: "socketfilterfw --setglobalstate on", args: [socketfilterfw, --setglobalstate, "on"], uid: 0, euid: 0, signing_id: com.apple.socketfilterfw, is_platform: true, is_signed: true}
+      - name: CreateProcess
+        proc: {pid: 3612, ppid: 3610, exe: /usr/libexec/ApplicationFirewall/socketfilterfw, name: socketfilterfw, cmdline: "socketfilterfw --getglobalstate", args: [socketfilterfw, --getglobalstate], uid: 501, euid: 501, signing_id: com.apple.socketfilterfw, is_platform: true, is_signed: true}
+  - desc: benign lookalike - VPN client releases its pf token (pfctl -X), not -d
+    events:
+      - name: CreateProcess
+        proc: {pid: 3613, ppid: 3610, exe: /sbin/pfctl, name: pfctl, cmdline: "pfctl -X 1234567890", args: [pfctl, -X, "1234567890"], uid: 0, euid: 0, signing_id: com.apple.pfctl, is_platform: true, is_signed: true}

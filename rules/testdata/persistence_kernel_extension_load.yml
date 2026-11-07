@@ -1,0 +1,26 @@
+match:
+  - desc: 'kextload / kmutil load SoftRAID.kext (ART T1547.006 #2)'
+    events:
+      - name: LoadKext
+        proc: {pid: 120, ppid: 1, exe: /usr/libexec/kernelmanagerd, name: kernelmanagerd, uid: 0, euid: 0, signing_id: com.apple.kernelmanagerd, is_platform: true, is_signed: true}
+        args: {kext_id: com.softraid.driver.SoftRAID}
+  - desc: kext named com.apple.* loaded by a non-platform caller is not trusted
+    events:
+      - name: LoadKext
+        proc: {pid: 7701, ppid: 7700, exe: /private/tmp/loader, name: loader, uid: 0, euid: 0, is_platform: false, is_signed: false}
+        args: {kext_id: com.apple.driver.AppleHIDKeyboardEx}
+  - desc: LoadKext without an identifier alerts (cannot be shown to be Apple's)
+    events:
+      - name: LoadKext
+        proc: {pid: 120, ppid: 1, exe: /usr/libexec/kernelmanagerd, name: kernelmanagerd, uid: 0, euid: 0, signing_id: com.apple.kernelmanagerd, is_platform: true, is_signed: true}
+nomatch:
+  - desc: benign lookalike - Apple kext loaded on demand
+    events:
+      - name: LoadKext
+        proc: {pid: 120, ppid: 1, exe: /usr/libexec/kernelmanagerd, name: kernelmanagerd, uid: 0, euid: 0, signing_id: com.apple.kernelmanagerd, is_platform: true, is_signed: true}
+        args: {kext_id: com.apple.filesystems.smbfs}
+  - desc: benign lookalike - Apple USB driver kext loaded by kernelmanagerd at device attach
+    events:
+      - name: LoadKext
+        proc: {pid: 120, ppid: 1, exe: /usr/libexec/kernelmanagerd, name: kernelmanagerd, uid: 0, euid: 0, signing_id: com.apple.kernelmanagerd, is_platform: true, is_signed: true}
+        args: {kext_id: com.apple.driver.usb.cdc}

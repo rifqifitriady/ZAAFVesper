@@ -1,0 +1,31 @@
+name: Cron or periodic job installed
+id: 29d10c7c-cb24-459d-8008-43e0311d40c8
+version: 1.0.0
+description: |
+  A crontab was replaced with `crontab <file>` / `crontab -`, or a file was written to a
+  cron or periodic location (/private/var/at/tabs, /etc/crontab, /etc/periodic/*,
+  /etc/cron.*). Listing (`crontab -l`) and removal (`crontab -r`) are ignored; writes by
+  /usr/bin/crontab itself are covered by the process branch. PackageKit is not excluded
+  (it installs any .pkg).
+  Known benign: administrators installing their own cron jobs; OS updates that rewrite
+  /etc/periodic scripts.
+labels:
+  tactic.id: TA0003
+  tactic.name: Persistence
+  technique.id: T1053.003
+  technique.name: Cron
+references:
+  - https://attack.mitre.org/techniques/T1053/003/
+condition: >
+  (spawn_process and ps.exe = '/usr/bin/crontab' and not (ps.args in ('-l', '-r')))
+  or (
+    file_written and file.path imatches cron_globs
+    and not (ps.exe = '/usr/bin/crontab')
+    and not (apple_trusted_process)
+  )
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) installed a scheduled job: %ps.cmdline %file.path"
+severity: medium
+action: []
+tests:
+  atomic: [435057fb-74b1-410e-9403-d81baf194f75, b7d42afa-9086-4c8a-b7b0-8ea3faa6ebb0]
+min-engine-version: 0.1.0

@@ -1,0 +1,30 @@
+name: Security tool or sensor stopped
+id: 78de8058-e4d6-435d-9bd5-63610f16a812
+version: 1.0.0
+description: |
+  launchctl unload/bootout/remove/disable/kill targeting a security product's launchd job,
+  pkill/killall of a security agent or of ZAAFVesper's own eslogger, or Microsoft Defender's
+  real-time protection switched off with mdatp. PackageKit is not excluded:
+  a malicious .pkg postinstall can unload an EDR just as well as a vendor upgrade.
+  Known benign: vendor upgrades/uninstallers run from a .pkg, and administrators
+  uninstalling a product by hand.
+labels:
+  tactic.id: TA0112
+  tactic.name: Defense Impairment
+  technique.id: T1685
+  technique.name: Disable or Modify Tools
+references:
+  - https://attack.mitre.org/techniques/T1685/
+condition: >
+  spawn_process
+  and (
+    (ps.exe = '/bin/launchctl' and ps.args in ('unload', 'bootout', 'remove', 'disable', 'kill', 'stop') and ps.cmdline icontains security_tool_identifiers)
+    or (ps.exe in ('/usr/bin/pkill', '/usr/bin/killall') and (ps.cmdline icontains security_tool_process_names or ps.args in sensor_self_names))
+    or (ps.name = 'mdatp' and ps.cmdline icontains 'real-time-protection' and ps.args iin ('disabled', 'false'))
+  )
+output: "%ps.cmdline (pid %ps.pid, uid %ps.euid, parent %ps.parent.exe) tampered with a security tool"
+severity: high
+action: []
+tests:
+  atomic: [8fba7766-2d11-4b4a-979a-1e3d9cc9a88c, 62155dd8-bb3d-4f32-b31c-6532ff3ac6a3, 07f43b33-1e15-4e99-be70-bc094157c849, b3e7510c-2d4c-4249-a33f-591a2bc83eef, 40074085-dbc8-492b-90a3-11bcfc52fda8]
+min-engine-version: 0.1.0

@@ -1,0 +1,26 @@
+[
+  {
+    "seq": 1027,
+    "time": "2026-11-07T08:00:18.001027123Z",
+    "name": "LoadKext",
+    "source": "eslogger",
+    "proc": {
+      "pid": 1,
+      "ppid": 0,
+      "pidversion": 1,
+      "uuid": 4294967297,
+      "exe": "/usr/libexec/kernelmanagerd",
+      "name": "kernelmanagerd",
+      "uid": 0,
+      "euid": 0,
+      "signing_id": "com.apple.kernelmanagerd",
+      "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
+      "is_platform": true,
+      "is_signed": true,
+      "start_time": "2026-11-07T07:59:59.5Z"
+    },
+    "args": {
+      "kext_id": "com.example.driver.Rootkit"
+    }
+  }
+]

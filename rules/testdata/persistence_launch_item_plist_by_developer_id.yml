@@ -1,0 +1,27 @@
+match:
+  - desc: Google Keystone (team EQHXZ8M8AV) installs its updater agent - kept at low severity
+    events:
+      - name: CreateFile
+        proc: {pid: 4100, ppid: 1, exe: /Users/rifqi/Library/Google/GoogleSoftwareUpdate/GoogleSoftwareUpdate.bundle/Contents/Helpers/GoogleSoftwareUpdateAgent.app/Contents/MacOS/GoogleSoftwareUpdateAgent, name: GoogleSoftwareUpdateAgent, uid: 501, euid: 501, signing_id: com.google.Keystone.Agent, team_id: EQHXZ8M8AV, is_platform: false, is_signed: true}
+        file: {path: /Users/rifqi/Library/LaunchAgents/com.google.keystone.agent.plist}
+  - desc: notarized malware with its own Developer ID installs a daemon
+    events:
+      - name: CreateFile
+        proc: {pid: 4120, ppid: 1, exe: /Applications/PDF Converter.app/Contents/MacOS/PDF Converter, name: PDF Converter, uid: 0, euid: 0, signing_id: com.pdfconv.helper, team_id: QX7Z2K9P4L, is_platform: false, is_signed: true}
+        file: {path: /Library/LaunchDaemons/com.pdfconv.helper.plist}
+nomatch:
+  - desc: benign lookalike - launchd-side daemon (Apple platform) rewrites an agent plist
+    events:
+      - name: WriteFile
+        proc: {pid: 380, ppid: 1, exe: /System/Library/PrivateFrameworks/BackgroundTaskManagement.framework/Resources/backgroundtaskmanagementd, name: backgroundtaskmanagementd, signing_id: com.apple.backgroundtaskmanagementd, is_platform: true, is_signed: true}
+        file: {path: /Library/LaunchAgents/com.example.helper.plist}
+  - desc: Developer ID signed Python (team present) is an interpreter and belongs to the high rule
+    events:
+      - name: CreateFile
+        proc: {pid: 4130, ppid: 4129, exe: /Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12, name: python3.12, uid: 501, euid: 501, signing_id: org.python.python, team_id: DJ3H93M7VJ, is_platform: false, is_signed: true}
+        file: {path: /Users/rifqi/Library/LaunchAgents/com.updater.plist}
+  - desc: unsigned dropper writes an agent (handled by the high-severity rule)
+    events:
+      - name: CreateFile
+        proc: {pid: 3300, ppid: 1, exe: /private/tmp/x, name: x, uid: 501, euid: 501, is_platform: false, is_signed: false}
+        file: {path: /Users/rifqi/Library/LaunchAgents/com.x.plist}

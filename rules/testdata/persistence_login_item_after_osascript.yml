@@ -1,0 +1,30 @@
+match:
+  - desc: 'osascript runs add_login_item.osa, BTM registers the item (ART T1547.015 #2)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 3601, ppid: 3600, exe: /usr/bin/osascript, name: osascript, cmdline: "osascript /tmp/atomics/T1547.015/src/add_login_item.osa", args: [osascript, /tmp/atomics/T1547.015/src/add_login_item.osa], uid: 501, euid: 501, signing_id: com.apple.osascript, is_platform: true, is_signed: true, parent: {pid: 3600, ppid: 3599, exe: /bin/bash, name: bash, signing_id: com.apple.bash, is_platform: true, is_signed: true}}
+      - name: AddLaunchItem
+        proc: {pid: 380, ppid: 1, exe: /System/Library/PrivateFrameworks/BackgroundTaskManagement.framework/Resources/backgroundtaskmanagementd, name: backgroundtaskmanagementd, signing_id: com.apple.backgroundtaskmanagementd, is_platform: true, is_signed: true}
+        args: {launch_item_type: user_item, launch_item_path: "file:///Applications/Safari.app/"}
+nomatch:
+  - desc: benign lookalike - user adds a login item in System Settings with no osascript before it
+    events:
+      - name: AddLaunchItem
+        proc: {pid: 380, ppid: 1, exe: /System/Library/PrivateFrameworks/BackgroundTaskManagement.framework/Resources/backgroundtaskmanagementd, name: backgroundtaskmanagementd, signing_id: com.apple.backgroundtaskmanagementd, is_platform: true, is_signed: true}
+        args: {launch_item_type: user_item, launch_item_path: "file:///Applications/Rectangle.app/"}
+  - desc: benign lookalike - osascript runs, then an app registers its own daemon (type daemon)
+    events:
+      - name: CreateProcess
+        proc: {pid: 3611, ppid: 3610, exe: /usr/bin/osascript, name: osascript, cmdline: "osascript -e tell application \"Music\" to playpause", args: [osascript, -e, "tell application \"Music\" to playpause"], uid: 501, euid: 501, signing_id: com.apple.osascript, is_platform: true, is_signed: true}
+      - name: AddLaunchItem
+        proc: {pid: 380, ppid: 1, exe: /System/Library/PrivateFrameworks/BackgroundTaskManagement.framework/Resources/backgroundtaskmanagementd, name: backgroundtaskmanagementd, signing_id: com.apple.backgroundtaskmanagementd, is_platform: true, is_signed: true}
+        args: {launch_item_type: daemon, launch_item_path: "file:///Library/LaunchDaemons/com.vendor.helper.plist"}
+  - desc: osascript followed by a login item more than 30 s later
+    events:
+      - name: CreateProcess
+        time: 2026-01-01T00:00:00Z
+        proc: {pid: 3621, ppid: 3620, exe: /usr/bin/osascript, name: osascript, cmdline: "osascript /Users/rifqi/scripts/tidy.scpt", args: [osascript, /Users/rifqi/scripts/tidy.scpt], uid: 501, euid: 501, signing_id: com.apple.osascript, is_platform: true, is_signed: true}
+      - name: AddLaunchItem
+        time: 2026-01-01T00:02:00Z
+        proc: {pid: 380, ppid: 1, exe: /System/Library/PrivateFrameworks/BackgroundTaskManagement.framework/Resources/backgroundtaskmanagementd, name: backgroundtaskmanagementd, signing_id: com.apple.backgroundtaskmanagementd, is_platform: true, is_signed: true}
+        args: {launch_item_type: user_item, launch_item_path: "file:///Applications/Rectangle.app/"}

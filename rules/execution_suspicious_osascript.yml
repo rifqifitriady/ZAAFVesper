@@ -1,0 +1,31 @@
+name: Suspicious AppleScript or JXA execution
+id: c9f839d0-4f45-4527-a46c-8147a89232bb
+version: 1.0.0
+description: |
+  osascript ran either (a) an inline `do shell script` that decodes, downloads or
+  evaluates code (base64, curl, python, eval, /dev/tcp, chmod +x, xattr), or (b) a JXA /
+  ObjC-bridge script launched by a parent without developer identity (unsigned, ad-hoc or self-signed), a parent in a user-writable
+  location, or a script interpreter. Legitimate automation (Alfred, Raycast, Keyboard
+  Maestro, Shortcuts) runs JXA from Developer ID or Apple-signed parents.
+labels:
+  tactic.id: TA0002
+  tactic.name: Execution
+  technique.id: T1059.002
+  technique.name: AppleScript
+references:
+  - https://attack.mitre.org/techniques/T1059/002/
+condition: >
+  spawn_osascript
+  and (
+    (ps.cmdline icontains 'do shell script' and ps.cmdline icontains ('base64', 'b64decode', 'curl ', 'python', 'eval ', '/dev/tcp', 'chmod +x', 'xattr -'))
+    or (
+      (ps.args iin ('JavaScript', '-lJavaScript') or ps.cmdline icontains 'ObjC.import')
+      and (parent_no_developer_identity or parent_from_user_writable or ps.parent.name imatches script_interpreter_name_globs)
+    )
+  )
+output: "osascript (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline"
+severity: medium
+action: []
+tests:
+  atomic: [3600d97d-81b9-4171-ab96-e4386506e2c2]
+min-engine-version: 0.1.0

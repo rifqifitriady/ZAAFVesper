@@ -1,0 +1,22 @@
+match:
+  - desc: 'sudo sh -c "echo Defaults !tty_tickets >> /etc/sudoers" (ART T1548.003 #5)'
+    events:
+      - name: WriteFile
+        proc: {pid: 3101, ppid: 3100, exe: /bin/sh, name: sh, cmdline: "sh -c echo Defaults !tty_tickets >> /etc/sudoers", args: [sh, -c, "echo Defaults !tty_tickets >> /etc/sudoers"], uid: 0, euid: 0, signing_id: com.apple.sh, is_platform: true, is_signed: true}
+        file: {path: /private/etc/sudoers}
+  - desc: 'sed -i replaces /etc/sudoers via rename (ART T1548.003 #3)'
+    events:
+      - name: RenameFile
+        proc: {pid: 3102, ppid: 3100, exe: /usr/bin/sed, name: sed, cmdline: "sed -i s/env_reset.*$/env_reset,timestamp_timeout=-1/ /etc/sudoers", args: [sed, -i, "s/env_reset.*$/env_reset,timestamp_timeout=-1/", /etc/sudoers], uid: 0, euid: 0, signing_id: com.apple.sed, is_platform: true, is_signed: true}
+        file: {path: /private/etc/sudoers.sedtmp, dest: /private/etc/sudoers}
+nomatch:
+  - desc: benign lookalike - visudo saves its edit by renaming over /etc/sudoers
+    events:
+      - name: RenameFile
+        proc: {pid: 3111, ppid: 3110, exe: /usr/sbin/visudo, name: visudo, cmdline: "visudo", args: [visudo], uid: 0, euid: 0, signing_id: com.apple.visudo, is_platform: true, is_signed: true}
+        file: {path: /private/etc/sudoers.tmp, dest: /private/etc/sudoers}
+  - desc: reading sudoers (sudo cat /etc/sudoers) is not a write
+    events:
+      - name: OpenFile
+        proc: {pid: 3112, ppid: 3110, exe: /bin/cat, name: cat, uid: 0, euid: 0, signing_id: com.apple.cat, is_platform: true, is_signed: true}
+        file: {path: /private/etc/sudoers}

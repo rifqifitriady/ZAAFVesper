@@ -1,0 +1,44 @@
+[
+  {
+    "seq": 1019,
+    "time": "2026-11-07T08:00:11.001019123Z",
+    "name": "SetMode",
+    "source": "eslogger",
+    "proc": {
+      "pid": 5100,
+      "ppid": 4100,
+      "pidversion": 5101,
+      "uuid": 21904333214701,
+      "exe": "/bin/chmod",
+      "name": "chmod",
+      "uid": 501,
+      "euid": 501,
+      "signing_id": "com.apple.chmod",
+      "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
+      "is_platform": true,
+      "is_signed": true,
+      "start_time": "2026-11-07T07:59:59.5Z",
+      "parent": {
+        "pid": 4100,
+        "ppid": 0,
+        "pidversion": 4100,
+        "uuid": 17609365917700,
+        "exe": "",
+        "name": "",
+        "uid": 0,
+        "euid": 0,
+        "is_platform": false,
+        "is_signed": false,
+        "start_time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "file": {
+      "path": "/private/tmp/payload",
+      "mode": 2541,
+      "size": 88
+    },
+    "args": {
+      "mode": "4755"
+    }
+  }
+]

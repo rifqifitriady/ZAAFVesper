@@ -1,0 +1,26 @@
+name: YARA signature match
+id: 4dcf71fe-f872-4847-b91a-639da0d9c389
+version: 1.0.0
+description: |
+  ZAAFVesper's YARA scanner matched a rule from rules/yara/ against an executed binary or a
+  file written to a watched folder (/tmp, Downloads, /Users/Shared). The YARA rule's own
+  meta (description, attack) says what it found. Rules tagged `hunting` are low-confidence
+  research signatures and are excluded here; write a dedicated rule if you want them to
+  alert.
+labels:
+  tactic.id: TA0002
+  tactic.name: Execution
+  technique.id: T1204.002
+  technique.name: Malicious File
+references:
+  - https://attack.mitre.org/techniques/T1204/002/
+  - https://yara.readthedocs.io/
+condition: >
+  yara_match
+  and not (yara.tags = 'hunting')
+output: "YARA %yara.rule [%yara.meta[attack]] matched %yara.target (process %ps.exe pid %ps.pid): %yara.meta[description]"
+severity: high
+action: []
+tests:
+  atomic: []
+min-engine-version: 0.1.0

@@ -1,0 +1,30 @@
+name: Gatekeeper or quarantine disabled system-wide
+id: 5d413305-1332-4505-8ca5-bd67bae2f219
+version: 1.0.0
+description: |
+  spctl was asked to disable assessments globally (--master-disable, --global-disable,
+  --disable), or `defaults` turned off file quarantine (LSQuarantine) or Gatekeeper
+  auto-rearm. Either removes the main macOS barrier against unsigned downloads for every
+  later payload. On recent macOS the change still needs confirmation in System Settings,
+  but the attempt itself is the signal.
+labels:
+  tactic.id: TA0112
+  tactic.name: Defense Impairment
+  technique.id: T1685
+  technique.name: Disable or Modify Tools
+references:
+  - https://attack.mitre.org/techniques/T1685/
+  - https://attack.mitre.org/techniques/T1553/001/
+condition: >
+  spawn_process
+  and (
+    (ps.exe = '/usr/sbin/spctl' and ps.args in ('--master-disable', '--global-disable', '--disable'))
+    or (ps.exe = '/usr/bin/defaults' and ps.args = 'write' and ps.cmdline icontains 'LSQuarantine' and ps.args iin ('NO', 'false', '0'))
+    or (ps.exe = '/usr/bin/defaults' and ps.args = 'write' and ps.cmdline icontains 'GKAutoRearm' and ps.args iin ('NO', 'false', '0'))
+  )
+output: "%ps.cmdline (pid %ps.pid, uid %ps.euid, parent %ps.parent.exe) disabled Gatekeeper/quarantine"
+severity: high
+action: []
+tests:
+  atomic: [2a821573-fb3f-4e71-92c3-daac7432f053]
+min-engine-version: 0.1.0

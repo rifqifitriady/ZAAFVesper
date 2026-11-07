@@ -1,0 +1,27 @@
+match:
+  - desc: 'sudo touch creates /Library/StartupItems/EvilStartup.plist (ART T1037.005 #1)'
+    events:
+      - name: CreateFile
+        proc: {pid: 2701, ppid: 2700, exe: /usr/bin/touch, name: touch, cmdline: "touch /Library/StartupItems/EvilStartup.plist", args: [touch, /Library/StartupItems/EvilStartup.plist], uid: 0, euid: 0, signing_id: com.apple.touch, is_platform: true, is_signed: true}
+        file: {path: /Library/StartupItems/EvilStartup.plist}
+  - desc: 'sudo cp drops a start script (ART T1037.005 #2)'
+    events:
+      - name: CreateFile
+        proc: {pid: 2711, ppid: 2710, exe: /bin/cp, name: cp, cmdline: "cp T1037.005_daemon.sh /Library/StartupItems/atomic.sh", args: [cp, T1037.005_daemon.sh, /Library/StartupItems/atomic.sh], uid: 0, euid: 0, signing_id: com.apple.cp, is_platform: true, is_signed: true}
+        file: {path: /Library/StartupItems/atomic.sh}
+nomatch:
+  - desc: benign lookalike - macOS update (PackageKit) refreshes a /System StartupItems path
+    events:
+      - name: CreateFile
+        proc: {pid: 900, ppid: 1, exe: /System/Library/PrivateFrameworks/PackageKit.framework/Versions/A/Resources/system_installd, name: system_installd, uid: 0, euid: 0, signing_id: com.apple.system_installd, is_platform: true, is_signed: true}
+        file: {path: /System/Library/StartupItems/README}
+  - desc: benign lookalike - Finder browsing the folder leaves .DS_Store
+    events:
+      - name: CreateFile
+        proc: {pid: 610, ppid: 1, exe: /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder, name: Finder, signing_id: com.apple.finder, is_platform: true, is_signed: true}
+        file: {path: /Library/StartupItems/.DS_Store}
+  - desc: write to an unrelated Library folder
+    events:
+      - name: CreateFile
+        proc: {pid: 2701, ppid: 2700, exe: /usr/bin/touch, name: touch, uid: 0, euid: 0, signing_id: com.apple.touch, is_platform: true, is_signed: true}
+        file: {path: /Library/Fonts/Example.ttf}

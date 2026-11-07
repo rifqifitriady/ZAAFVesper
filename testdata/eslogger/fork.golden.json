@@ -1,0 +1,40 @@
+[
+  {
+    "seq": 1005,
+    "time": "2026-11-07T08:00:03.001005123Z",
+    "name": "Fork",
+    "source": "eslogger",
+    "proc": {
+      "pid": 4401,
+      "ppid": 4100,
+      "pidversion": 4401,
+      "uuid": 18902151074097,
+      "exe": "/bin/zsh",
+      "name": "zsh",
+      "uid": 501,
+      "euid": 501,
+      "signing_id": "com.apple.zsh",
+      "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
+      "is_platform": true,
+      "is_signed": true,
+      "tty": "/dev/ttys003",
+      "start_time": "2026-11-07T07:59:59.5Z",
+      "parent": {
+        "pid": 4100,
+        "ppid": 0,
+        "pidversion": 4100,
+        "uuid": 17609365917700,
+        "exe": "",
+        "name": "",
+        "uid": 0,
+        "euid": 0,
+        "is_platform": false,
+        "is_signed": false,
+        "start_time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "args": {
+      "parent_pid": "4100"
+    }
+  }
+]

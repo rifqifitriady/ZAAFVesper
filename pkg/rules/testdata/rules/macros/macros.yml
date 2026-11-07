@@ -1,0 +1,11 @@
+# Test macros for pkg/rules (the real ones live in rules/macros/).
+- macro: spawn_process
+  expr: evt.name = 'CreateProcess'
+- macro: create_file
+  expr: evt.name = 'CreateFile'
+- macro: set_xattr
+  expr: evt.name = 'SetXattr'
+- list: shells
+  items: ['/bin/sh', '/bin/bash', '/bin/zsh', '/bin/dash', '/bin/ksh', '/bin/tcsh', '/bin/csh']
+- list: launchd_writers
+  items: ['com.apple.xpc.launchd', 'com.apple.backgroundtaskmanagementd']

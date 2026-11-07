@@ -1,0 +1,46 @@
+match:
+  - desc: 'sudo rm -rf /var/log/system.log (ART T1685.006 #1)'
+    events:
+      - name: DeleteFile
+        proc: {pid: 3701, ppid: 3700, exe: /bin/rm, name: rm, cmdline: "rm -rf /var/log/system.log", args: [rm, -rf, /var/log/system.log], uid: 0, euid: 0, signing_id: com.apple.rm, is_platform: true, is_signed: true}
+        file: {path: /private/var/log/system.log}
+  - desc: 'sudo log erase --all (ART T1685.006 #3)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 3702, ppid: 3700, exe: /usr/bin/log, name: log, cmdline: "log erase --all", args: [log, erase, --all], uid: 0, euid: 0, signing_id: com.apple.log, is_platform: true, is_signed: true}
+  - desc: 'sudo unlink /var/log/system.log (ART T1685.006 #12)'
+    events:
+      - name: DeleteFile
+        proc: {pid: 3703, ppid: 3700, exe: /usr/bin/unlink, name: unlink, cmdline: "unlink /var/log/system.log", args: [unlink, /var/log/system.log], uid: 0, euid: 0, signing_id: com.apple.unlink, is_platform: true, is_signed: true}
+        file: {path: /private/var/log/system.log}
+  - desc: 'sudo cat /dev/null > /var/log/system.log - shell opens the log with O_TRUNC (ART T1685.006 #6)'
+    events:
+      - name: OpenFile
+        proc: {pid: 3704, ppid: 3700, exe: /bin/sh, name: sh, uid: 0, euid: 0, signing_id: com.apple.sh, is_platform: true, is_signed: true}
+        file: {path: /private/var/log/system.log}
+        args: {open_flags: "1538", open_flag_names: "FWRITE|O_CREAT|O_TRUNC"}
+  - desc: 'Finder moves system.log to the Trash (ART T1685.006 #17)'
+    events:
+      - name: RenameFile
+        proc: {pid: 610, ppid: 1, exe: /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder, name: Finder, uid: 501, euid: 501, signing_id: com.apple.finder, is_platform: true, is_signed: true}
+        file: {path: /private/var/log/system.log, dest: /Users/rifqi/.Trash/system.log}
+nomatch:
+  - desc: benign lookalike - newsyslog deletes a rotated archive
+    events:
+      - name: DeleteFile
+        proc: {pid: 4001, ppid: 1, exe: /usr/sbin/newsyslog, name: newsyslog, uid: 0, euid: 0, signing_id: com.apple.newsyslog, is_platform: true, is_signed: true}
+        file: {path: /private/var/log/system.log.7.gz}
+  - desc: benign lookalike - newsyslog renames system.log during rotation (stays inside /var/log)
+    events:
+      - name: RenameFile
+        proc: {pid: 4001, ppid: 1, exe: /usr/sbin/newsyslog, name: newsyslog, uid: 0, euid: 0, signing_id: com.apple.newsyslog, is_platform: true, is_signed: true}
+        file: {path: /private/var/log/system.log, dest: /private/var/log/system.log.0}
+  - desc: benign lookalike - Developer ID agent rotates its own log in /var/log (out of scope by path, not allow-listed)
+    events:
+      - name: DeleteFile
+        proc: {pid: 4002, ppid: 1, exe: /Library/Application Support/JAMF/bin/jamf, name: jamf, uid: 0, euid: 0, signing_id: com.jamfsoftware.jamf, team_id: 483DWKW443, is_platform: false, is_signed: true}
+        file: {path: /private/var/log/jamf.log.3}
+  - desc: log show (read) is not log erase
+    events:
+      - name: CreateProcess
+        proc: {pid: 4003, ppid: 4000, exe: /usr/bin/log, name: log, cmdline: "log show --last 1h", args: [log, show, --last, 1h], uid: 501, euid: 501, signing_id: com.apple.log, is_platform: true, is_signed: true}

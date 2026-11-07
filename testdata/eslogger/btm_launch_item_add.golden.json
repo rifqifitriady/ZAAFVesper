@@ -1,0 +1,50 @@
+[
+  {
+    "seq": 1025,
+    "time": "2026-11-07T08:00:16.001025123Z",
+    "name": "AddLaunchItem",
+    "source": "eslogger",
+    "proc": {
+      "pid": 5600,
+      "ppid": 4100,
+      "pidversion": 5601,
+      "uuid": 24051816863201,
+      "exe": "/Users/alice/Downloads/Installer",
+      "name": "Installer",
+      "uid": 501,
+      "euid": 501,
+      "signing_id": "com.example.installer",
+      "team_id": "ABCDE12345",
+      "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
+      "is_platform": false,
+      "is_signed": true,
+      "start_time": "2026-11-07T07:59:59.5Z",
+      "parent": {
+        "pid": 4100,
+        "ppid": 0,
+        "pidversion": 4100,
+        "uuid": 17609365917700,
+        "exe": "",
+        "name": "",
+        "uid": 0,
+        "euid": 0,
+        "is_platform": false,
+        "is_signed": false,
+        "start_time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "file": {
+      "path": "/Users/alice/Library/LaunchAgents/com.example.updater.plist"
+    },
+    "args": {
+      "launch_item_exe": "/Users/alice/Library/Application Support/Example/updater",
+      "launch_item_legacy": "true",
+      "launch_item_managed": "false",
+      "launch_item_path": "/Users/alice/Library/LaunchAgents/com.example.updater.plist",
+      "launch_item_type": "agent",
+      "launch_item_uid": "501",
+      "launch_item_url": "file:///Users/alice/Library/LaunchAgents/com.example.updater.plist",
+      "reporter_exe": "/System/Library/PrivateFrameworks/BackgroundTaskManagement.framework/Resources/backgroundtaskmanagementd"
+    }
+  }
+]

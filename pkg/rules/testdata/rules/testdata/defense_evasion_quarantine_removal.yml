@@ -1,0 +1,20 @@
+match:
+  - desc: xattr -d com.apple.quarantine
+    events:
+      - name: DeleteXattr
+        proc: {pid: 10, exe: /usr/bin/xattr}
+        file: {path: /Users/a/Downloads/app}
+        args: {xattr: com.apple.quarantine}
+nomatch:
+  - desc: another attribute removed
+    events:
+      - name: DeleteXattr
+        proc: {pid: 10, exe: /usr/bin/xattr}
+        file: {path: /Users/a/Downloads/app}
+        args: {xattr: com.apple.metadata:kMDItemWhereFroms}
+  - desc: quarantine set, not removed
+    events:
+      - name: SetXattr
+        proc: {pid: 11, exe: /Applications/Safari.app/Contents/MacOS/Safari}
+        file: {path: /Users/a/Downloads/app}
+        args: {xattr: com.apple.quarantine}

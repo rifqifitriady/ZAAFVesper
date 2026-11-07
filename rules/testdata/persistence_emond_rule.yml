@@ -1,0 +1,22 @@
+match:
+  - desc: 'sudo cp installs an emond rule (ART T1546.014 #1)'
+    events:
+      - name: CreateFile
+        proc: {pid: 2901, ppid: 2900, exe: /bin/cp, name: cp, cmdline: "cp T1546.014_emond.plist /etc/emond.d/rules/T1546.014_emond.plist", args: [cp, T1546.014_emond.plist, /etc/emond.d/rules/T1546.014_emond.plist], uid: 0, euid: 0, signing_id: com.apple.cp, is_platform: true, is_signed: true}
+        file: {path: /private/etc/emond.d/rules/T1546.014_emond.plist}
+  - desc: 'sudo touch activates emond via emondClients (ART T1546.014 #1, second step)'
+    events:
+      - name: CreateFile
+        proc: {pid: 2902, ppid: 2900, exe: /usr/bin/touch, name: touch, cmdline: "touch /private/var/db/emondClients/T1546.014", args: [touch, /private/var/db/emondClients/T1546.014], uid: 0, euid: 0, signing_id: com.apple.touch, is_platform: true, is_signed: true}
+        file: {path: /private/var/db/emondClients/T1546.014}
+nomatch:
+  - desc: benign lookalike - OS update (PackageKit) refreshes the stock emond config
+    events:
+      - name: WriteFile
+        proc: {pid: 900, ppid: 1, exe: /System/Library/PrivateFrameworks/PackageKit.framework/Versions/A/Resources/system_installd, name: system_installd, uid: 0, euid: 0, signing_id: com.apple.system_installd, is_platform: true, is_signed: true}
+        file: {path: /private/etc/emond.d/emond.plist}
+  - desc: unrelated file under /private/etc
+    events:
+      - name: CreateFile
+        proc: {pid: 2901, ppid: 2900, exe: /bin/cp, name: cp, uid: 0, euid: 0, signing_id: com.apple.cp, is_platform: true, is_signed: true}
+        file: {path: /private/etc/hosts.bak}

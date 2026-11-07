@@ -1,0 +1,14 @@
+match:
+  - desc: dropper adds a hidden login item with an osascript one-liner
+    events:
+      - name: CreateProcess
+        proc: {pid: 3501, ppid: 3500, exe: /usr/bin/osascript, name: osascript, cmdline: "osascript -e tell application \"System Events\" to make login item at end with properties {path:\"/Users/Shared/.updater/updater\", hidden:true}", args: [osascript, -e, "tell application \"System Events\" to make login item at end with properties {path:\"/Users/Shared/.updater/updater\", hidden:true}"], uid: 501, euid: 501, signing_id: com.apple.osascript, is_platform: true, is_signed: true, parent: {pid: 3500, ppid: 1, exe: /bin/sh, name: sh, signing_id: com.apple.sh, is_platform: true, is_signed: true}}
+nomatch:
+  - desc: benign lookalike - script lists existing login items (read-only)
+    events:
+      - name: CreateProcess
+        proc: {pid: 3511, ppid: 3510, exe: /usr/bin/osascript, name: osascript, cmdline: "osascript -e tell application \"System Events\" to get the name of every login item", args: [osascript, -e, "tell application \"System Events\" to get the name of every login item"], uid: 501, euid: 501, signing_id: com.apple.osascript, is_platform: true, is_signed: true}
+  - desc: osascript used for an unrelated notification
+    events:
+      - name: CreateProcess
+        proc: {pid: 3521, ppid: 3520, exe: /usr/bin/osascript, name: osascript, cmdline: "osascript -e display notification \"Backup done\"", args: [osascript, -e, "display notification \"Backup done\""], uid: 501, euid: 501, signing_id: com.apple.osascript, is_platform: true, is_signed: true}

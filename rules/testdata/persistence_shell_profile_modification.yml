@@ -1,0 +1,37 @@
+match:
+  - desc: 'sh appends a command to ~/.bash_profile with >> (ART T1546.004 #1)'
+    events:
+      - name: WriteFile
+        proc: {pid: 2301, ppid: 2300, exe: /bin/sh, name: sh, cmdline: "sh -c echo 'echo \"Hello from Atomic Red Team T1546.004\" > /tmp/T1546.004' >> ~/.bash_profile", args: [sh, -c, "echo 'echo \"Hello from Atomic Red Team T1546.004\" > /tmp/T1546.004' >> ~/.bash_profile"], uid: 501, euid: 501, signing_id: com.apple.sh, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/.bash_profile}
+  - desc: ad-hoc signed payload creates ~/.zshenv
+    events:
+      - name: CreateFile
+        proc: {pid: 3401, ppid: 1, exe: /Users/Shared/.agent/agent, name: agent, uid: 501, euid: 501, signing_id: agent-55554944, is_platform: false, is_signed: false}
+        file: {path: /Users/rifqi/.zshenv}
+  - desc: forged - binary claiming VS Code's signing_id under a different Team ID writes ~/.zshrc
+    events:
+      - name: WriteFile
+        proc: {pid: 3402, ppid: 1, exe: /Applications/Code Helper.app/Contents/MacOS/Code Helper, name: Code Helper, uid: 501, euid: 501, signing_id: com.microsoft.VSCode, team_id: QX7Z2K9P4L, is_platform: false, is_signed: true}
+        file: {path: /Users/rifqi/.zshrc}
+  - desc: forged - self-signed binary (is_signed true, no Team ID) claiming Sublime's signing_id
+    events:
+      - name: WriteFile
+        proc: {pid: 3403, ppid: 1, exe: /Users/Shared/subl, name: subl, uid: 501, euid: 501, signing_id: com.sublimetext.4, is_platform: false, is_signed: true}
+        file: {path: /Users/rifqi/.bash_profile}
+nomatch:
+  - desc: benign lookalike - Apple vim edits ~/.zshrc
+    events:
+      - name: WriteFile
+        proc: {pid: 2401, ppid: 2400, exe: /usr/bin/vim, name: vim, cmdline: "vim /Users/rifqi/.zshrc", args: [vim, /Users/rifqi/.zshrc], uid: 501, euid: 501, signing_id: com.apple.vim, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/.zshrc}
+  - desc: benign lookalike - VS Code (Developer ID UBF8T346G9) saves ~/.zprofile
+    events:
+      - name: RenameFile
+        proc: {pid: 2501, ppid: 1, exe: /Applications/Visual Studio Code.app/Contents/MacOS/Electron, name: Electron, uid: 501, euid: 501, signing_id: com.microsoft.VSCode, team_id: UBF8T346G9, is_platform: false, is_signed: true}
+        file: {path: /Users/rifqi/.zprofile.tmp-1234, dest: /Users/rifqi/.zprofile}
+  - desc: zsh writes its history file, not a start-up file
+    events:
+      - name: WriteFile
+        proc: {pid: 2600, ppid: 2599, exe: /bin/zsh, name: zsh, uid: 501, euid: 501, signing_id: com.apple.zsh, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/.zsh_history}

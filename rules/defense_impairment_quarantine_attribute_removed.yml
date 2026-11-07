@@ -1,0 +1,28 @@
+name: Quarantine attribute removed from file
+id: 34f08a45-25b5-44aa-afa2-e67bcf4622ef
+version: 1.0.0
+description: |
+  The com.apple.quarantine extended attribute was deleted from a file. Without it
+  Gatekeeper never assesses the file, so droppers and "copy this into Terminal"
+  lures strip it (`xattr -d com.apple.quarantine`, `xattr -c`, or removexattr() in code)
+  before running a payload. Apple's policy daemons are excluded.
+  Known benign: developers clearing quarantine on their own builds and Homebrew
+  `--no-quarantine` cask installs. A recursive removal (`xattr -dr`) raises one alert
+  per file.
+labels:
+  tactic.id: TA0112
+  tactic.name: Defense Impairment
+  technique.id: T1553.001
+  technique.name: Gatekeeper Bypass
+references:
+  - https://attack.mitre.org/techniques/T1553/001/
+condition: >
+  delete_xattr
+  and evt.arg[xattr] = 'com.apple.quarantine'
+  and not (apple_trusted_process)
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) removed the quarantine attribute from %file.path"
+severity: medium
+action: []
+tests:
+  atomic: [fb3d46c6-9480-4803-8d7d-ce676e1f1a9b]
+min-engine-version: 0.1.0

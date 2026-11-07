@@ -1,0 +1,29 @@
+name: Sudoers modified outside visudo
+id: f59b4b8c-c5ac-432b-aead-e11b7ae8cb54
+version: 1.0.0
+description: |
+  /etc/sudoers or a file in /etc/sudoers.d was written or replaced by something other than
+  /usr/sbin/visudo. Attackers add NOPASSWD entries, `timestamp_timeout=-1` or
+  `!tty_tickets` to keep root without a password prompt.
+  Known benign: configuration-management tools (Ansible, Jamf scripts) that write
+  sudoers.d fragments directly.
+labels:
+  tactic.id: TA0004
+  tactic.name: Privilege Escalation
+  technique.id: T1548.003
+  technique.name: Sudo and Sudo Caching
+references:
+  - https://attack.mitre.org/techniques/T1548/003/
+condition: >
+  (
+    (file_written and file.path imatches sudoers_globs)
+    or (rename_file and file.dest imatches sudoers_globs)
+  )
+  and not (ps.exe = '/usr/sbin/visudo')
+  and not (apple_trusted_process)
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.cmdline) modified %file.path %file.dest"
+severity: high
+action: []
+tests:
+  atomic: [91a60b03-fb75-4d24-a42e-2eb8956e8de1, a7b17659-dd5e-46f7-b7d1-e6792c91d0bc]
+min-engine-version: 0.1.0

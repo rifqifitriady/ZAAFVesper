@@ -1,0 +1,18 @@
+match:
+  - desc: 'screencapture -x /tmp/T1113_desktop.png (ART T1113 #2)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 4901, ppid: 4900, exe: /usr/sbin/screencapture, name: screencapture, cmdline: "screencapture -x /tmp/T1113_desktop.png", args: [screencapture, -x, /tmp/T1113_desktop.png], uid: 501, euid: 501, signing_id: com.apple.screencapture, is_platform: true, is_signed: true, parent: {pid: 4900, ppid: 4899, exe: /bin/bash, name: bash, signing_id: com.apple.bash, is_platform: true, is_signed: true}}
+  - desc: 'screencapture /tmp/T1113_desktop.png (ART T1113 #1)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 4902, ppid: 4900, exe: /usr/sbin/screencapture, name: screencapture, cmdline: "screencapture /tmp/T1113_desktop.png", args: [screencapture, /tmp/T1113_desktop.png], uid: 501, euid: 501, signing_id: com.apple.screencapture, is_platform: true, is_signed: true, parent: {pid: 4900, ppid: 4899, exe: /bin/bash, name: bash, signing_id: com.apple.bash, is_platform: true, is_signed: true}}
+nomatch:
+  - desc: benign lookalike - interactive `screencapture -i` from Terminal
+    events:
+      - name: CreateProcess
+        proc: {pid: 4911, ppid: 4910, exe: /usr/sbin/screencapture, name: screencapture, cmdline: "screencapture -i /Users/rifqi/Desktop/shot.png", args: [screencapture, -i, /Users/rifqi/Desktop/shot.png], uid: 501, euid: 501, signing_id: com.apple.screencapture, is_platform: true, is_signed: true, parent: {pid: 4910, ppid: 4909, exe: /bin/zsh, name: zsh, signing_id: com.apple.zsh, is_platform: true, is_signed: true}}
+  - desc: benign lookalike - Apple's screenshot UI (Cmd-Shift-5) runs screencapture
+    events:
+      - name: CreateProcess
+        proc: {pid: 4912, ppid: 4913, exe: /usr/sbin/screencapture, name: screencapture, cmdline: "screencapture -x -t png /Users/rifqi/Desktop/Screenshot.png", args: [screencapture, -x, -t, png, /Users/rifqi/Desktop/Screenshot.png], uid: 501, euid: 501, signing_id: com.apple.screencapture, is_platform: true, is_signed: true, parent: {pid: 4913, ppid: 1, exe: /System/Library/CoreServices/screencaptureui.app/Contents/MacOS/screencaptureui, name: screencaptureui, signing_id: com.apple.screencaptureui, is_platform: true, is_signed: true}}

@@ -1,0 +1,243 @@
+# ZAAFVesper built-in rules (macOS)
+
+39 behaviour rules, 5 YARA signatures and one shared macro file. Every rule maps to one
+MITRE ATT&CK technique, has a fixture file with at least one `match` and two `nomatch`
+scenarios (one of them a realistic benign lookalike), and, where Atomic Red Team ships a
+macOS test for the behaviour, lists that test's GUID in `tests.atomic`.
+
+ATT&CK IDs follow the data bundled with the Atomic Red Team checkout used for this work
+(`atomic_red_team/enterprise-attack.json`). That release renamed TA0005 to **Stealth**,
+added **TA0112 Defense Impairment**, and revoked several older IDs. Old to new:
+T1562 and T1562.001 to **T1685**, T1562.004 to **T1686**, T1070.002 to **T1685.006**,
+T1562.003 to T1690. Every `technique.id`/`tactic.id` pair below was checked against that
+file: not revoked, name identical, tactic is one of the technique's tactics.
+
+## Rule table
+
+Seq = sequence rule. Action = response taken only when ZAAFVesper runs with `--enable-response`.
+
+| # | Rule (file) | Tactic | Technique | Severity | Seq | Action | Atomic tests |
+|---|---|---|---|---|---|---|---|
+| 1 | Cron or periodic job installed<br>`rules/persistence_cron_periodic.yml` | TA0003 Persistence | T1053.003 Cron | medium |  |  | `435057fb-74b1-410e-9403-d81baf194f75`<br>`b7d42afa-9086-4c8a-b7b0-8ea3faa6ebb0` |
+| 2 | Event Monitor (emond) rule persistence<br>`rules/persistence_emond_rule.yml` | TA0003 Persistence | T1546.014 Emond | high |  |  | `23c9c127-322b-4c75-95ca-eff464906114` |
+| 3 | Third-party kernel extension loaded<br>`rules/persistence_kernel_extension_load.yml` | TA0003 Persistence | T1547.006 Kernel Modules and Extensions | medium |  |  | `f4391089-d3a5-4dd1-ab22-0419527f2672` |
+| 4 | Launch Agent persistence via plist write<br>`rules/persistence_launch_agent_plist.yml` | TA0003 Persistence | T1543.001 Launch Agent | high |  |  | `a5983dee-bf6c-4eaf-951c-dbc1a7b90900`<br>`66774fa8-c562-4bae-a58d-5264a0dd9dd7` |
+| 5 | Launch Daemon persistence via plist write<br>`rules/persistence_launch_daemon_plist.yml` | TA0003 Persistence | T1543.004 Launch Daemon | high |  |  | `03ab8df5-3a6b-4417-b6bd-bb7a5cfd74cf` |
+| 6 | Launch item plist written by a Developer ID signed process<br>`rules/persistence_launch_item_plist_by_developer_id.yml` | TA0003 Persistence | T1543 Create or Modify System Process | low |  |  | (none indexed for this technique) |
+| 7 | Login Item registered shortly after osascript ran<br>`rules/persistence_login_item_after_osascript.yml` | TA0003 Persistence | T1547.015 Login Items | medium | yes |  | `716e756a-607b-41f3-8204-b214baf37c1d` |
+| 8 | Login Item added via inline AppleScript<br>`rules/persistence_login_item_via_osascript.yml` | TA0003 Persistence | T1547.015 Login Items | high |  |  | (none indexed for this technique) |
+| 9 | Shell start-up file modified by non-editor process<br>`rules/persistence_shell_profile_modification.yml` | TA0003 Persistence | T1546.004 Unix Shell Configuration Modification | medium |  |  | `94500ae1-7e31-47e3-886b-c328da46872f`<br>`0a898315-4cfa-4007-bafe-33a4646d115f` |
+| 10 | StartupItems persistence<br>`rules/persistence_startup_items.yml` | TA0003 Persistence | T1037.005 Startup Items | high |  |  | `134627c3-75db-410e-bff8-7a920075f198`<br>`fc369906-90c7-4a15-86fd-d37da624dde6`<br>`10cf5bec-49dd-4ebf-8077-8f47e420096f` |
+| 11 | Setuid or setgid bit set with chmod<br>`rules/privilege_escalation_setuid_bit_set.yml` | TA0004 Privilege Escalation | T1548.001 Setuid and Setgid | medium |  |  | `759055b3-3885-4582-a8ec-c00c9d64dd79`<br>`db55f666-7cba-46c6-9fe6-205a05c3242c`<br>`896dfe97-ae43-4101-8e96-9a7996555d80` |
+| 12 | Sudoers modified outside visudo<br>`rules/privilege_escalation_sudoers_modification.yml` | TA0004 Privilege Escalation | T1548.003 Sudo and Sudo Caching | high |  |  | `91a60b03-fb75-4d24-a42e-2eb8956e8de1`<br>`a7b17659-dd5e-46f7-b7d1-e6792c91d0bc` |
+| 13 | TCC database modified outside tccd<br>`rules/privilege_escalation_tcc_database_modification.yml` | TA0004 Privilege Escalation | T1548.006 TCC Manipulation | high |  |  | (none indexed for this technique) |
+| 14 | Process started with DYLD_INSERT_LIBRARIES<br>`rules/stealth_dyld_insert_libraries.yml` | TA0005 Stealth | T1574.006 Dynamic Linker Hijacking | high |  |  | `4d66029d-7355-43fd-93a4-b63ba92ea1be` |
+| 15 | File hidden with chflags or SetFile<br>`rules/stealth_hidden_file_flag.yml` | TA0005 Stealth | T1564.001 Hidden Files and Directories | low |  |  | `b115ecaf-3b24-4ed2-aefe-2fcb9db913d3`<br>`3b7015f2-3144-4205-b799-b05580621379` |
+| 16 | Shell history file deleted<br>`rules/stealth_shell_history_deleted.yml` | TA0005 Stealth | T1070.003 Clear Command History | medium |  |  | `a934276e-2be5-4a36-93fd-98adbb5bd4fc`<br>`23d348f3-cc5c-4ba9-bd0a-ae09069f0914` |
+| 17 | Task port, ptrace or remote thread from untrusted binary<br>`rules/stealth_task_port_access_by_untrusted_binary.yml` | TA0005 Stealth | T1055 Process Injection | high |  |  | (none indexed for this technique) |
+| 18 | macOS firewall disabled<br>`rules/defense_impairment_firewall_disabled.yml` | TA0112 Defense Impairment | T1686 Disable or Modify System Firewall | medium |  |  | (none indexed for this technique) |
+| 19 | Gatekeeper or quarantine disabled system-wide<br>`rules/defense_impairment_gatekeeper_disabled.yml` | TA0112 Defense Impairment | T1685 Disable or Modify Tools | high |  |  | `2a821573-fb3f-4e71-92c3-daac7432f053` |
+| 20 | Quarantine attribute removed from file<br>`rules/defense_impairment_quarantine_attribute_removed.yml` | TA0112 Defense Impairment | T1553.001 Gatekeeper Bypass | medium |  |  | `fb3d46c6-9480-4803-8d7d-ce676e1f1a9b` |
+| 21 | Security tool or sensor stopped<br>`rules/defense_impairment_security_tool_tampering.yml` | TA0112 Defense Impairment | T1685 Disable or Modify Tools | high |  |  | `8fba7766-2d11-4b4a-979a-1e3d9cc9a88c`<br>`62155dd8-bb3d-4f32-b31c-6532ff3ac6a3`<br>`07f43b33-1e15-4e99-be70-bc094157c849`<br>`b3e7510c-2d4c-4249-a33f-591a2bc83eef`<br>`40074085-dbc8-492b-90a3-11bcfc52fda8` |
+| 22 | System or audit logs cleared<br>`rules/defense_impairment_system_log_clearing.yml` | TA0112 Defense Impairment | T1685.006 Clear Linux or Mac System Logs | high |  |  | `989cc1b1-3642-4260-a809-54f9dd559683`<br>`653d39cd-bae7-499a-898c-9fb96b8b5cd1`<br>`6290f8a8-8ee9-4661-b9cf-390031bf6973`<br>`c23bdb88-928d-493e-b46d-df2906a50941`<br>`bc8eeb4a-cc3e-45ec-aa6e-41e973da2558`<br>`0208ea60-98f1-4e8c-8052-930dce8f742c`<br>`848e43b3-4c0a-4e4c-b4c9-d1e8cea9651c`<br>`03013b4b-01db-437d-909b-1fdaa5010ee8`<br>`86f0e4d5-3ca7-45fb-829d-4eda32b232bb`<br>`b0768a5e-0f32-4e75-ae5b-d036edcf96b6`<br>`810a465f-cd4f-47bc-b43e-d2de3b033ecc`<br>`e62f8694-cbc7-468f-862c-b10cd07e1757` |
+| 23 | System logging or audit disabled<br>`rules/defense_impairment_system_logging_disabled.yml` | TA0112 Defense Impairment | T1685 Disable or Modify Tools | high |  |  | (none indexed for this technique) |
+| 24 | Browser credential or cookie store read by another process<br>`rules/credential_access_browser_credential_store_read.yml` | TA0006 Credential Access | T1555.003 Credentials from Web Browsers | high |  |  | `c1402f7b-67ca-43a8-b5f3-3143abedc01b`<br>`124e13e5-d8a1-4378-a6ee-a53cd0c7e369`<br>`29d0c390-3cbc-4e4e-a52b-a1350ed836b7` |
+| 25 | Keychain secrets dumped with security CLI<br>`rules/credential_access_keychain_dump_via_security.yml` | TA0006 Credential Access | T1555.001 Keychain | high |  |  | `88e1fa00-bf63-4e5b-a3e1-e2ea51c8cca6` |
+| 26 | Keychain database read by file tool or untrusted binary<br>`rules/credential_access_keychain_file_read.yml` | TA0006 Credential Access | T1555.001 Keychain | high |  |  | `5c32102a-c508-49d3-978f-288f8a9f6617` |
+| 27 | Fake password prompt via osascript<br>`rules/credential_access_osascript_password_prompt.yml` | TA0006 Credential Access | T1056.002 GUI Input Capture | high |  |  | `76628574-0bc1-4646-8fe2-8f4427b47d15`<br>`b7037b89-947a-427a-ba29-e7e9f09bc045` |
+| 28 | Fake password prompt via osascript from untrusted origin<br>`rules/credential_access_osascript_password_prompt_untrusted_origin.yml` | TA0006 Credential Access | T1056.002 GUI Input Capture | critical |  | kill | (none indexed for this technique) |
+| 29 | SSH or GnuPG private key read by unusual process<br>`rules/credential_access_ssh_private_key_read.yml` | TA0006 Credential Access | T1552.004 Private Keys | high |  |  | `46959285-906d-40fa-9437-5a439accd878`<br>`864bb0b2-6bb5-489a-b43b-a77b3a16d68a`<br>`2a5a0601-f5fb-4e2e-aa09-73282ae6afca` |
+| 30 | Non-interactive screen capture from script or untrusted parent<br>`rules/collection_noninteractive_screencapture.yml` | TA0009 Collection | T1113 Screen Capture | medium |  |  | `0f47ceb1-720f-4275-96b8-21f0562217ac`<br>`deb7d358-5fbd-4dc4-aecc-ee0054d2d9a4` |
+| 31 | Security software enumeration<br>`rules/discovery_security_software_enumeration.yml` | TA0007 Discovery | T1518.001 Security Software Discovery | low |  |  | `ba62ce11-e820-485f-9c17-6f3c857cd840` |
+| 32 | System profiling burst from a script<br>`rules/discovery_system_profiling_burst.yml` | TA0007 Discovery | T1082 System Information Discovery | low | yes |  | `edff98ec-0f73-4f63-9890-6b117092aff6` |
+| 33 | launchctl submits a job or loads a plist from a temp folder<br>`rules/execution_launchctl_submit_or_load_from_temp.yml` | TA0002 Execution | T1569.001 Launchctl | medium |  |  | `6fb61988-724e-4755-a595-07743749d4e2` |
+| 34 | Downloaded or decoded script piped into a shell<br>`rules/execution_remote_script_piped_to_shell.yml` | TA0002 Execution | T1059.004 Unix Shell | high |  |  | `d0c88567-803d-4dca-99b4-7ce65e7b257c` |
+| 35 | Suspicious AppleScript or JXA execution<br>`rules/execution_suspicious_osascript.yml` | TA0002 Execution | T1059.002 AppleScript | medium |  |  | `3600d97d-81b9-4171-ab96-e4386506e2c2` |
+| 36 | Binary dropped in a temp or shared folder and executed without developer identity<br>`rules/execution_untrusted_binary_dropped_and_run_from_temp.yml` | TA0002 Execution | T1204.002 Malicious File | high | yes |  | (none indexed for this technique) |
+| 37 | XProtect malware detection<br>`rules/threat_xprotect_malware_detection.yml` | TA0002 Execution | T1204.002 Malicious File | critical |  |  | (none indexed for this technique) |
+| 38 | YARA signature match<br>`rules/threat_yara_signature_match.yml` | TA0002 Execution | T1204.002 Malicious File | high |  |  | (none indexed for this technique) |
+| 39 | Download followed by stdin-fed shell<br>`rules/command_and_control_download_then_stdin_shell.yml` | TA0011 Command and Control | T1105 Ingress Tool Transfer | high | yes |  | (none indexed for this technique) |
+
+Totals: 39 rules, 4 sequence rules, 28 rules with at least one macOS atomic indexed under the rule's own technique (59 GUIDs), 1 rule with a kill action.
+
+`tests.atomic` lists only GUIDs that `atomics/Indexes/Indexes-CSV/macos-index.csv` files
+under the rule's own technique (or its parent). Atomics filed under another technique that
+also exercise a rule are cited in that rule's `references` instead, as
+"atomic <guid> (indexed <technique>) also exercises this behaviour":
+`d0c88567` (T1059.004) on the T1105 download-then-shell sequence; `3a15c372` (T1140) on the
+pipe-to-shell rule; `b16ef901`/`4d46e16b` (T1027.002, UPX) on the dropped-binary rule;
+`11979f23` (T1543.001) on the emond rule; `10cf5bec`/`fc369906` (T1037.005) on the
+launchctl rule.
+
+**"Mapped" is not "validated".** No atomic has been executed against a live sensor yet.
+Spec section 5 step 4 (run `sudo zaafvesper run --capture`, execute the listed atomics with
+Rifqi's approval, keep the capture as a regression fixture) is still to do.
+
+## YARA signatures (`rules/yara/`)
+
+Written for ZAAFVesper; no strings or conditions copied from public rule sets. All compile with
+libyara 4.6 (`yarac`) and pass `yr check` (YARA-X).
+
+| File | Rule | Tags | ATT&CK | What it needs to fire |
+|---|---|---|---|---|
+| `macos_infostealer.yar` | `MAL_Mac_Infostealer_HarvestTargets_Nov26` | stealer, macos | T1555.003 | Mach-O or shebang script under 30 MB with a keychain reference AND 3 browser store paths AND 2 crypto-wallet locations/extension IDs |
+| `macos_password_phish.yar` | `SUSP_Mac_OsascriptPasswordDialog_Nov26` | stealer, phishing, macos | T1056.002 | Mach-O, shebang script or compiled AppleScript that builds a dialog with a hidden/default answer asking for a password, plus osascript/NSAppleScript |
+| `macos_reverse_shell.yar` | `SUSP_Mac_ReverseShell_OneLiner_Nov26` | backdoor, macos | T1059.004 | bash `/dev/tcp` redirect, mkfifo+nc loop, `nc -e /bin/sh`, Python socket+dup2/pty, or Perl Socket+exec shell |
+| `macos_dropper_quarantine_strip.yar` | `SUSP_Mac_Dropper_QuarantineStripExec_Nov26` | dropper, macos | T1553.001 | download (`curl -o` / NSURLSession) AND quarantine removal AND `chmod +x/755/777` |
+| `macos_hunting_launchagent_writer.yar` | `SUSP_Mac_EmbeddedLaunchAgentTemplate_Nov26` | **hunting**, persistence, macos | T1543.001 | small Mach-O embedding a LaunchAgents path and a RunAtLoad/ProgramArguments plist template |
+
+Each rule carries `meta: author = "ZAAFVesper", description, reference, attack, date`. The
+built-in rule "YARA signature match" alerts on every match except rules tagged `hunting`;
+that tag is the switch for research signatures that should feed custom rules or hunts but
+not page anyone.
+
+Goodware check (7 Nov 2026, this Mac): all five rules scanned `/bin`, `/usr/bin`,
+`/usr/sbin`, `/usr/libexec`, `/System/Applications`, `/Applications` (about 858 000 files),
+`/opt/homebrew/bin` and `~/Downloads` with **0 matches**. The password-dialog rule
+initially matched Sublime Text's AppleScript snippet package; a file-type gate (Mach-O,
+`#!` script or compiled AppleScript) removed it. Each rule fires on a hand-made inert test
+sample; none has been run against real malware samples yet.
+
+## Macros and lists (`rules/macros/macros.yml`)
+
+Event macros, one per canonical `evt.name`: `spawn_process fork_process exit_process
+open_file create_file write_file rename_file delete_file set_xattr delete_xattr set_mode
+set_owner open_process send_signal ptrace remote_thread add_launch_item load_kext mount
+authenticate sudo modify_tcc xprotect_detect yara_match`.
+
+Composite macros: `file_written` (CreateFile or WriteFile), `apple_trusted_process`,
+`apple_package_installer`, `no_developer_identity`, `parent_no_developer_identity`, `apple_developer_tool`, `parent_apple_developer_tool`,
+`parent_from_user_writable`, `ancestor_from_user_writable`, `generic_reader_process`,
+`spawn_osascript`, `developer_id_signed`,
+`osascript_credential_prompt`, `untrusted_prompt_origin`, `trusted_editor`.
+
+Lists: `shells`, `shell_names`, `script_interpreters`, `script_interpreter_name_globs`,
+`apple_signed_trusted`, `temp_drop_globs`, `user_writable_exe_globs`,
+`file_access_tool_names`, `browser_team_ids`, `apple_browser_signing_prefixes`,
+`security_tool_identifiers`, `security_tool_process_names`, `sensor_self_names`,
+`editor_names`, `logging_service_identifiers`, `logging_config_globs`, `shell_profile_globs`, `shell_history_names`,
+`system_log_globs`, `cron_globs`, `sudoers_globs`, `tcc_db_globs`, `browser_secret_globs`.
+
+Path lists carry both `/private/...` (what Endpoint Security reports) and the `/etc`,
+`/tmp`, `/var` spellings. Globs use the engine's semantics: `*` crosses `/`.
+
+## Trust and allow-list policy
+
+An exclusion may only rest on identity the attacker cannot choose:
+
+- **Apple platform binary**: `ps.is_platform = true`, together with a `signing_id` or a path
+  under a SIP-protected directory (`/bin`, `/sbin`, `/usr/bin`, `/usr/sbin`,
+  `/usr/libexec`, `/System`). Macro `apple_trusted_process`.
+- **A specific vendor**: that vendor's Team ID paired with its signing IDs, e.g. VS Code
+  = `UBF8T346G9` + `com.microsoft.VSCode`, Sublime Text = `Z6D26JE4Y4` +
+  `com.sublimetext.4` (`trusted_editor`), browsers by verified Team ID
+  (`browser_team_ids`: Google, Mozilla, Microsoft, Brave).
+- **Apple's non-platform tools** (Xcode, Command Line Tools, `debugserver`, `clang`):
+  these are *not* platform binaries; codesign on this Mac shows them signed with Apple's
+  Team ID `59GAB85EFG`. Macro `apple_developer_tool` binds to that Team ID.
+
+What is **not** trust:
+
+- `signing_id` or `ps.name` on their own: an ad-hoc or self-signed signer picks any
+  identifier.
+- `ps.is_signed = true`: the decoder sets it for any valid non-ad-hoc signature, a
+  self-signed certificate included. With an empty Team ID it says nothing about who
+  signed.
+- `ps.team_id != ''` (any Developer ID): Developer IDs are cheap and notarized malware
+  exists. `developer_id_signed` is only used to route such writers to the low-severity
+  rule "Launch item plist written by a Developer ID signed process", never to drop an
+  event.
+- PackageKit / `installd`: it installs any `.pkg`, malicious ones included. It is not an
+  exclusion anywhere except for SIP-protected `/System` paths (StartupItems rule).
+  `system_installd` (Apple-signed packages only) stays on the trusted list.
+
+"No developer identity" (`no_developer_identity`) = not a platform binary and no Team ID:
+unsigned, ad-hoc, linker-signed and self-signed code alike.
+
+Residual risk: the Team ID comes from the code signature's CodeDirectory. The decoder does
+not report whether the certificate chains to Apple, so a self-signed binary that embeds
+another vendor's Team ID would pass a Team ID pair. Closing this needs an
+"Apple-anchored" signal from the sensor (see requests in the WS C report).
+
+## `evt.arg` keys used
+
+The sensor workstream fills these; names and formats were checked against
+`pkg/source/eslogger/README.md` (7 Nov 2026). A branch that tests a missing key never fires,
+except `kext_id`, whose absence makes the kext rule alert:
+
+| Key | Rules | Expected value |
+|---|---|---|
+| `xattr` | Quarantine attribute removed | attribute name, e.g. `com.apple.quarantine` |
+| `launch_item_type` | Login Item registered shortly after osascript | lower-case ES enum name without prefix: `user_item`, `app`, `login_item`, `agent`, `daemon` |
+| `launch_item_path` | same (output only) | item URL/path |
+| `kext_id` | Third-party kernel extension loaded | bundle identifier, e.g. `com.softraid.driver.SoftRAID` |
+| `open_flag_names` | System or audit logs cleared (truncate branch) | symbolic flags joined by `\|`, containing `O_TRUNC` when set, e.g. `FWRITE\|O_CREAT\|O_TRUNC` |
+| `xp_malware_identifier` | XProtect malware detection (output only) | XProtect signature name |
+
+Other indexed fields used: `ps.env[DYLD_INSERT_LIBRARIES]` and
+`ps.parent.env[DYLD_INSERT_LIBRARIES]` (needs exec env in the decoder and env kept in the
+process snapshot), `yara.meta[attack]` and `yara.meta[description]` (output only).
+
+## Known limits and false-positive notes
+
+- **Package installs alert.** With PackageKit no longer excluded, installing a `.pkg` that
+  ships a launch daemon/agent, cron/periodic script, emond rule or sudoers fragment raises
+  the corresponding alert, and vendor EDR upgrades that `launchctl unload` their own job
+  raise "Security tool or sensor stopped". This is accepted noise; review the package.
+- **Developer ID writers of launch items** go to a separate low-severity rule instead of
+  being dropped. Allow-list known vendors locally as Team ID + signing ID pairs.
+- **Kernel extension load**: the decoder gives only `kext_id` and the caller (no kext path),
+  so the exclusion is "com.apple.* identifier AND platform caller". If kernelmanagerd is
+  always the caller, a third-party kext that names itself com.apple.* is missed.
+- **System logs cleared** is scoped to logs Apple's daemons write (system.log, install.log,
+  asl, launchd, powermanagement, /var/audit, unified log store). Third-party logs in
+  /var/log are out of scope rather than allow-listed.
+- **SSH / GnuPG keys**: GUI SSH clients that read keys themselves (Termius, Transmit,
+  JetBrains) now alert; Developer ID alone is not an allow-list.
+
+- **Shell start-up file modified**: following an installer's instruction such as Homebrew's
+  `echo 'eval "$(brew shellenv)"' >> ~/.zprofile` looks the same as the atomic. Medium
+  severity; triage the written content.
+- **Launch Agent**: `brew services start` (Homebrew's Ruby, no Team ID) alerts once per
+  new service.
+- **Download followed by stdin-fed shell**: legitimate `curl | sh` installers (rustup, nvm,
+  oh-my-zsh) alert; only the exact official Homebrew command is excluded. If bash execs
+  before curl in a pipeline the sequence is missed; the single-event pipe rule covers
+  pipelines passed as one `-c` argument.
+- **Shell history deleted**: in-place truncation (`cat /dev/null > ~/.bash_history`, atomic
+  `b1251c35`) is not covered, because bash truncates its own history on exit.
+- **Dropped binary run from temp**: shebang scripts execute as their interpreter, so only
+  Mach-O payloads match. Exposing the ES exec `script` path as an `evt.arg` would close this.
+- **Keychain file read**: script interpreters are deliberately out of scope (keyring
+  libraries open the file through Security.framework); Python stealers copying with
+  `shutil` are a gap.
+- **SSH / GnuPG keys**: Homebrew OpenSSH, Ansible/paramiko and Homebrew `gpg` have no
+  identity an attacker cannot choose, so they are not allow-listed (the GnuPG branch only
+  fires on generic file tools).
+- **Login Item after osascript**: there is no join key between osascript and the BTM event,
+  so the window is 30 s. A user adding a login item right after unrelated automation alerts.
+- **Quarantine removed**: `xattr -dr` on an app bundle raises one alert per file.
+- **Security software enumeration**: MDM/compliance scripts alert (low severity); tune with a
+  local exclusion.
+- **Browser Team IDs**: only Google (checked with codesign here), Mozilla, Microsoft and
+  Brave are listed. Opera, Vivaldi and Arc reading their own stores alert until their IDs
+  are read from a real install; a wrong ID would allow-list another developer.
+- **Kill action**: only "Fake password prompt via osascript from untrusted origin" kills,
+  and only with `--enable-response`. Kill is reactive (ES NOTIFY): the dialog may already
+  be on screen.
+
+## How the fixtures were checked
+
+- `zaafvesper rules validate --rules rules`: 39 rules, 4 sequences, 62 macros/lists, 0 warnings.
+- `zaafvesper rules test --rules rules`: 194 scenarios, 194 passed, 0 failed.
+- Every `technique.id`/`tactic.id` re-checked against `enterprise-attack.json`; every
+  `tests.atomic` GUID is indexed under the rule's technique (or its parent).
+- Each identity-based exclusion has a "forged" match scenario: a signing ID claimed under a
+  different Team ID (VS Code, Chrome) or by a self-signed binary with no Team ID
+  (debugserver, Sublime, the password-prompt parent) still fires.
+- Before the engine built, a throwaway reference evaluator (scratch only) was used;
+  mutation tests confirmed the nomatch scenarios exercise the exclusions.
+
+Fixtures are synthetic events written to mirror what each cited atomic does (as eslogger
+would report it). They prove the rule logic, not the decoder: a real capture is still needed
+to confirm field population (`ps.env`, `evt.arg[...]`, `/private` path forms).

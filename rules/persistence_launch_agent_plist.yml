@@ -1,0 +1,35 @@
+name: Launch Agent persistence via plist write
+id: 0b449aa4-d059-4f11-a67b-5f834d87164b
+version: 1.0.0
+description: |
+  A property list was created, modified or renamed into a LaunchAgents directory.
+  launchd starts every agent found there at the next user login, which makes this the
+  most common persistence mechanism on macOS (Atomic Stealer, Shlayer, XCSSET, etc.).
+  Apple's launchd/BTM daemons are excluded by platform identity. Writers with a Team ID
+  (Developer ID app installers and updaters) are not dropped: they go to the low-severity
+  companion rule "Launch item plist written by a Developer ID signed process", because a
+  Developer ID is not proof of good intent. Apple file tools (cp, ditto, sh redirects)
+  and script interpreters stay here, because that is how droppers write the plist.
+  PackageKit is not excluded: it installs any .pkg, malicious ones included.
+  Known benign: `brew services start` (Homebrew's Ruby writes homebrew.mxcl.*.plist) and
+  .pkg installs that ship a launch agent.
+labels:
+  tactic.id: TA0003
+  tactic.name: Persistence
+  technique.id: T1543.001
+  technique.name: Launch Agent
+references:
+  - https://attack.mitre.org/techniques/T1543/001/
+condition: >
+  (
+    (file_written and file.path imatches ('/Users/*/Library/LaunchAgents/*.plist', '/Library/LaunchAgents/*.plist', '/private/var/root/Library/LaunchAgents/*.plist'))
+    or (rename_file and file.dest imatches ('/Users/*/Library/LaunchAgents/*.plist', '/Library/LaunchAgents/*.plist', '/private/var/root/Library/LaunchAgents/*.plist'))
+  )
+  and not (apple_trusted_process)
+  and not (developer_id_signed)
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) wrote launch agent %file.path %file.dest"
+severity: high
+action: []
+tests:
+  atomic: [a5983dee-bf6c-4eaf-951c-dbc1a7b90900, 66774fa8-c562-4bae-a58d-5264a0dd9dd7]
+min-engine-version: 0.1.0

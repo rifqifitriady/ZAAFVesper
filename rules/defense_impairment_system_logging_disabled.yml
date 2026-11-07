@@ -1,0 +1,44 @@
+name: System logging or audit disabled
+id: 8a2db416-17c5-4e74-985b-fd32d271c920
+version: 1.0.0
+description: |
+  macOS logging or auditing was switched off or reconfigured: launchctl stopped Apple's
+  logging daemons (auditd, syslogd, logd, aslmanager, diagnosticd); `log config` set a
+  mode to level:off or persist:off; `audit -t` terminated the BSM audit daemon; or a
+  logging/audit configuration file (audit_control, asl.conf, syslog.conf, newsyslog
+  config, /Library/Preferences/Logging) was written by anything other than Apple's own
+  logging daemons. Turning logging off before acting hides what follows; clearing logs
+  afterwards is covered by "System or audit logs cleared".
+  Not matched: `audit -s` (re-reads the configuration; a malicious edit before it is
+  caught by the file branch), `log config --status`, `log show`/`log stream`.
+  Known benign: administrators tuning audit flags or log levels, and OS updates that
+  rewrite the default configuration files.
+labels:
+  tactic.id: TA0112
+  tactic.name: Defense Impairment
+  technique.id: T1685
+  technique.name: Disable or Modify Tools
+references:
+  - https://attack.mitre.org/techniques/T1685/
+condition: >
+  (
+    spawn_process
+    and (
+      (ps.exe = '/bin/launchctl' and ps.args in ('unload', 'bootout', 'remove', 'disable', 'kill', 'stop') and ps.cmdline icontains logging_service_identifiers)
+      or (ps.exe = '/usr/bin/log' and ps.args = 'config' and ps.cmdline icontains ('level:off', 'persist:off'))
+      or (ps.exe = '/usr/sbin/audit' and ps.args = '-t')
+    )
+  )
+  or (
+    (
+      (file_written and file.path imatches logging_config_globs)
+      or (rename_file and file.dest imatches logging_config_globs)
+    )
+    and not (apple_trusted_process)
+  )
+output: "%ps.exe (pid %ps.pid, uid %ps.euid, parent %ps.parent.cmdline) changed system logging: %ps.cmdline %file.path %file.dest"
+severity: high
+action: []
+tests:
+  atomic: []
+min-engine-version: 0.1.0

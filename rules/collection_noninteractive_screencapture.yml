@@ -1,0 +1,26 @@
+name: Non-interactive screen capture from script or untrusted parent
+id: aea9e10f-835b-40ed-9863-d11e4b5f0074
+version: 1.0.0
+description: |
+  /usr/sbin/screencapture was started without an interactive selection mode (-i, -W,
+  -U) by something other than Apple's screenshot UI. Spyware and stealers take silent
+  full-screen captures with `screencapture -x <file>` from a script or their own binary.
+  Known benign: user scripts or automation tools that take scheduled screenshots.
+labels:
+  tactic.id: TA0009
+  tactic.name: Collection
+  technique.id: T1113
+  technique.name: Screen Capture
+references:
+  - https://attack.mitre.org/techniques/T1113/
+condition: >
+  spawn_process
+  and ps.exe = '/usr/sbin/screencapture'
+  and not (ps.args regex '^-[a-zA-Z]*[iWU][a-zA-Z]*$')
+  and not (ps.parent.is_platform = true and ps.parent.signing_id in ('com.apple.screencaptureui', 'com.apple.screenshot.launcher', 'com.apple.systemuiserver', 'com.apple.dock', 'com.apple.Screenshot'))
+output: "%ps.cmdline (pid %ps.pid, parent %ps.parent.exe) captured the screen"
+severity: medium
+action: []
+tests:
+  atomic: [0f47ceb1-720f-4275-96b8-21f0562217ac, deb7d358-5fbd-4dc4-aecc-ee0054d2d9a4]
+min-engine-version: 0.1.0

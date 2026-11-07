@@ -1,0 +1,32 @@
+match:
+  - desc: unsigned payload dropped in /tmp and run
+    events:
+      - name: CreateFile
+        proc: {pid: 200, exe: /usr/bin/curl, is_signed: true, is_platform: true}
+        file: {path: /tmp/payload}
+      - name: CreateProcess
+        proc: {pid: 201, ppid: 200, exe: /tmp/payload, is_signed: false}
+nomatch:
+  - desc: payload runs after the window
+    events:
+      - name: CreateFile
+        time: 2026-01-01T00:00:00Z
+        proc: {pid: 200, exe: /usr/bin/curl}
+        file: {path: /tmp/payload}
+      - name: CreateProcess
+        time: 2026-01-01T00:05:00Z
+        proc: {pid: 201, exe: /tmp/payload}
+  - desc: a different binary runs
+    events:
+      - name: CreateFile
+        proc: {pid: 200, exe: /usr/bin/curl}
+        file: {path: /tmp/payload}
+      - name: CreateProcess
+        proc: {pid: 201, exe: /tmp/other}
+  - desc: signed installer dropped and run (benign lookalike)
+    events:
+      - name: CreateFile
+        proc: {pid: 300, exe: /usr/bin/ditto, is_signed: true}
+        file: {path: /Users/Shared/Installer}
+      - name: CreateProcess
+        proc: {pid: 301, exe: /Users/Shared/Installer, is_signed: true, team_id: ABCDE12345}

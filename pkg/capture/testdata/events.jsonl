@@ -1,0 +1,7 @@
+{"seq":1,"time":"2026-11-07T10:00:00Z","name":"Fork","source":"eslogger","proc":{"pid":500,"ppid":400,"exe":"/bin/zsh","name":"zsh","uid":501,"euid":501,"is_platform":true,"is_signed":true}}
+{"seq":2,"time":"2026-11-07T10:00:01Z","name":"CreateFile","source":"eslogger","proc":{"pid":501,"ppid":500,"exe":"/usr/bin/curl","name":"curl","uid":501,"euid":501,"signing_id":"com.apple.curl","is_platform":true,"is_signed":true},"file":{"path":"/tmp/payload"}}
+
+{"seq":3,"time":"2026-11-07T10:00:05Z","name":"CreateProcess","source":"eslogger","proc":{"pid":502,"ppid":500,"exe":"/tmp/payload","name":"payload","cmdline":"/tmp/payload --beacon \u001b[2J","args":["/tmp/payload","--beacon"],"uid":501,"euid":501,"is_platform":false,"is_signed":false}}
+this line is not json
+{"seq":4,"time":"2026-11-07T10:00:06Z","name":"CreateFile","source":"eslogger","proc":{"pid":502,"ppid":500,"exe":"/tmp/payload","name":"payload","uid":501,"euid":501,"is_platform":false,"is_signed":false},"file":{"path":"/Users/a/Library/LaunchAgents/com.evil.agent.plist"}}
+{"seq":5,"time":"2026-11-07T10:00:07Z","name":"OpenFile","source":"eslogger","proc":{"pid":88,"ppid":1,"exe":"/System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared","name":"mdworker_shared","signing_id":"com.apple.mdworker_shared","is_platform":true,"is_signed":true},"file":{"path":"/Users/a/Documents/x.txt"}}

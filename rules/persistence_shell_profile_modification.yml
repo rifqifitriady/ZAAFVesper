@@ -1,0 +1,31 @@
+name: Shell start-up file modified by non-editor process
+id: 43c54c4b-3ed8-4c6c-a0d6-eb507bf0170f
+version: 1.0.0
+description: |
+  A shell start-up file (~/.zshrc, ~/.bash_profile, /etc/zprofile, ...) was written or
+  replaced by something other than a trusted text editor. Code appended there runs in
+  every new shell. Droppers typically append with a shell redirect, a script interpreter
+  or their own binary.
+  Known benign: following an installer's instruction such as
+  `echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile`, conda/nvm/rustup
+  init. These are indistinguishable from the atomic by telemetry; triage the content.
+labels:
+  tactic.id: TA0003
+  tactic.name: Persistence
+  technique.id: T1546.004
+  technique.name: Unix Shell Configuration Modification
+references:
+  - https://attack.mitre.org/techniques/T1546/004/
+condition: >
+  (
+    (file_written and file.path imatches shell_profile_globs)
+    or (rename_file and file.dest imatches shell_profile_globs)
+  )
+  and not (trusted_editor)
+  and not (apple_trusted_process)
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) modified shell start-up file %file.path %file.dest"
+severity: medium
+action: []
+tests:
+  atomic: [94500ae1-7e31-47e3-886b-c328da46872f, 0a898315-4cfa-4007-bafe-33a4646d115f]
+min-engine-version: 0.1.0

@@ -1,0 +1,27 @@
+name: Shell history file deleted
+id: 9889fe8e-48e3-4b10-b8dd-38949b8afb9b
+version: 1.0.0
+description: |
+  A shell history file (~/.bash_history, ~/.zsh_history, ...) was deleted, either with
+  rm/unlink or by `ln -sf /dev/null ~/.bash_history` (ln unlinks the file first). Removing
+  history erases the record of hands-on-keyboard commands. zsh's normal save path writes
+  .zsh_history.new and renames it over the file, which is a rename, not a delete.
+  Not covered: truncation in place (`cat /dev/null > ~/.bash_history`), because bash
+  legitimately truncates its own history on exit and the two cannot be told apart.
+labels:
+  tactic.id: TA0005
+  tactic.name: Stealth
+  technique.id: T1070.003
+  technique.name: Clear Command History
+references:
+  - https://attack.mitre.org/techniques/T1070/003/
+condition: >
+  delete_file
+  and file.name in shell_history_names
+  and file.path imatches ('/Users/*', '/private/var/root/*')
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) deleted shell history %file.path"
+severity: medium
+action: []
+tests:
+  atomic: [a934276e-2be5-4a36-93fd-98adbb5bd4fc, 23d348f3-cc5c-4ba9-bd0a-ae09069f0914]
+min-engine-version: 0.1.0

@@ -1,0 +1,19 @@
+match:
+  - desc: stealer rule matches a binary executed from a mounted DMG
+    events:
+      - name: YaraMatch
+        source: yara
+        proc: {pid: 5701, ppid: 1, exe: /Volumes/Installer/Installer.app/Contents/MacOS/Installer, name: Installer, uid: 501, euid: 501, signing_id: Installer-55554944, is_platform: false, is_signed: false}
+        yara: {rule: MAL_Mac_Infostealer_HarvestTargets_Nov26, namespace: zaafvesper, tags: [stealer, macos], meta: {author: ZAAFVesper, description: "macOS infostealer harvest strings", attack: T1555.003}, target: /Volumes/Installer/Installer.app/Contents/MacOS/Installer}
+nomatch:
+  - desc: benign lookalike - match from a rule tagged hunting (low-confidence research signature)
+    events:
+      - name: YaraMatch
+        source: yara
+        proc: {pid: 5711, ppid: 1, exe: /usr/bin/curl, name: curl, uid: 501, euid: 501, signing_id: com.apple.curl, is_platform: true, is_signed: true}
+        yara: {rule: SUSP_Mac_EmbeddedLaunchAgentTemplate_Nov26, namespace: zaafvesper, tags: [hunting, persistence, macos], meta: {author: ZAAFVesper, description: "embedded LaunchAgent template (hunting only)", attack: T1543.001}, target: /private/tmp/install.sh}
+  - desc: the CreateFile that triggered a scan is not itself a match
+    events:
+      - name: CreateFile
+        proc: {pid: 5712, ppid: 1, exe: /usr/bin/curl, name: curl, uid: 501, euid: 501, signing_id: com.apple.curl, is_platform: true, is_signed: true}
+        file: {path: /private/tmp/install.sh}

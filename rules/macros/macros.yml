@@ -1,0 +1,321 @@
+# ZAAFVesper macros and lists for the macOS rule set.
+#
+# Order matters: a macro may only reference lists and macros defined above it.
+# Paths: Endpoint Security reports resolved paths, so /tmp, /etc and /var arrive
+# as /private/tmp, /private/etc and /private/var. Path lists carry both forms so
+# that rules also work on captures from other sources.
+# Globs: `*` matches any run of characters INCLUDING `/`.
+
+# ---------------------------------------------------------------------------
+# Lists
+# ---------------------------------------------------------------------------
+
+- list: shells
+  items: ['/bin/sh', '/bin/bash', '/bin/zsh', '/bin/dash', '/bin/ksh', '/bin/tcsh', '/bin/csh',
+          '/opt/homebrew/bin/bash', '/opt/homebrew/bin/zsh', '/opt/homebrew/bin/fish',
+          '/usr/local/bin/bash', '/usr/local/bin/zsh', '/usr/local/bin/fish']
+
+- list: shell_names
+  items: ['sh', 'bash', 'zsh', 'dash', 'ksh', 'tcsh', 'csh', 'fish']
+
+# Script interpreters by executable path (Apple-shipped and common Homebrew locations).
+- list: script_interpreters
+  items: ['/usr/bin/python3', '/usr/bin/perl', '/usr/bin/perl5.30', '/usr/bin/perl5.34', '/usr/bin/ruby',
+          '/usr/bin/osascript', '/usr/bin/tclsh', '/usr/bin/php',
+          '/opt/homebrew/bin/python3', '/opt/homebrew/bin/node', '/opt/homebrew/bin/ruby', '/opt/homebrew/bin/perl',
+          '/usr/local/bin/python3', '/usr/local/bin/node', '/usr/local/bin/ruby', '/usr/local/bin/pwsh']
+
+# Script interpreters by process name (glob, case-insensitive use with imatches).
+- list: script_interpreter_name_globs
+  items: ['python*', 'perl*', 'ruby*', 'node', 'php*', 'tclsh*', 'lua*', 'pwsh', 'osascript']
+
+# Apple daemons trusted to touch launch items, keychains, logs and TCC state.
+# Only meaningful together with ps.is_platform = true (see macro apple_trusted_process).
+# com.apple.installd is deliberately absent: it installs third-party packages,
+# malicious ones included. system_installd only installs Apple-signed packages.
+- list: apple_signed_trusted
+  items: ['com.apple.xpc.launchd', 'com.apple.backgroundtaskmanagementd',
+          'com.apple.system_installd', 'com.apple.softwareupdated', 'com.apple.securityd',
+          'com.apple.secd', 'com.apple.trustd', 'com.apple.tccd', 'com.apple.backupd',
+          'com.apple.backupd-helper', 'com.apple.mds', 'com.apple.mdworker', 'com.apple.mdworker.shared',
+          'com.apple.mds_stores', 'com.apple.newsyslog', 'com.apple.aslmanager', 'com.apple.syslogd',
+          'com.apple.logd', 'com.apple.auditd', 'com.apple.syspolicyd', 'com.apple.lsd']
+
+# Writable staging locations where a dropped payload commonly lands.
+- list: temp_drop_globs
+  items: ['/private/tmp/*', '/tmp/*', '/private/var/tmp/*', '/var/tmp/*', '/Users/Shared/*']
+
+# Locations a user can write without admin rights, plus mounted images and
+# App Translocation. Used to judge the origin of a parent/ancestor executable.
+- list: user_writable_exe_globs
+  items: ['/private/tmp/*', '/tmp/*', '/private/var/tmp/*', '/var/tmp/*', '/Users/Shared/*',
+          '/Users/*/Downloads/*', '/Users/*/Desktop/*', '/Users/*/Library/*', '/Users/*/.*',
+          '/private/var/folders/*', '/Volumes/*']
+
+# Generic tools an attacker uses to read or copy a secret file.
+- list: file_access_tool_names
+  items: ['cat', 'cp', 'ditto', 'rsync', 'scp', 'sftp', 'tar', 'zip', 'gzip', 'bzip2', 'xz', 'dd',
+          'base64', 'xxd', 'hexdump', 'od', 'strings', 'sqlite3', 'curl', 'nc', 'ncat', 'head', 'tail',
+          'less', 'more', 'grep', 'egrep', 'fgrep', 'openssl', 'split', 'mv', 'ln']
+
+# Browser vendor Team IDs (Developer ID). A wrong ID would allow-list some other
+# developer, so only verified IDs are listed: Google EQHXZ8M8AV (checked with
+# codesign on this Mac, 7 Nov 2026), Mozilla 43AQ936H96, Microsoft UBF8T346G9,
+# Brave KL8N8XSYF4. Opera, Vivaldi and Arc are deliberately absent until their
+# IDs are read from a real install (`codesign -dv <app>`); until then those
+# browsers reading their own stores raise alerts.
+- list: browser_team_ids
+  items: ['EQHXZ8M8AV', '43AQ936H96', 'UBF8T346G9', 'KL8N8XSYF4']
+
+# Apple processes that legitimately read Safari/WebKit cookie and credential stores.
+- list: apple_browser_signing_prefixes
+  items: ['com.apple.Safari', 'com.apple.WebKit', 'com.apple.cfnetwork', 'com.apple.nsurlsessiond',
+          'com.apple.CloudKit', 'com.apple.cloudd', 'com.apple.backupd', 'com.apple.mdworker', 'com.apple.mds']
+
+# Security and monitoring products: launchd labels and plist fragments.
+- list: security_tool_identifiers
+  items: ['com.crowdstrike', 'at.obdev.littlesnitch', 'com.carbonblack', 'com.vmware.carbonblack',
+          'com.opendns', 'com.cisco.umbrella', 'com.cisco.amp', 'com.sentinelone', 'com.microsoft.wdav',
+          'com.microsoft.fresno', 'com.objective-see', 'com.jamf.protect', 'com.malwarebytes', 'com.sophos',
+          'com.eset', 'com.paloaltonetworks', 'com.elastic', 'com.osquery', 'io.osquery', 'com.cylance',
+          'com.trendmicro', 'com.bitdefender', 'com.kaspersky', 'com.google.santa', 'com.northpolesec.santa',
+          'com.apple.XProtect', 'com.rifqifitriady.zaafvesper']
+
+# Security and monitoring products: process names an attacker greps for or kills.
+- list: security_tool_process_names
+  items: ['falcond', 'falcon-sensor', 'com.crowdstrike', 'Little Snitch', 'LittleSnitch', 'CbOsxSensorService',
+          'CbDefense', 'nessusd', 'santad', 'td-agent', 'packetbeat', 'filebeat', 'auditbeat', 'osqueryd',
+          'BlockBlock', 'LuLu', 'KnockKnock', 'SentinelAgent', 'sentineld', 'wdavdaemon', 'JamfProtect',
+          'SophosScanD', 'esets_daemon']
+
+# Apple logging and audit daemons (system-logging impairment rule).
+- list: logging_service_identifiers
+  items: ['com.apple.auditd', 'com.apple.syslogd', 'com.apple.logd', 'com.apple.aslmanager', 'com.apple.diagnosticd']
+
+# Logging and audit configuration files.
+- list: logging_config_globs
+  items: ['/private/etc/security/audit_control', '/etc/security/audit_control',
+          '/private/etc/security/audit_event', '/etc/security/audit_event',
+          '/private/etc/asl.conf', '/etc/asl.conf', '/private/etc/asl/*', '/etc/asl/*',
+          '/private/etc/syslog.conf', '/etc/syslog.conf',
+          '/private/etc/newsyslog.conf', '/etc/newsyslog.conf', '/private/etc/newsyslog.d/*', '/etc/newsyslog.d/*',
+          '/Library/Preferences/Logging/*']
+
+# ZAAFVesper's own moving parts: killing these blinds the sensor.
+- list: sensor_self_names
+  items: ['eslogger', 'zaafvesper']
+
+# Terminal and GUI text editors that legitimately edit shell start-up files.
+- list: editor_names
+  items: ['vi', 'vim', 'nvim', 'mvim', 'nano', 'pico', 'emacs', 'micro', 'hx', 'ed', 'TextEdit']
+
+# Shell start-up files (T1546.004).
+- list: shell_profile_globs
+  items: ['/Users/*/.bash_profile', '/Users/*/.bashrc', '/Users/*/.bash_login', '/Users/*/.profile',
+          '/Users/*/.zshrc', '/Users/*/.zshenv', '/Users/*/.zprofile', '/Users/*/.zlogin', '/Users/*/.zlogout',
+          '/Users/*/.config/fish/config.fish', '/private/var/root/.zshrc', '/private/var/root/.bash_profile',
+          '/private/var/root/.profile', '/private/etc/profile', '/private/etc/zshrc', '/private/etc/zshenv',
+          '/private/etc/zprofile', '/private/etc/bashrc', '/etc/profile', '/etc/zshrc', '/etc/zshenv',
+          '/etc/zprofile', '/etc/bashrc']
+
+# Shell history files (T1070.003).
+- list: shell_history_names
+  items: ['.bash_history', '.zsh_history', '.sh_history', '.history', '.ksh_history', '.fish_history']
+
+# Apple system and audit logs (T1685.006). Scoped to logs Apple's own daemons
+# write, so third-party agents rotating their own files in /var/log do not need an
+# allow-list.
+- list: system_log_globs
+  items: ['/private/var/log/system.log*', '/var/log/system.log*', '/private/var/log/install.log*', '/var/log/install.log*',
+          '/private/var/log/wifi.log*', '/private/var/log/fsck_*', '/private/var/log/asl/*', '/var/log/asl/*',
+          '/private/var/log/DiagnosticMessages/*', '/private/var/log/com.apple.xpc.launchd/*',
+          '/private/var/log/powermanagement/*', '/private/var/log/daily.out', '/private/var/log/weekly.out',
+          '/private/var/log/monthly.out', '/private/var/audit/*', '/var/audit/*',
+          '/private/var/db/diagnostics/*', '/var/db/diagnostics/*', '/private/var/db/uuidtext/*', '/var/db/uuidtext/*']
+
+# Cron and periodic locations (T1053.003).
+- list: cron_globs
+  items: ['/private/var/at/tabs/*', '/usr/lib/cron/tabs/*', '/private/etc/crontab', '/etc/crontab',
+          '/private/etc/cron.*', '/etc/cron.*', '/private/etc/periodic/*', '/etc/periodic/*',
+          '/usr/local/etc/periodic/*', '/private/etc/periodic.conf', '/etc/periodic.conf']
+
+# Sudoers (T1548.003).
+- list: sudoers_globs
+  items: ['/private/etc/sudoers', '/etc/sudoers', '/private/etc/sudoers.d/*', '/etc/sudoers.d/*']
+
+# TCC databases (T1548.006).
+- list: tcc_db_globs
+  items: ['/Library/Application Support/com.apple.TCC/TCC.db*',
+          '/Users/*/Library/Application Support/com.apple.TCC/TCC.db*']
+
+# ---------------------------------------------------------------------------
+# Event macros (one per canonical evt.name)
+# ---------------------------------------------------------------------------
+
+- macro: spawn_process
+  expr: evt.name = 'CreateProcess'
+- macro: fork_process
+  expr: evt.name = 'Fork'
+- macro: exit_process
+  expr: evt.name = 'TerminateProcess'
+- macro: open_file
+  expr: evt.name = 'OpenFile'
+- macro: create_file
+  expr: evt.name = 'CreateFile'
+- macro: write_file
+  expr: evt.name = 'WriteFile'
+- macro: rename_file
+  expr: evt.name = 'RenameFile'
+- macro: delete_file
+  expr: evt.name = 'DeleteFile'
+- macro: set_xattr
+  expr: evt.name = 'SetXattr'
+- macro: delete_xattr
+  expr: evt.name = 'DeleteXattr'
+- macro: set_mode
+  expr: evt.name = 'SetMode'
+- macro: set_owner
+  expr: evt.name = 'SetOwner'
+- macro: open_process
+  expr: evt.name = 'OpenProcess'
+- macro: send_signal
+  expr: evt.name = 'Signal'
+- macro: ptrace
+  expr: evt.name = 'Ptrace'
+- macro: remote_thread
+  expr: evt.name = 'CreateRemoteThread'
+- macro: add_launch_item
+  expr: evt.name = 'AddLaunchItem'
+- macro: load_kext
+  expr: evt.name = 'LoadKext'
+- macro: mount
+  expr: evt.name = 'Mount'
+- macro: authenticate
+  expr: evt.name = 'Authenticate'
+- macro: sudo
+  expr: evt.name = 'Sudo'
+- macro: modify_tcc
+  expr: evt.name = 'ModifyTCC'
+- macro: xprotect_detect
+  expr: evt.name = 'XProtectDetect'
+- macro: yara_match
+  expr: evt.name = 'YaraMatch'
+
+# ---------------------------------------------------------------------------
+# Composite macros
+# ---------------------------------------------------------------------------
+
+# A file was created, written, or something was renamed onto it. Use with
+# file.path for create/write and with file.dest for rename (see modify_path_* rules).
+- macro: file_written
+  expr: evt.name in ('CreateFile', 'WriteFile')
+
+# Apple platform binary on the trusted-daemon list. ps.is_platform cannot be
+# forged by an ad-hoc signature, so the signing_id check is safe to rely on here.
+- macro: apple_trusted_process
+  expr: ps.is_platform = true and ps.signing_id in apple_signed_trusted
+
+# Apple Installer / PackageKit writing package payloads. PackageKit installs ANY
+# .pkg, malicious ones included, so this is only safe for SIP-protected
+# destinations that third-party packages cannot write (see StartupItems rule).
+- macro: apple_package_installer
+  expr: ps.is_platform = true and ps.exe istartswith '/System/Library/PrivateFrameworks/PackageKit.framework/'
+
+# Signing semantics (decoder contract, pkg/source/eslogger/README.md): ps.is_signed
+# is true only when CS_SIGNED and CS_VALID are set and CS_ADHOC is not. That does
+# NOT mean the certificate chains to Apple: a self-signed certificate also gives
+# is_signed = true. Trust therefore never rests on is_signed or signing_id alone;
+# it rests on ps.is_platform = true (Apple platform binary) or on a specific
+# vendor Team ID paired with that vendor's signing IDs.
+#
+# Apple's own non-platform software (Xcode, Command Line Tools, debugserver,
+# clang) is signed with Apple's Team ID 59GAB85EFG (checked with codesign on
+# this Mac, 7 Nov 2026); it is NOT a platform binary.
+
+# No developer identity: not a platform binary and no Team ID. Covers unsigned,
+# ad-hoc, linker-signed and self-signed code.
+- macro: no_developer_identity
+  expr: (ps.is_platform = false and ps.team_id = '')
+
+- macro: parent_no_developer_identity
+  expr: (ps.parent.is_platform = false and ps.parent.team_id = '')
+
+# Apple-signed, non-platform developer tools (Xcode / CLT), bound to Apple's Team ID.
+- macro: apple_developer_tool
+  expr: (ps.is_platform = false and ps.team_id = '59GAB85EFG' and ps.signing_id istartswith 'com.apple.')
+
+- macro: parent_apple_developer_tool
+  expr: (ps.parent.is_platform = false and ps.parent.team_id = '59GAB85EFG' and ps.parent.signing_id istartswith 'com.apple.')
+
+# Executable lives somewhere a normal user can write, or on a mounted image.
+- macro: parent_from_user_writable
+  expr: ps.parent.exe imatches user_writable_exe_globs
+
+- macro: ancestor_from_user_writable
+  expr: ps.ancestors imatches user_writable_exe_globs
+
+# Generic file tools and script interpreters (by name) - the usual readers of a
+# stolen secret when the stealer lives off the land.
+- macro: generic_reader_process
+  expr: (ps.name in file_access_tool_names or ps.name imatches script_interpreter_name_globs)
+
+# osascript invocation.
+- macro: spawn_osascript
+  expr: spawn_process and ps.exe = '/usr/bin/osascript'
+
+# Has some developer identity (Team ID present, not a platform binary) and is
+# not a script interpreter. NOT a trust anchor: any Developer ID holder (or a
+# self-signed certificate carrying a Team ID) satisfies it. Used only to route
+# such writers to a lower-severity companion rule, never to drop an event.
+- macro: developer_id_signed
+  expr: ps.is_signed = true and ps.is_platform = false and ps.team_id != '' and not (ps.name imatches script_interpreter_name_globs)
+
+# AppleScript / JXA dialog that asks for a secret.
+- macro: osascript_credential_prompt
+  expr: >
+    ps.cmdline icontains ('display dialog', 'displayDialog')
+    and ps.cmdline icontains ('default answer', 'defaultAnswer')
+    and ps.cmdline icontains ('hidden answer', 'hiddenAnswer', 'password', 'passphrase')
+
+# The prompt comes from an untrusted origin: an unsigned/ad-hoc parent, or a
+# parent or ancestor running from a user-writable location or mounted image.
+- macro: untrusted_prompt_origin
+  expr: (parent_no_developer_identity or parent_from_user_writable or ancestor_from_user_writable)
+
+# Text editors with an identity an attacker cannot choose: an Apple platform
+# binary (vim, nano, TextEdit), or a vendor signing ID paired with that vendor's
+# Team ID. VS Code = Microsoft UBF8T346G9; Sublime Text = Z6D26JE4Y4 (checked with
+# codesign on this Mac). Other editors stay out until their Team ID is verified.
+- macro: trusted_editor
+  expr: >
+    (ps.is_platform = true and ps.name in editor_names)
+    or (ps.team_id = 'UBF8T346G9' and ps.signing_id in ('com.microsoft.VSCode', 'com.microsoft.VSCodeInsiders'))
+    or (ps.team_id = 'Z6D26JE4Y4' and ps.signing_id in ('com.sublimetext.4', 'com.sublimetext.3'))
+
+# Browser credential, cookie and key stores (T1555.003). Chromium-family profiles
+# share a layout: <root>/<profile>/Login Data, Cookies (or Network/Cookies), Web Data.
+- list: browser_secret_globs
+  items: ['/Users/*/Library/Application Support/Google/Chrome/*/Login Data',
+          '/Users/*/Library/Application Support/Google/Chrome/*/Login Data For Account',
+          '/Users/*/Library/Application Support/Google/Chrome/*/Cookies',
+          '/Users/*/Library/Application Support/Google/Chrome/*/Web Data',
+          '/Users/*/Library/Application Support/Google/Chrome/Local State',
+          '/Users/*/Library/Application Support/Chromium/*/Login Data',
+          '/Users/*/Library/Application Support/Chromium/*/Cookies',
+          '/Users/*/Library/Application Support/BraveSoftware/Brave-Browser/*/Login Data',
+          '/Users/*/Library/Application Support/BraveSoftware/Brave-Browser/*/Cookies',
+          '/Users/*/Library/Application Support/BraveSoftware/Brave-Browser/*/Web Data',
+          '/Users/*/Library/Application Support/Microsoft Edge/*/Login Data',
+          '/Users/*/Library/Application Support/Microsoft Edge/*/Cookies',
+          '/Users/*/Library/Application Support/Microsoft Edge/*/Web Data',
+          '/Users/*/Library/Application Support/com.operasoftware.Opera*/Login Data',
+          '/Users/*/Library/Application Support/com.operasoftware.Opera*/Cookies',
+          '/Users/*/Library/Application Support/Vivaldi/*/Login Data',
+          '/Users/*/Library/Application Support/Vivaldi/*/Cookies',
+          '/Users/*/Library/Application Support/Arc/User Data/*/Login Data',
+          '/Users/*/Library/Application Support/Arc/User Data/*/Cookies',
+          '/Users/*/Library/Application Support/Firefox/Profiles/*/logins.json',
+          '/Users/*/Library/Application Support/Firefox/Profiles/*/key4.db',
+          '/Users/*/Library/Application Support/Firefox/Profiles/*/cookies.sqlite',
+          '/Users/*/Library/Cookies/Cookies.binarycookies',
+          '/Users/*/Library/Containers/com.apple.Safari/Data/Library/Cookies/Cookies.binarycookies']

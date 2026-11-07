@@ -1,0 +1,27 @@
+name: File hidden with chflags or SetFile
+id: 3934e901-b4c2-4bd4-9250-9b5fd955016e
+version: 1.0.0
+description: |
+  `chflags hidden <path>` or `SetFile -a V <path>` set the Finder "invisible" flag so a
+  payload or staging directory does not show in Finder. `chflags nohidden` (the common
+  tip to reveal ~/Library) does not match.
+  Known benign: users or setup scripts hiding clutter folders.
+labels:
+  tactic.id: TA0005
+  tactic.name: Stealth
+  technique.id: T1564.001
+  technique.name: Hidden Files and Directories
+references:
+  - https://attack.mitre.org/techniques/T1564/001/
+condition: >
+  spawn_process
+  and (
+    (ps.exe = '/usr/bin/chflags' and ps.args = 'hidden')
+    or (ps.name imatches 'setfile' and ps.args = '-a' and ps.args = 'V')
+  )
+output: "%ps.cmdline (pid %ps.pid, parent %ps.parent.exe) hid a file"
+severity: low
+action: []
+tests:
+  atomic: [b115ecaf-3b24-4ed2-aefe-2fcb9db913d3, 3b7015f2-3144-4205-b799-b05580621379]
+min-engine-version: 0.1.0

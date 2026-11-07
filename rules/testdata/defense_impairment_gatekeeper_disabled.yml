@@ -1,0 +1,22 @@
+match:
+  - desc: 'sudo spctl --master-disable (ART T1685 #12)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 3401, ppid: 3400, exe: /usr/sbin/spctl, name: spctl, cmdline: "spctl --master-disable", args: [spctl, --master-disable], uid: 0, euid: 0, signing_id: com.apple.spctl, is_platform: true, is_signed: true}
+  - desc: defaults turns off LSQuarantine
+    events:
+      - name: CreateProcess
+        proc: {pid: 3402, ppid: 3400, exe: /usr/bin/defaults, name: defaults, cmdline: "defaults write com.apple.LaunchServices LSQuarantine -bool NO", args: [defaults, write, com.apple.LaunchServices, LSQuarantine, -bool, "NO"], uid: 501, euid: 501, signing_id: com.apple.defaults, is_platform: true, is_signed: true}
+nomatch:
+  - desc: benign lookalike - spctl --status / --assess
+    events:
+      - name: CreateProcess
+        proc: {pid: 3411, ppid: 3410, exe: /usr/sbin/spctl, name: spctl, cmdline: "spctl --status", args: [spctl, --status], uid: 501, euid: 501, signing_id: com.apple.spctl, is_platform: true, is_signed: true}
+      - name: CreateProcess
+        proc: {pid: 3412, ppid: 3410, exe: /usr/sbin/spctl, name: spctl, cmdline: "spctl --assess -vv /Applications/Rectangle.app", args: [spctl, --assess, -vv, /Applications/Rectangle.app], uid: 501, euid: 501, signing_id: com.apple.spctl, is_platform: true, is_signed: true}
+  - desc: benign lookalike - re-enabling Gatekeeper and reading LSQuarantine
+    events:
+      - name: CreateProcess
+        proc: {pid: 3413, ppid: 3410, exe: /usr/sbin/spctl, name: spctl, cmdline: "spctl --master-enable", args: [spctl, --master-enable], uid: 0, euid: 0, signing_id: com.apple.spctl, is_platform: true, is_signed: true}
+      - name: CreateProcess
+        proc: {pid: 3414, ppid: 3410, exe: /usr/bin/defaults, name: defaults, cmdline: "defaults read com.apple.LaunchServices LSQuarantine", args: [defaults, read, com.apple.LaunchServices, LSQuarantine], uid: 501, euid: 501, signing_id: com.apple.defaults, is_platform: true, is_signed: true}

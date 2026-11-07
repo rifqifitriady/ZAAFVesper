@@ -1,0 +1,20 @@
+match:
+  - desc: sqlite3 inserts a Full Disk Access grant into the user TCC.db
+    events:
+      - name: CreateProcess
+        proc: {pid: 3201, ppid: 3200, exe: /usr/bin/sqlite3, name: sqlite3, cmdline: "sqlite3 /Users/rifqi/Library/Application Support/com.apple.TCC/TCC.db INSERT INTO access VALUES('kTCCServiceSystemPolicyAllFiles','com.evil.agent',0,2,4,1,NULL,NULL,0,'UNUSED',NULL,0,1700000000)", args: [sqlite3, "/Users/rifqi/Library/Application Support/com.apple.TCC/TCC.db", "INSERT INTO access VALUES('kTCCServiceSystemPolicyAllFiles','com.evil.agent',0,2,4,1,NULL,NULL,0,'UNUSED',NULL,0,1700000000)"], uid: 501, euid: 501, signing_id: com.apple.sqlite3, is_platform: true, is_signed: true}
+  - desc: unsigned binary writes the system TCC.db directly
+    events:
+      - name: WriteFile
+        proc: {pid: 3202, ppid: 1, exe: /private/var/tmp/.helper, name: .helper, uid: 0, euid: 0, is_platform: false, is_signed: false}
+        file: {path: /Library/Application Support/com.apple.TCC/TCC.db}
+nomatch:
+  - desc: benign lookalike - tccd records a user's approval
+    events:
+      - name: WriteFile
+        proc: {pid: 210, ppid: 1, exe: /System/Library/PrivateFrameworks/TCC.framework/Support/tccd, name: tccd, uid: 501, euid: 501, signing_id: com.apple.tccd, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/Library/Application Support/com.apple.TCC/TCC.db-wal}
+  - desc: benign lookalike - sqlite3 SELECT (read-only audit by an admin)
+    events:
+      - name: CreateProcess
+        proc: {pid: 3211, ppid: 3210, exe: /usr/bin/sqlite3, name: sqlite3, cmdline: "sqlite3 /Library/Application Support/com.apple.TCC/TCC.db SELECT client,service FROM access", args: [sqlite3, "/Library/Application Support/com.apple.TCC/TCC.db", "SELECT client,service FROM access"], uid: 0, euid: 0, signing_id: com.apple.sqlite3, is_platform: true, is_signed: true}

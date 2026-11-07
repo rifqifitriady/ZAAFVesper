@@ -1,0 +1,37 @@
+match:
+  - desc: 'cp test_upx /tmp/packed_bin && /tmp/packed_bin (ART T1027.002 #3)'
+    events:
+      - name: CreateFile
+        proc: {pid: 5401, ppid: 5400, exe: /bin/cp, name: cp, cmdline: "cp test_upx /tmp/packed_bin", args: [cp, test_upx, /tmp/packed_bin], uid: 501, euid: 501, signing_id: com.apple.cp, is_platform: true, is_signed: true}
+        file: {path: /private/tmp/packed_bin}
+      - name: CreateProcess
+        proc: {pid: 5402, ppid: 5400, exe: /private/tmp/packed_bin, name: packed_bin, cmdline: "/tmp/packed_bin", args: [/tmp/packed_bin], uid: 501, euid: 501, is_platform: false, is_signed: false}
+  - desc: curl drops an ad-hoc signed payload in /Users/Shared and runs it
+    events:
+      - name: CreateFile
+        proc: {pid: 5403, ppid: 5400, exe: /usr/bin/curl, name: curl, uid: 501, euid: 501, signing_id: com.apple.curl, is_platform: true, is_signed: true}
+        file: {path: /Users/Shared/.cache/update}
+      - name: CreateProcess
+        proc: {pid: 5404, ppid: 5400, exe: /Users/Shared/.cache/update, name: update, uid: 501, euid: 501, signing_id: update-555549446b2f, is_platform: false, is_signed: false}
+nomatch:
+  - desc: benign lookalike - Developer ID signed installer helper extracted to /tmp and run
+    events:
+      - name: CreateFile
+        proc: {pid: 5411, ppid: 1, exe: /Applications/Docker.app/Contents/MacOS/Docker, name: Docker, uid: 501, euid: 501, signing_id: com.docker.docker, team_id: 9BNSXJN65R, is_platform: false, is_signed: true}
+        file: {path: /private/tmp/com.docker.install-helper}
+      - name: CreateProcess
+        proc: {pid: 5412, ppid: 5411, exe: /private/tmp/com.docker.install-helper, name: com.docker.install-helper, uid: 0, euid: 0, signing_id: com.docker.install-helper, team_id: 9BNSXJN65R, is_platform: false, is_signed: true}
+  - desc: benign lookalike - unsigned dev build run from ~/src (not a temp folder)
+    events:
+      - name: CreateFile
+        proc: {pid: 5413, ppid: 5410, exe: /usr/bin/ld, name: ld, uid: 501, euid: 501, signing_id: com.apple.ld, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/src/tool/a.out}
+      - name: CreateProcess
+        proc: {pid: 5414, ppid: 5410, exe: /Users/rifqi/src/tool/a.out, name: a.out, uid: 501, euid: 501, signing_id: a.out-55554944, is_platform: false, is_signed: false}
+  - desc: file created in /tmp but a different unsigned file is executed
+    events:
+      - name: CreateFile
+        proc: {pid: 5415, ppid: 5410, exe: /bin/cp, name: cp, uid: 501, euid: 501, signing_id: com.apple.cp, is_platform: true, is_signed: true}
+        file: {path: /private/tmp/notes.txt}
+      - name: CreateProcess
+        proc: {pid: 5416, ppid: 5410, exe: /private/tmp/other_bin, name: other_bin, uid: 501, euid: 501, is_platform: false, is_signed: false}

@@ -1,0 +1,32 @@
+match:
+  - desc: 'xattr -d com.apple.quarantine myapp.app (ART T1553.001 #1)'
+    events:
+      - name: DeleteXattr
+        proc: {pid: 3301, ppid: 3300, exe: /usr/bin/xattr, name: xattr, cmdline: "xattr -d com.apple.quarantine myapp.app", args: [xattr, -d, com.apple.quarantine, myapp.app], uid: 501, euid: 501, signing_id: com.apple.xattr, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/Downloads/myapp.app}
+        args: {xattr: com.apple.quarantine}
+  - desc: ad-hoc signed loader strips quarantine from its second stage via removexattr()
+    events:
+      - name: DeleteXattr
+        proc: {pid: 3302, ppid: 1, exe: /Volumes/Installer/Install.app/Contents/MacOS/Install, name: Install, uid: 501, euid: 501, signing_id: Install-5555494411aa, is_platform: false, is_signed: false}
+        file: {path: /Users/rifqi/Library/Application Support/.helper/helper}
+        args: {xattr: com.apple.quarantine}
+nomatch:
+  - desc: benign lookalike - syspolicyd (Apple platform) clears the attribute during assessment
+    events:
+      - name: DeleteXattr
+        proc: {pid: 330, ppid: 1, exe: /usr/libexec/syspolicyd, name: syspolicyd, uid: 0, euid: 0, signing_id: com.apple.syspolicyd, is_platform: true, is_signed: true}
+        file: {path: /Applications/Rectangle.app}
+        args: {xattr: com.apple.quarantine}
+  - desc: benign lookalike - xattr removes the download-origin metadata, not quarantine
+    events:
+      - name: DeleteXattr
+        proc: {pid: 3311, ppid: 3310, exe: /usr/bin/xattr, name: xattr, cmdline: "xattr -d com.apple.metadata:kMDItemWhereFroms report.pdf", args: [xattr, -d, "com.apple.metadata:kMDItemWhereFroms", report.pdf], uid: 501, euid: 501, signing_id: com.apple.xattr, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/Downloads/report.pdf}
+        args: {xattr: "com.apple.metadata:kMDItemWhereFroms"}
+  - desc: Safari sets (not removes) quarantine on a download
+    events:
+      - name: SetXattr
+        proc: {pid: 700, ppid: 1, exe: /Applications/Safari.app/Contents/MacOS/Safari, name: Safari, uid: 501, euid: 501, signing_id: com.apple.Safari, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/Downloads/tool.dmg}
+        args: {xattr: com.apple.quarantine}

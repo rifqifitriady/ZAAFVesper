@@ -1,0 +1,30 @@
+match:
+  - desc: 'crontab replaced from /tmp/persistevil (ART T1053.003 #1)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 2801, ppid: 2800, exe: /usr/bin/crontab, name: crontab, cmdline: "crontab /tmp/persistevil", args: [crontab, /tmp/persistevil], uid: 501, euid: 501, signing_id: com.apple.crontab, is_platform: true, is_signed: true, parent: {pid: 2800, ppid: 2799, exe: /bin/sh, name: sh, signing_id: com.apple.sh, is_platform: true, is_signed: true}}
+  - desc: 'sh redirect writes /etc/cron.daily/persistevil (ART T1053.003 #2)'
+    events:
+      - name: CreateFile
+        proc: {pid: 2811, ppid: 2810, exe: /bin/bash, name: bash, uid: 0, euid: 0, signing_id: com.apple.bash, is_platform: true, is_signed: true}
+        file: {path: /private/etc/cron.daily/persistevil}
+  - desc: payload drops a periodic daily script
+    events:
+      - name: CreateFile
+        proc: {pid: 2821, ppid: 1, exe: /private/tmp/upd, name: upd, uid: 0, euid: 0, is_platform: false, is_signed: false}
+        file: {path: /private/etc/periodic/daily/999.update}
+nomatch:
+  - desc: benign lookalike - crontab -l (the atomic's own backup step)
+    events:
+      - name: CreateProcess
+        proc: {pid: 2831, ppid: 2830, exe: /usr/bin/crontab, name: crontab, cmdline: "crontab -l", args: [crontab, -l], uid: 501, euid: 501, signing_id: com.apple.crontab, is_platform: true, is_signed: true}
+  - desc: benign lookalike - crontab itself writes the spool file (process branch already alerted)
+    events:
+      - name: CreateFile
+        proc: {pid: 2801, ppid: 2800, exe: /usr/bin/crontab, name: crontab, uid: 0, euid: 501, signing_id: com.apple.crontab, is_platform: true, is_signed: true}
+        file: {path: /private/var/at/tabs/rifqi}
+  - desc: benign lookalike - macOS update rewrites a periodic script
+    events:
+      - name: WriteFile
+        proc: {pid: 900, ppid: 1, exe: /System/Library/PrivateFrameworks/PackageKit.framework/Versions/A/Resources/system_installd, name: system_installd, uid: 0, euid: 0, signing_id: com.apple.system_installd, is_platform: true, is_signed: true}
+        file: {path: /private/etc/periodic/daily/110.clean-tmps}

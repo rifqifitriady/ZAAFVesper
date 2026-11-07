@@ -1,0 +1,16 @@
+name: Binary dropped in /tmp then executed
+id: 2528a712-3399-4db7-8951-42b1f31db3d5
+version: 1.0.0
+description: A file is created under /tmp or /Users/Shared and executed within two minutes.
+labels:
+  tactic.id: TA0002
+  tactic.name: Execution
+  technique.id: T1204.002
+  technique.name: Malicious File
+condition: |
+  sequence maxspan 2m
+    |create_file and file.path imatches ('/tmp/*', '/private/tmp/*', '/Users/Shared/*')| by file.path
+    |spawn_process and not ps.is_signed| by ps.exe
+output: "%1.ps.exe dropped %1.file.path, which ran as pid %ps.pid"
+severity: medium
+min-engine-version: 0.1.0

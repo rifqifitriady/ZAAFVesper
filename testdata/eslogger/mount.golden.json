@@ -1,0 +1,45 @@
+[
+  {
+    "seq": 1026,
+    "time": "2026-11-07T08:00:17.001026123Z",
+    "name": "Mount",
+    "source": "eslogger",
+    "proc": {
+      "pid": 5700,
+      "ppid": 1,
+      "pidversion": 5701,
+      "uuid": 24481313592901,
+      "exe": "/usr/libexec/diskimagesiod",
+      "name": "diskimagesiod",
+      "uid": 0,
+      "euid": 0,
+      "signing_id": "com.apple.diskimagesiod",
+      "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
+      "is_platform": true,
+      "is_signed": true,
+      "start_time": "2026-11-07T07:59:59.5Z",
+      "parent": {
+        "pid": 1,
+        "ppid": 0,
+        "pidversion": 1,
+        "uuid": 4294967297,
+        "exe": "",
+        "name": "",
+        "uid": 0,
+        "euid": 0,
+        "is_platform": false,
+        "is_signed": false,
+        "start_time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "file": {
+      "path": "/Volumes/Installer"
+    },
+    "args": {
+      "mount_disposition": "virtual",
+      "mount_from": "/dev/disk4s2",
+      "mount_fstype": "hfs",
+      "mount_path": "/Volumes/Installer"
+    }
+  }
+]

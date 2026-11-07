@@ -1,0 +1,13 @@
+name: Quarantine attribute removed
+id: 734fbb6d-91e3-4b6a-af80-35c5188e3d10
+version: 1.0.0
+description: The com.apple.quarantine extended attribute is deleted from a file.
+labels:
+  tactic.id: TA0005
+  technique.id: T1553.001
+  technique.name: Gatekeeper Bypass
+condition: evt.name = 'DeleteXattr' and evt.arg[xattr] = 'com.apple.quarantine'
+output: "%ps.exe removed quarantine from %file.path"
+severity: medium
+enabled: false
+min-engine-version: 0.1.0

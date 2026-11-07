@@ -1,0 +1,17 @@
+match:
+  - desc: curl drops a launch agent
+    events:
+      - name: CreateFile
+        proc: {pid: 100, ppid: 1, exe: /usr/bin/curl, name: curl, is_platform: true, is_signed: true}
+        file: {path: /Users/a/Library/LaunchAgents/com.evil.plist}
+nomatch:
+  - desc: launchd itself writes a launch agent
+    events:
+      - name: CreateFile
+        proc: {pid: 1, exe: /sbin/launchd, signing_id: com.apple.xpc.launchd, is_platform: true}
+        file: {path: /Library/LaunchAgents/com.apple.x.plist}
+  - desc: plist written outside LaunchAgents
+    events:
+      - name: CreateFile
+        proc: {pid: 100, exe: /usr/bin/curl}
+        file: {path: /Users/a/Library/Preferences/com.evil.plist}

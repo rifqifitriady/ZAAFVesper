@@ -1,0 +1,86 @@
+[
+  {
+    "seq": 1007,
+    "time": "2026-11-07T08:00:05.001007123Z",
+    "name": "OpenFile",
+    "source": "eslogger",
+    "proc": {
+      "pid": 4500,
+      "ppid": 1,
+      "pidversion": 4501,
+      "uuid": 19327352836501,
+      "exe": "/Users/Shared/stealer",
+      "name": "stealer",
+      "uid": 501,
+      "euid": 501,
+      "is_platform": false,
+      "is_signed": false,
+      "start_time": "2026-11-07T07:59:59.5Z",
+      "parent": {
+        "pid": 1,
+        "ppid": 0,
+        "pidversion": 1,
+        "uuid": 4294967297,
+        "exe": "",
+        "name": "",
+        "uid": 0,
+        "euid": 0,
+        "is_platform": false,
+        "is_signed": false,
+        "start_time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "file": {
+      "path": "/Users/alice/Library/Keychains/login.keychain-db",
+      "mode": 33152,
+      "size": 262144
+    },
+    "args": {
+      "open_access": "read",
+      "open_flag_names": "FREAD",
+      "open_flags": "1"
+    }
+  },
+  {
+    "seq": 1008,
+    "time": "2026-11-07T08:00:05.001008123Z",
+    "name": "OpenFile",
+    "source": "eslogger",
+    "proc": {
+      "pid": 4500,
+      "ppid": 1,
+      "pidversion": 4501,
+      "uuid": 19327352836501,
+      "exe": "/Users/Shared/stealer",
+      "name": "stealer",
+      "uid": 501,
+      "euid": 501,
+      "is_platform": false,
+      "is_signed": false,
+      "start_time": "2026-11-07T07:59:59.5Z",
+      "parent": {
+        "pid": 1,
+        "ppid": 0,
+        "pidversion": 1,
+        "uuid": 4294967297,
+        "exe": "",
+        "name": "",
+        "uid": 0,
+        "euid": 0,
+        "is_platform": false,
+        "is_signed": false,
+        "start_time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "file": {
+      "path": "/Users/alice/.ssh/id_ed25519",
+      "mode": 33152,
+      "size": 411
+    },
+    "args": {
+      "open_access": "readwrite",
+      "open_flag_names": "FREAD|FWRITE",
+      "open_flags": "3"
+    }
+  }
+]

@@ -1,0 +1,39 @@
+name: Download followed by stdin-fed shell
+id: 37f1b379-c1d0-4131-a03b-6a9c96d82ef7
+version: 1.0.0
+description: |
+  Sequence: curl/wget/nscurl fetches a URL and, within 30 seconds, a sibling process
+  (same parent) starts a shell or interpreter that reads its program from stdin
+  (`bash`, `sh -s`, `python3 -`) or receives a large script inline (`bash -c "$(curl
+  ...)"`, where the parent shell expands the download into the argument). This is the
+  telemetry shape of `curl ... | bash` typed at a prompt, which no single event shows.
+  The official Homebrew installer command is excluded by its exact command line.
+  Known benign: other `curl | sh` installers (rustup, nvm, oh-my-zsh).
+  Limitation: if the shell execs before curl in a pipeline, the order is reversed and
+  the sequence does not fire.
+labels:
+  tactic.id: TA0011
+  tactic.name: Command and Control
+  technique.id: T1105
+  technique.name: Ingress Tool Transfer
+references:
+  - https://attack.mitre.org/techniques/T1105/
+  - https://attack.mitre.org/techniques/T1059/004/
+  - atomic d0c88567-803d-4dca-99b4-7ce65e7b257c (indexed T1059.004) also exercises this behaviour (curl ... | bash)
+condition: >
+  sequence maxspan 30s by ps.ppid
+    |spawn_process and ps.name in ('curl', 'wget', 'nscurl')
+       and ps.cmdline icontains ('http://', 'https://', 'ftp://')
+       and not (ps.cmdline = 'curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh')|
+    |spawn_process
+       and (ps.exe in shells or ps.name in shell_names or ps.name imatches ('python*', 'perl*', 'ruby*', 'osascript'))
+       and (
+         ps.cmdline regex '^[^ ]*(sh|python[0-9.]*|perl|ruby|osascript)( +-s.*| +-)?$'
+         or (ps.args = '-c' and length(ps.cmdline) > 400)
+       )|
+output: "%1.ps.cmdline was followed by stdin-fed %2.ps.exe (parent pid %2.ps.ppid)"
+severity: high
+action: []
+tests:
+  atomic: []
+min-engine-version: 0.1.0

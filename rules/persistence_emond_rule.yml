@@ -1,0 +1,29 @@
+name: Event Monitor (emond) rule persistence
+id: a1dd2511-8cf0-4c41-8b64-9024fa0dab10
+version: 1.0.0
+description: |
+  A rule file was written to /etc/emond.d/rules or a client marker to
+  /private/var/db/emondClients. emond executes rule actions as root, and touching a file
+  in emondClients activates it. emond is unused on current macOS, so any write is
+  suspicious. PackageKit is not excluded: it installs any .pkg, malicious
+  ones included.
+labels:
+  tactic.id: TA0003
+  tactic.name: Persistence
+  technique.id: T1546.014
+  technique.name: Emond
+references:
+  - https://attack.mitre.org/techniques/T1546/014/
+  - atomic 11979f23-9b9d-482a-9935-6fc9cd022c3e (indexed T1543.001) also exercises this behaviour (copies an emond rule)
+condition: >
+  (
+    (file_written and file.path imatches ('/private/etc/emond.d/*', '/etc/emond.d/*', '/private/var/db/emondClients/*', '/var/db/emondClients/*'))
+    or (rename_file and file.dest imatches ('/private/etc/emond.d/*', '/etc/emond.d/*', '/private/var/db/emondClients/*', '/var/db/emondClients/*'))
+  )
+  and not (apple_trusted_process)
+output: "%ps.exe (pid %ps.pid, uid %ps.uid) wrote emond file %file.path %file.dest"
+severity: high
+action: []
+tests:
+  atomic: [23c9c127-322b-4c75-95ca-eff464906114]
+min-engine-version: 0.1.0

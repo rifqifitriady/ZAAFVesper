@@ -1,0 +1,27 @@
+name: StartupItems persistence
+id: 1077d373-6cd8-4040-8c1e-3e063474bf54
+version: 1.0.0
+description: |
+  A file was created, modified or renamed into a StartupItems directory. StartupItems
+  are deprecated and nothing current installs them, so any write is suspicious. The
+  Installer payload writer is excluded only for /System paths (OS updates).
+labels:
+  tactic.id: TA0003
+  tactic.name: Persistence
+  technique.id: T1037.005
+  technique.name: Startup Items
+references:
+  - https://attack.mitre.org/techniques/T1037/005/
+condition: >
+  (
+    (file_written and file.path imatches ('/Library/StartupItems/*', '/System/Library/StartupItems/*'))
+    or (rename_file and file.dest imatches ('/Library/StartupItems/*', '/System/Library/StartupItems/*'))
+  )
+  and not (apple_package_installer and file.path istartswith '/System/')
+  and not (file.name = '.DS_Store')
+output: "%ps.exe (pid %ps.pid, uid %ps.uid) wrote StartupItems file %file.path %file.dest"
+severity: high
+action: []
+tests:
+  atomic: [134627c3-75db-410e-bff8-7a920075f198, fc369906-90c7-4a15-86fd-d37da624dde6, 10cf5bec-49dd-4ebf-8077-8f47e420096f]
+min-engine-version: 0.1.0

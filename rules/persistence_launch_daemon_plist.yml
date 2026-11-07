@@ -1,0 +1,31 @@
+name: Launch Daemon persistence via plist write
+id: 3bbbda85-d32e-4ae9-b6b9-86f0a980a562
+version: 1.0.0
+description: |
+  A property list was created, modified or renamed into /Library/LaunchDaemons. Daemons
+  run as root at boot, so a new one means root-level persistence. Apple's launchd/BTM
+  daemons are excluded by platform identity; Developer ID signed writers go to the
+  low-severity companion rule "Launch item plist written by a Developer ID signed
+  process". PackageKit is not excluded: it installs any .pkg, malicious ones included.
+  Known benign: legitimate .pkg installers that ship a daemon (payload written by
+  PackageKit, or a postinstall script that `cp`s the plist); review the package.
+labels:
+  tactic.id: TA0003
+  tactic.name: Persistence
+  technique.id: T1543.004
+  technique.name: Launch Daemon
+references:
+  - https://attack.mitre.org/techniques/T1543/004/
+condition: >
+  (
+    (file_written and file.path imatches '/Library/LaunchDaemons/*.plist')
+    or (rename_file and file.dest imatches '/Library/LaunchDaemons/*.plist')
+  )
+  and not (apple_trusted_process)
+  and not (developer_id_signed)
+output: "%ps.exe (pid %ps.pid, uid %ps.uid, parent %ps.parent.exe) wrote launch daemon %file.path %file.dest"
+severity: high
+action: []
+tests:
+  atomic: [03ab8df5-3a6b-4417-b6bd-bb7a5cfd74cf]
+min-engine-version: 0.1.0

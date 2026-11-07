@@ -1,0 +1,28 @@
+match:
+  - desc: 'sudo chmod u+xs /tmp/evilBinary (ART T1548.001 #3)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 3001, ppid: 3000, exe: /bin/chmod, name: chmod, cmdline: "chmod u+xs /tmp/evilBinary", args: [chmod, u+xs, /tmp/evilBinary], uid: 0, euid: 0, signing_id: com.apple.chmod, is_platform: true, is_signed: true}
+  - desc: 'sudo chmod g+xs /tmp/evilBinary (ART T1548.001 #5)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 3002, ppid: 3000, exe: /bin/chmod, name: chmod, cmdline: "chmod g+xs /tmp/evilBinary", args: [chmod, g+xs, /tmp/evilBinary], uid: 0, euid: 0, signing_id: com.apple.chmod, is_platform: true, is_signed: true}
+  - desc: numeric setuid mode
+    events:
+      - name: CreateProcess
+        proc: {pid: 3003, ppid: 3000, exe: /bin/chmod, name: chmod, cmdline: "chmod 4755 /usr/local/bin/helper", args: [chmod, "4755", /usr/local/bin/helper], uid: 0, euid: 0, signing_id: com.apple.chmod, is_platform: true, is_signed: true}
+nomatch:
+  - desc: benign lookalike - chmod 755 on a script
+    events:
+      - name: CreateProcess
+        proc: {pid: 3011, ppid: 3010, exe: /bin/chmod, name: chmod, cmdline: "chmod 755 /tmp/AtomicRedTeam/atomics/T1222.002", args: [chmod, "755", /tmp/AtomicRedTeam/atomics/T1222.002], uid: 501, euid: 501, signing_id: com.apple.chmod, is_platform: true, is_signed: true}
+  - desc: benign lookalike - chmod +x and sticky bit 1777
+    events:
+      - name: CreateProcess
+        proc: {pid: 3012, ppid: 3010, exe: /bin/chmod, name: chmod, cmdline: "chmod +x run.sh", args: [chmod, +x, run.sh], uid: 501, euid: 501, signing_id: com.apple.chmod, is_platform: true, is_signed: true}
+      - name: CreateProcess
+        proc: {pid: 3013, ppid: 3010, exe: /bin/chmod, name: chmod, cmdline: "chmod 1777 /private/tmp/shared", args: [chmod, "1777", /private/tmp/shared], uid: 0, euid: 0, signing_id: com.apple.chmod, is_platform: true, is_signed: true}
+  - desc: benign lookalike - removing setuid (u-s)
+    events:
+      - name: CreateProcess
+        proc: {pid: 3014, ppid: 3010, exe: /bin/chmod, name: chmod, cmdline: "chmod u-s /tmp/evilBinary", args: [chmod, u-s, /tmp/evilBinary], uid: 0, euid: 0, signing_id: com.apple.chmod, is_platform: true, is_signed: true}

@@ -1,0 +1,82 @@
+[
+  {
+    "seq": 1014,
+    "time": "2026-11-07T08:00:08.001014123Z",
+    "name": "RenameFile",
+    "source": "eslogger",
+    "proc": {
+      "pid": 4800,
+      "ppid": 4100,
+      "pidversion": 4801,
+      "uuid": 20615843025601,
+      "exe": "/bin/mv",
+      "name": "mv",
+      "uid": 501,
+      "euid": 501,
+      "signing_id": "com.apple.mv",
+      "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
+      "is_platform": true,
+      "is_signed": true,
+      "start_time": "2026-11-07T07:59:59.5Z",
+      "parent": {
+        "pid": 4100,
+        "ppid": 0,
+        "pidversion": 4100,
+        "uuid": 17609365917700,
+        "exe": "",
+        "name": "",
+        "uid": 0,
+        "euid": 0,
+        "is_platform": false,
+        "is_signed": false,
+        "start_time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "file": {
+      "path": "/private/tmp/x.plist",
+      "dest": "/Users/alice/Library/LaunchAgents/com.evil.plist",
+      "mode": 33188,
+      "size": 600
+    }
+  },
+  {
+    "seq": 1015,
+    "time": "2026-11-07T08:00:08.001015123Z",
+    "name": "RenameFile",
+    "source": "eslogger",
+    "proc": {
+      "pid": 4800,
+      "ppid": 4100,
+      "pidversion": 4801,
+      "uuid": 20615843025601,
+      "exe": "/bin/mv",
+      "name": "mv",
+      "uid": 501,
+      "euid": 501,
+      "signing_id": "com.apple.mv",
+      "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
+      "is_platform": true,
+      "is_signed": true,
+      "start_time": "2026-11-07T07:59:59.5Z",
+      "parent": {
+        "pid": 4100,
+        "ppid": 0,
+        "pidversion": 4100,
+        "uuid": 17609365917700,
+        "exe": "",
+        "name": "",
+        "uid": 0,
+        "euid": 0,
+        "is_platform": false,
+        "is_signed": false,
+        "start_time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "file": {
+      "path": "/Users/alice/a.txt",
+      "dest": "/Users/alice/b.txt",
+      "mode": 33188,
+      "size": 6
+    }
+  }
+]

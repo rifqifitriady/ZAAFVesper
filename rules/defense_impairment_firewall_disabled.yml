@@ -1,0 +1,30 @@
+name: macOS firewall disabled
+id: 6ef019a4-b93c-44f4-aad1-f050a787a1a4
+version: 1.0.0
+description: |
+  The Application Firewall was turned off (socketfilterfw --setglobalstate off, or
+  `defaults write com.apple.alf globalstate -int 0`), its launchd job was unloaded, or the
+  packet filter was disabled with `pfctl -d`.
+  Known benign: VPN or network tools that toggle pf (they normally use `pfctl -E/-X`
+  tokens rather than `-d`); an administrator troubleshooting.
+labels:
+  tactic.id: TA0112
+  tactic.name: Defense Impairment
+  technique.id: T1686
+  technique.name: Disable or Modify System Firewall
+references:
+  - https://attack.mitre.org/techniques/T1686/
+condition: >
+  spawn_process
+  and (
+    (ps.exe = '/usr/libexec/ApplicationFirewall/socketfilterfw' and ps.args = '--setglobalstate' and ps.args = 'off')
+    or (ps.exe = '/usr/bin/defaults' and ps.args = 'write' and ps.cmdline icontains 'com.apple.alf' and ps.cmdline icontains 'globalstate' and ps.args = '0')
+    or (ps.exe = '/sbin/pfctl' and ps.args = '-d')
+    or (ps.exe = '/bin/launchctl' and ps.args in ('unload', 'bootout', 'disable') and ps.cmdline icontains 'com.apple.alf')
+  )
+output: "%ps.cmdline (pid %ps.pid, uid %ps.euid, parent %ps.parent.exe) disabled the firewall"
+severity: medium
+action: []
+tests:
+  atomic: []
+min-engine-version: 0.1.0

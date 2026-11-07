@@ -1,0 +1,33 @@
+name: TCC database modified outside tccd
+id: 3d4f88d3-77cf-4811-ac42-e74e81c9cfea
+version: 1.0.0
+description: |
+  A system or user TCC.db (the privacy permission store) was written or replaced by a
+  process other than tccd, or sqlite3 was run with a write statement against it. Writing
+  TCC.db directly grants an app camera, microphone, screen recording or Full Disk Access
+  without a prompt. It requires Full Disk Access, so it usually follows an earlier
+  compromise of an FDA-holding process.
+labels:
+  tactic.id: TA0004
+  tactic.name: Privilege Escalation
+  technique.id: T1548.006
+  technique.name: TCC Manipulation
+references:
+  - https://attack.mitre.org/techniques/T1548/006/
+condition: >
+  (
+    (file_written and file.path imatches tcc_db_globs)
+    or (rename_file and file.dest imatches tcc_db_globs)
+    or (
+      spawn_process and ps.name imatches 'sqlite3*'
+      and ps.cmdline icontains 'com.apple.TCC/TCC.db'
+      and ps.cmdline icontains ('insert ', 'update ', 'replace ', 'delete ')
+    )
+  )
+  and not (apple_trusted_process)
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) modified the TCC database %file.path %ps.cmdline"
+severity: high
+action: []
+tests:
+  atomic: []
+min-engine-version: 0.1.0

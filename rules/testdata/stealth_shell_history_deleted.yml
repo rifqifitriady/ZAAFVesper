@@ -1,0 +1,27 @@
+match:
+  - desc: 'rm ~/.bash_history (ART T1070.003 #1)'
+    events:
+      - name: DeleteFile
+        proc: {pid: 4101, ppid: 4100, exe: /bin/rm, name: rm, cmdline: "rm /Users/rifqi/.bash_history", args: [rm, /Users/rifqi/.bash_history], uid: 501, euid: 501, signing_id: com.apple.rm, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/.bash_history}
+  - desc: 'ln -sf /dev/null ~/.bash_history unlinks the file first (ART T1070.003 #4)'
+    events:
+      - name: DeleteFile
+        proc: {pid: 4102, ppid: 4100, exe: /bin/ln, name: ln, cmdline: "ln -sf /dev/null /Users/rifqi/.bash_history", args: [ln, -sf, /dev/null, /Users/rifqi/.bash_history], uid: 501, euid: 501, signing_id: com.apple.ln, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/.bash_history}
+nomatch:
+  - desc: benign lookalike - zsh saves history by renaming .zsh_history.new over .zsh_history
+    events:
+      - name: RenameFile
+        proc: {pid: 4111, ppid: 4110, exe: /bin/zsh, name: zsh, uid: 501, euid: 501, signing_id: com.apple.zsh, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/.zsh_history.new, dest: /Users/rifqi/.zsh_history}
+  - desc: benign lookalike - zsh removes its history lock file
+    events:
+      - name: DeleteFile
+        proc: {pid: 4111, ppid: 4110, exe: /bin/zsh, name: zsh, uid: 501, euid: 501, signing_id: com.apple.zsh, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/.zsh_history.LOCK}
+  - desc: deleting a project's .history folder file outside a home directory
+    events:
+      - name: DeleteFile
+        proc: {pid: 4112, ppid: 4110, exe: /bin/rm, name: rm, uid: 501, euid: 501, signing_id: com.apple.rm, is_platform: true, is_signed: true}
+        file: {path: /private/tmp/build/.history}

@@ -1,0 +1,68 @@
+[
+  {
+    "seq": 1022,
+    "time": "2026-11-07T08:00:13.001022123Z",
+    "name": "Signal",
+    "source": "eslogger",
+    "proc": {
+      "pid": 5400,
+      "ppid": 4100,
+      "pidversion": 5401,
+      "uuid": 23192823403801,
+      "exe": "/bin/kill",
+      "name": "kill",
+      "uid": 0,
+      "euid": 0,
+      "signing_id": "com.apple.kill",
+      "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
+      "is_platform": true,
+      "is_signed": true,
+      "start_time": "2026-11-07T07:59:59.5Z",
+      "parent": {
+        "pid": 4100,
+        "ppid": 0,
+        "pidversion": 4100,
+        "uuid": 17609365917700,
+        "exe": "",
+        "name": "",
+        "uid": 0,
+        "euid": 0,
+        "is_platform": false,
+        "is_signed": false,
+        "start_time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "target": {
+      "pid": 611,
+      "ppid": 1,
+      "pidversion": 611,
+      "uuid": 2624225018467,
+      "exe": "/usr/libexec/syspolicyd",
+      "name": "syspolicyd",
+      "uid": 0,
+      "euid": 0,
+      "signing_id": "com.apple.syspolicyd",
+      "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
+      "is_platform": true,
+      "is_signed": true,
+      "start_time": "2026-11-07T07:59:59.5Z",
+      "parent": {
+        "pid": 1,
+        "ppid": 0,
+        "pidversion": 1,
+        "uuid": 4294967297,
+        "exe": "",
+        "name": "",
+        "uid": 0,
+        "euid": 0,
+        "is_platform": false,
+        "is_signed": false,
+        "start_time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "args": {
+      "signal": "9",
+      "signal_name": "SIGKILL"
+    }
+  }
+]

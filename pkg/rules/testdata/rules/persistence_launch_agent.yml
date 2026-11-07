@@ -1,0 +1,21 @@
+name: Launch Agent persistence via plist write
+id: b921eb6f-1cba-4647-b1f1-39d336af2dd8
+version: 1.0.0
+description: |
+  A process writes a property list into a LaunchAgents directory.
+labels:
+  tactic.id: TA0003
+  tactic.name: Persistence
+  technique.id: T1543.001
+  technique.name: Launch Agent
+references: [https://attack.mitre.org/techniques/T1543/001/]
+condition: >
+  create_file
+  and file.path imatches ('/Users/*/Library/LaunchAgents/*.plist', '/Library/LaunchAgents/*.plist')
+  and not ps.signing_id in launchd_writers
+output: "%ps.exe created launch agent %file.path"
+severity: high
+action: [{name: kill}]
+tests:
+  atomic: [a5983dee-bf6c-4eaf-951c-dbc1a7b90900]
+min-engine-version: 0.1.0

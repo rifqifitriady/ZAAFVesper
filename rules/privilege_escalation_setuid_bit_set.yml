@@ -1,0 +1,26 @@
+name: Setuid or setgid bit set with chmod
+id: 4ae946f1-7e57-435d-b6c5-80c4820a5640
+version: 1.0.0
+description: |
+  chmod was run with a mode that sets the setuid or setgid bit (u+s, g+xs, 4755, 6755,
+  ...). Combined with a root-owned binary this gives a persistent privilege-escalation
+  backdoor. Package installs that ship setuid binaries do so through the payload, not by
+  running chmod, so they do not match.
+  Known benign: administrators creating setgid shared directories (`chmod 2775 dir`).
+labels:
+  tactic.id: TA0004
+  tactic.name: Privilege Escalation
+  technique.id: T1548.001
+  technique.name: Setuid and Setgid
+references:
+  - https://attack.mitre.org/techniques/T1548/001/
+condition: >
+  spawn_process
+  and ps.exe = '/bin/chmod'
+  and ps.args regex '^([ugoa]*[+=][rwxXt]*s[rwxXt]*|0?[2-7][0-7][0-7][0-7])$'
+output: "%ps.cmdline (pid %ps.pid, uid %ps.euid, parent %ps.parent.exe) set a setuid/setgid bit"
+severity: medium
+action: []
+tests:
+  atomic: [759055b3-3885-4582-a8ec-c00c9d64dd79, db55f666-7cba-46c6-9fe6-205a05c3242c, 896dfe97-ae43-4101-8e96-9a7996555d80]
+min-engine-version: 0.1.0

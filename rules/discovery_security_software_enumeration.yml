@@ -1,0 +1,27 @@
+name: Security software enumeration
+id: eb0c51ab-1dc9-491a-a1da-d2f828645a54
+version: 1.0.0
+description: |
+  grep/egrep/pgrep (typically fed by `ps aux` or `launchctl list`) searched for the
+  process names of security products (Little Snitch, LuLu, BlockBlock, CrowdStrike,
+  Carbon Black, Santa, osquery, SentinelOne, Defender, ...). Malware does this to decide
+  whether to run or stay dormant.
+  Known benign: MDM/compliance scripts and administrators checking agent health. There
+  is no unforgeable identity for those scripts, so tune with a local exclusion.
+labels:
+  tactic.id: TA0007
+  tactic.name: Discovery
+  technique.id: T1518.001
+  technique.name: Security Software Discovery
+references:
+  - https://attack.mitre.org/techniques/T1518/001/
+condition: >
+  spawn_process
+  and ps.name in ('grep', 'egrep', 'fgrep', 'pgrep', 'rg', 'awk')
+  and ps.cmdline icontains security_tool_process_names
+output: "%ps.cmdline (pid %ps.pid, parent %ps.parent.cmdline) looked for security software"
+severity: low
+action: []
+tests:
+  atomic: [ba62ce11-e820-485f-9c17-6f3c857cd840]
+min-engine-version: 0.1.0

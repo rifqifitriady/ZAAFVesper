@@ -1,0 +1,40 @@
+# ZAAFVesper main configuration. Files in config.d/*.yml are merged after this one
+# in name order: scalar settings override, lists (exclusions, prefixes) append.
+#
+# When zaafvesper runs as root, this file, config.d/ and the rules directory must be
+# owned by root and not writable by group or others, or zaafvesper refuses to start.
+#
+# There is deliberately no setting that turns on the kill response: only the
+# --enable-response flag does that (and --dry-run-response wins over it).
+
+rules_dir: rules
+
+source:
+  # WriteFile comes from eslogger's "close" event with modified=true: one event
+  # per modified file. true also subscribes the per-syscall "write" event,
+  # which can flood the sensor; leave it off unless a rule really needs it.
+  subscribe_write: false
+
+eslogger:
+  # When zaafvesper runs as root only /usr/bin/eslogger is accepted here.
+  binary: /usr/bin/eslogger
+  # File events under these prefixes are dropped inside the source, before
+  # enrichment. Keep this list short: anything here is invisible to every rule.
+  exclude_paths:
+    - /dev/
+    - /System/Volumes/Data/.Spotlight-V100/
+  # Events from processes with these signing IDs are dropped at the source.
+  exclude_signing: []
+
+yara:
+  disabled: false
+  # rules_dir defaults to <rules_dir>/yara
+  workers: 2
+  max_file_size: 67108864   # 64 MiB
+  timeout_sec: 10
+  watch_dirs: [/tmp, /private/tmp, /Users/*/Downloads, /Users/Shared]
+
+# Global exclusions (sysmon-modular style): matching events are dropped after
+# process enrichment and before the rules. Each entry needs events, a
+# condition, or both. See config.d/ for the Apple noise set.
+exclude: []

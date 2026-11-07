@@ -1,0 +1,18 @@
+match:
+  - desc: 'osascript -e "do shell script \"echo import sys,base64...exec(base64.b64decode(...)) | python\"" (ART T1059.002 #1)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 5501, ppid: 5500, exe: /usr/bin/osascript, name: osascript, cmdline: "osascript -e do shell script \"echo \\\"import sys,base64,warnings;warnings.filterwarnings('ignore');exec(base64.b64decode('aW1wb3J0IHN5cztpbXBvcnQgcmU='));\\\" | python3 &\"", args: [osascript, -e, "do shell script \"echo \\\"import sys,base64,warnings;warnings.filterwarnings('ignore');exec(base64.b64decode('aW1wb3J0IHN5cztpbXBvcnQgcmU='));\\\" | python3 &\""], uid: 501, euid: 501, signing_id: com.apple.osascript, is_platform: true, is_signed: true, parent: {pid: 5500, ppid: 5499, exe: /bin/sh, name: sh, signing_id: com.apple.sh, is_platform: true, is_signed: true}}
+  - desc: JXA ObjC-bridge script launched by a Python parent
+    events:
+      - name: CreateProcess
+        proc: {pid: 5502, ppid: 5503, exe: /usr/bin/osascript, name: osascript, cmdline: "osascript -l JavaScript -e ObjC.import('Foundation');$.NSFileManager.defaultManager", args: [osascript, -l, JavaScript, -e, "ObjC.import('Foundation');$.NSFileManager.defaultManager"], uid: 501, euid: 501, signing_id: com.apple.osascript, is_platform: true, is_signed: true, parent: {pid: 5503, ppid: 1, exe: /usr/bin/python3, name: python3, signing_id: com.apple.python3, is_platform: true, is_signed: true}}
+nomatch:
+  - desc: benign lookalike - Alfred (Developer ID) runs a JXA workflow
+    events:
+      - name: CreateProcess
+        proc: {pid: 5511, ppid: 5510, exe: /usr/bin/osascript, name: osascript, cmdline: "osascript -l JavaScript -e Application('Safari').windows[0].currentTab.url()", args: [osascript, -l, JavaScript, -e, "Application('Safari').windows[0].currentTab.url()"], uid: 501, euid: 501, signing_id: com.apple.osascript, is_platform: true, is_signed: true, parent: {pid: 5510, ppid: 1, exe: /Applications/Alfred 5.app/Contents/MacOS/Alfred, name: Alfred, signing_id: com.runningwithcrayons.Alfred, team_id: XZZXE9SED4, is_platform: false, is_signed: true}}
+  - desc: benign lookalike - do shell script running a plain command
+    events:
+      - name: CreateProcess
+        proc: {pid: 5512, ppid: 5510, exe: /usr/bin/osascript, name: osascript, cmdline: "osascript -e do shell script \"ls ~/Desktop\"", args: [osascript, -e, "do shell script \"ls ~/Desktop\""], uid: 501, euid: 501, signing_id: com.apple.osascript, is_platform: true, is_signed: true, parent: {pid: 5513, ppid: 1, exe: /bin/zsh, name: zsh, signing_id: com.apple.zsh, is_platform: true, is_signed: true}}

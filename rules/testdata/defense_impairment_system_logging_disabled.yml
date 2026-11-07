@@ -1,0 +1,40 @@
+match:
+  - desc: launchctl bootout of the BSM audit daemon
+    events:
+      - name: CreateProcess
+        proc: {pid: 7801, ppid: 7800, exe: /bin/launchctl, name: launchctl, cmdline: "launchctl bootout system/com.apple.auditd", args: [launchctl, bootout, system/com.apple.auditd], uid: 0, euid: 0, signing_id: com.apple.xpc.launchctl, is_platform: true, is_signed: true}
+  - desc: log config turns the system log level off
+    events:
+      - name: CreateProcess
+        proc: {pid: 7802, ppid: 7800, exe: /usr/bin/log, name: log, cmdline: "log config --mode level:off", args: [log, config, --mode, "level:off"], uid: 0, euid: 0, signing_id: com.apple.log, is_platform: true, is_signed: true}
+  - desc: audit -t terminates auditing
+    events:
+      - name: CreateProcess
+        proc: {pid: 7803, ppid: 7800, exe: /usr/sbin/audit, name: audit, cmdline: "audit -t", args: [audit, -t], uid: 0, euid: 0, signing_id: com.apple.audit, is_platform: true, is_signed: true}
+  - desc: sh redirect empties the audit flags in /etc/security/audit_control
+    events:
+      - name: WriteFile
+        proc: {pid: 7804, ppid: 7800, exe: /bin/sh, name: sh, cmdline: "sh -c echo flags: > /etc/security/audit_control", args: [sh, -c, "echo flags: > /etc/security/audit_control"], uid: 0, euid: 0, signing_id: com.apple.sh, is_platform: true, is_signed: true}
+        file: {path: /private/etc/security/audit_control}
+nomatch:
+  - desc: benign lookalike - log config --status and log show
+    events:
+      - name: CreateProcess
+        proc: {pid: 7811, ppid: 7810, exe: /usr/bin/log, name: log, cmdline: "log config --status", args: [log, config, --status], uid: 0, euid: 0, signing_id: com.apple.log, is_platform: true, is_signed: true}
+      - name: CreateProcess
+        proc: {pid: 7812, ppid: 7810, exe: /usr/bin/log, name: log, cmdline: "log show --last 1h --predicate subsystem == \"com.apple.xpc\"", args: [log, show, --last, 1h, --predicate, "subsystem == \"com.apple.xpc\""], uid: 501, euid: 501, signing_id: com.apple.log, is_platform: true, is_signed: true}
+  - desc: benign lookalike - audit -s re-reads configuration; launchctl print of syslogd
+    events:
+      - name: CreateProcess
+        proc: {pid: 7813, ppid: 7810, exe: /usr/sbin/audit, name: audit, cmdline: "audit -s", args: [audit, -s], uid: 0, euid: 0, signing_id: com.apple.audit, is_platform: true, is_signed: true}
+      - name: CreateProcess
+        proc: {pid: 7814, ppid: 7810, exe: /bin/launchctl, name: launchctl, cmdline: "launchctl print system/com.apple.syslogd", args: [launchctl, print, system/com.apple.syslogd], uid: 0, euid: 0, signing_id: com.apple.xpc.launchctl, is_platform: true, is_signed: true}
+  - desc: benign lookalike - syslogd (Apple platform) rewrites its own asl.conf
+    events:
+      - name: WriteFile
+        proc: {pid: 110, ppid: 1, exe: /usr/sbin/syslogd, name: syslogd, uid: 0, euid: 0, signing_id: com.apple.syslogd, is_platform: true, is_signed: true}
+        file: {path: /private/etc/asl.conf}
+  - desc: log config raising a subsystem to debug is not disabling
+    events:
+      - name: CreateProcess
+        proc: {pid: 7815, ppid: 7810, exe: /usr/bin/log, name: log, cmdline: "log config --subsystem com.example.app --mode level:debug", args: [log, config, --subsystem, com.example.app, --mode, "level:debug"], uid: 0, euid: 0, signing_id: com.apple.log, is_platform: true, is_signed: true}

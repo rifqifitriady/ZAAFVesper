@@ -1,0 +1,31 @@
+name: Third-party kernel extension loaded
+id: f1a987b9-0a90-407c-8d7c-1ade21d1ae13
+version: 1.0.0
+description: |
+  The kernel loaded a kernel extension. The only exclusion is an Apple bundle identifier
+  (com.apple.*) loaded by an Apple platform process. The bundle identifier is chosen by the
+  kext author, so it is never trusted on its own; the decoder reports no kext path
+  (LoadKext carries only evt.arg[kext_id] and the caller), so the path cannot be bound to
+  /System/Library/Extensions. If kernelmanagerd is always the caller on current macOS,
+  the platform check adds little; a third-party kext named com.apple.* would then be
+  missed. A load with no identifier alerts. Kernel
+  extensions are deprecated on Apple Silicon and require explicit user approval, so a new
+  third-party kext is rare and worth a look (rootkits, legacy drivers).
+  Known benign: legacy hardware/virtualisation drivers (SoftRAID, VirtualBox, some
+  audio interfaces). Allow-list their identifiers in a local exclusion after review.
+labels:
+  tactic.id: TA0003
+  tactic.name: Persistence
+  technique.id: T1547.006
+  technique.name: Kernel Modules and Extensions
+references:
+  - https://attack.mitre.org/techniques/T1547/006/
+condition: >
+  load_kext
+  and not (evt.arg[kext_id] istartswith 'com.apple.' and ps.is_platform = true)
+output: "Kernel extension %evt.arg[kext_id] loaded (reported by %ps.exe)"
+severity: medium
+action: []
+tests:
+  atomic: [f4391089-d3a5-4dd1-ab22-0419527f2672]
+min-engine-version: 0.1.0

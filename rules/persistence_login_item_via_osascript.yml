@@ -1,0 +1,24 @@
+name: Login Item added via inline AppleScript
+id: ba25a914-e7f0-4477-8540-b1905a061759
+version: 1.0.0
+description: |
+  osascript was started with an inline script that creates a login item through System
+  Events (AppleScript "make login item" or JXA "loginItem"). Malware uses this one-liner
+  to persist without writing a plist. Read-only queries of login items do not match.
+labels:
+  tactic.id: TA0003
+  tactic.name: Persistence
+  technique.id: T1547.015
+  technique.name: Login Items
+references:
+  - https://attack.mitre.org/techniques/T1547/015/
+condition: >
+  spawn_osascript
+  and ps.cmdline icontains ('login item', 'loginItem')
+  and ps.cmdline icontains ('make ', 'make(', '.push(')
+output: "osascript (pid %ps.pid, parent %ps.parent.exe) added a login item: %ps.cmdline"
+severity: high
+action: []
+tests:
+  atomic: []
+min-engine-version: 0.1.0

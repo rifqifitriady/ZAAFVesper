@@ -1,0 +1,26 @@
+match:
+  - desc: 'sudo launchctl unload CrowdStrike falcond (ART T1685 #13)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 3501, ppid: 3500, exe: /bin/launchctl, name: launchctl, cmdline: "launchctl unload /Library/LaunchDaemons/com.crowdstrike.falcond.plist", args: [launchctl, unload, /Library/LaunchDaemons/com.crowdstrike.falcond.plist], uid: 0, euid: 0, signing_id: com.apple.xpc.launchctl, is_platform: true, is_signed: true, ancestors: [/bin/sh, /usr/bin/sudo, /bin/zsh, /usr/bin/login, /sbin/launchd]}
+  - desc: 'sudo mdatp config real-time-protection --value disabled (ART T1685 #50)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 3502, ppid: 3500, exe: /usr/local/bin/mdatp, name: mdatp, cmdline: "mdatp config real-time-protection --value disabled", args: [mdatp, config, real-time-protection, --value, disabled], uid: 0, euid: 0, signing_id: com.microsoft.wdav.mdatp, team_id: UBF8T346G9, is_platform: false, is_signed: true}
+  - desc: payload kills ZAAFVesper's eslogger
+    events:
+      - name: CreateProcess
+        proc: {pid: 3503, ppid: 3500, exe: /usr/bin/pkill, name: pkill, cmdline: "pkill -9 eslogger", args: [pkill, "-9", eslogger], uid: 0, euid: 0, signing_id: com.apple.pkill, is_platform: true, is_signed: true}
+nomatch:
+  - desc: benign lookalike - launchctl print of the falcond job (read-only, names the security tool)
+    events:
+      - name: CreateProcess
+        proc: {pid: 3511, ppid: 3510, exe: /bin/launchctl, name: launchctl, cmdline: "launchctl print system/com.crowdstrike.falcond", args: [launchctl, print, system/com.crowdstrike.falcond], uid: 0, euid: 0, signing_id: com.apple.xpc.launchctl, is_platform: true, is_signed: true}
+  - desc: benign lookalike - launchctl list piped to grep (read-only)
+    events:
+      - name: CreateProcess
+        proc: {pid: 3512, ppid: 3510, exe: /bin/launchctl, name: launchctl, cmdline: "launchctl list", args: [launchctl, list], uid: 501, euid: 501, signing_id: com.apple.xpc.launchctl, is_platform: true, is_signed: true}
+  - desc: benign lookalike - unloading a Homebrew service
+    events:
+      - name: CreateProcess
+        proc: {pid: 3513, ppid: 3510, exe: /bin/launchctl, name: launchctl, cmdline: "launchctl unload /Users/rifqi/Library/LaunchAgents/homebrew.mxcl.redis.plist", args: [launchctl, unload, /Users/rifqi/Library/LaunchAgents/homebrew.mxcl.redis.plist], uid: 501, euid: 501, signing_id: com.apple.xpc.launchctl, is_platform: true, is_signed: true}

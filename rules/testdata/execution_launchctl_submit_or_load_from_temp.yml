@@ -1,0 +1,18 @@
+match:
+  - desc: 'launchctl submit -l <label> -- Calculator (ART T1569.001 #1)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 5601, ppid: 5600, exe: /bin/launchctl, name: launchctl, cmdline: "launchctl submit -l evil -- /System/Applications/Calculator.app/Contents/MacOS/Calculator", args: [launchctl, submit, -l, evil, --, /System/Applications/Calculator.app/Contents/MacOS/Calculator], uid: 501, euid: 501, signing_id: com.apple.xpc.launchctl, is_platform: true, is_signed: true}
+  - desc: 'StartupItems script runs launchctl load -w /tmp/T1037_005_agent.plist (ART T1037.005 #3)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 5602, ppid: 5600, exe: /bin/launchctl, name: launchctl, cmdline: "launchctl load -w /tmp/T1037_005_agent.plist", args: [launchctl, load, -w, /tmp/T1037_005_agent.plist], uid: 501, euid: 501, signing_id: com.apple.xpc.launchctl, is_platform: true, is_signed: true}
+nomatch:
+  - desc: benign lookalike - launchctl load of a Homebrew agent in ~/Library/LaunchAgents
+    events:
+      - name: CreateProcess
+        proc: {pid: 5611, ppid: 5610, exe: /bin/launchctl, name: launchctl, cmdline: "launchctl load -w /Users/rifqi/Library/LaunchAgents/homebrew.mxcl.postgresql@16.plist", args: [launchctl, load, -w, "/Users/rifqi/Library/LaunchAgents/homebrew.mxcl.postgresql@16.plist"], uid: 501, euid: 501, signing_id: com.apple.xpc.launchctl, is_platform: true, is_signed: true}
+  - desc: benign lookalike - launchctl print / list
+    events:
+      - name: CreateProcess
+        proc: {pid: 5612, ppid: 5610, exe: /bin/launchctl, name: launchctl, cmdline: "launchctl print gui/501", args: [launchctl, print, gui/501], uid: 501, euid: 501, signing_id: com.apple.xpc.launchctl, is_platform: true, is_signed: true}

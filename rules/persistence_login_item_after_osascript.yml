@@ -1,0 +1,28 @@
+name: Login Item registered shortly after osascript ran
+id: 569e7a3f-be92-45ae-a653-880f11e1f0ed
+version: 1.0.0
+description: |
+  Sequence: osascript runs, and within 30 seconds Background Task Management registers a
+  new user/login item. Catches AppleScript persistence delivered as a compiled script or
+  .scpt file, where the command line does not reveal the intent (e.g. `osascript
+  add_login_item.osa`). There is no join key between the two events (BTM reports the
+  item, not the scripting process), so the window is kept short.
+  Known benign: a user adds a login item in System Settings within 30 s of any automation
+  that happens to call osascript.
+labels:
+  tactic.id: TA0003
+  tactic.name: Persistence
+  technique.id: T1547.015
+  technique.name: Login Items
+references:
+  - https://attack.mitre.org/techniques/T1547/015/
+condition: >
+  sequence maxspan 30s
+    |spawn_osascript|
+    |add_launch_item and evt.arg[launch_item_type] in ('user_item', 'login_item')|
+output: "Login item %evt.arg[launch_item_path] registered after osascript %1.ps.cmdline (parent %1.ps.parent.exe)"
+severity: medium
+action: []
+tests:
+  atomic: [716e756a-607b-41f3-8204-b214baf37c1d]
+min-engine-version: 0.1.0

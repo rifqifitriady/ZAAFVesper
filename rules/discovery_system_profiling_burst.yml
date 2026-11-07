@@ -1,0 +1,33 @@
+name: System profiling burst from a script
+id: 17f0b0d5-b863-4678-971f-3192df4bbe2f
+version: 1.0.0
+description: |
+  Sequence: system_profiler is started by a shell, script interpreter, osascript or an
+  untrusted binary, and within one minute the same parent runs another host-profiling
+  tool (sw_vers, sysctl, ioreg, csrutil, uname) or lists /Applications. Stealers
+  (AMOS, Cuckoo) and sandbox-evasion checks fingerprint the host this way before deciding
+  what to steal. Apps that call system_profiler from their own signed binary do not
+  match the first step.
+  Known benign: support/diagnostic scripts run from Terminal.
+labels:
+  tactic.id: TA0007
+  tactic.name: Discovery
+  technique.id: T1082
+  technique.name: System Information Discovery
+references:
+  - https://attack.mitre.org/techniques/T1082/
+condition: >
+  sequence maxspan 1m by ps.ppid
+    |spawn_process and ps.exe = '/usr/sbin/system_profiler'
+       and (ps.parent.name in shell_names or ps.parent.name imatches script_interpreter_name_globs or parent_no_developer_identity)|
+    |spawn_process
+       and (
+         ps.exe in ('/usr/bin/sw_vers', '/usr/sbin/sysctl', '/usr/sbin/ioreg', '/usr/bin/csrutil', '/usr/bin/uname')
+         or (ps.exe = '/bin/ls' and ps.args imatches '/Applications*')
+       )|
+output: "Host profiling by %1.ps.parent.cmdline: %1.ps.cmdline then %2.ps.cmdline"
+severity: low
+action: []
+tests:
+  atomic: [edff98ec-0f73-4f63-9890-6b117092aff6]
+min-engine-version: 0.1.0

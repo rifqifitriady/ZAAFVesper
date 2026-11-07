@@ -1,0 +1,26 @@
+match:
+  - desc: 'DYLD_INSERT_LIBRARIES=/tmp/T1574006MOS.dylib firefox (ART T1574.006 #3)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 3801, ppid: 3800, exe: /Applications/Firefox.app/Contents/MacOS/firefox, name: firefox, cmdline: "/Applications/Firefox.app/Contents/MacOS/firefox", args: [/Applications/Firefox.app/Contents/MacOS/firefox], uid: 501, euid: 501, signing_id: org.mozilla.firefox, team_id: 43AQ936H96, is_platform: false, is_signed: true, env: {DYLD_INSERT_LIBRARIES: /tmp/T1574006MOS.dylib, HOME: /Users/rifqi}, parent: {pid: 3800, ppid: 3799, exe: /bin/bash, name: bash, signing_id: com.apple.bash, is_platform: true, is_signed: true, env: {HOME: /Users/rifqi}}}
+  - desc: launchctl setenv makes the variable global for the GUI session
+    events:
+      - name: CreateProcess
+        proc: {pid: 3802, ppid: 3800, exe: /bin/launchctl, name: launchctl, cmdline: "launchctl setenv DYLD_INSERT_LIBRARIES /Users/Shared/libhook.dylib", args: [launchctl, setenv, DYLD_INSERT_LIBRARIES, /Users/Shared/libhook.dylib], uid: 501, euid: 501, signing_id: com.apple.xpc.launchctl, is_platform: true, is_signed: true}
+  - desc: forged - self-signed parent claiming com.apple.debugserver (no Team ID) injects a dylib
+    events:
+      - name: CreateProcess
+        proc: {pid: 3803, ppid: 3804, exe: /Applications/Safari.app/Contents/MacOS/Safari, name: Safari, uid: 501, euid: 501, signing_id: com.apple.Safari, is_platform: true, is_signed: true, env: {DYLD_INSERT_LIBRARIES: /Users/Shared/libhook.dylib}, parent: {pid: 3804, ppid: 1, exe: /Users/Shared/debugserver, name: debugserver, signing_id: com.apple.debugserver, is_platform: false, is_signed: true}}
+nomatch:
+  - desc: benign lookalike - Xcode's debugserver (Apple Team ID 59GAB85EFG) launches a build with the Main Thread Checker
+    events:
+      - name: CreateProcess
+        proc: {pid: 3811, ppid: 3810, exe: /Users/rifqi/Library/Developer/Xcode/DerivedData/App/Build/Products/Debug/App.app/Contents/MacOS/App, name: App, uid: 501, euid: 501, signing_id: com.rifqi.App, is_platform: false, is_signed: false, env: {DYLD_INSERT_LIBRARIES: /Applications/Xcode.app/Contents/Developer/usr/lib/libMainThreadChecker.dylib}, parent: {pid: 3810, ppid: 3809, exe: /Applications/Xcode.app/Contents/SharedFrameworks/LLDB.framework/Versions/A/Resources/debugserver, name: debugserver, signing_id: com.apple.debugserver, team_id: 59GAB85EFG, is_platform: false, is_signed: true}}
+  - desc: benign lookalike - helper inherits the variable from its already-injected parent
+    events:
+      - name: CreateProcess
+        proc: {pid: 3812, ppid: 3801, exe: /Applications/Firefox.app/Contents/MacOS/plugin-container.app/Contents/MacOS/plugin-container, name: plugin-container, uid: 501, euid: 501, signing_id: org.mozilla.plugincontainer, team_id: 43AQ936H96, is_platform: false, is_signed: true, env: {DYLD_INSERT_LIBRARIES: /tmp/T1574006MOS.dylib}, parent: {pid: 3801, ppid: 3800, exe: /Applications/Firefox.app/Contents/MacOS/firefox, name: firefox, signing_id: org.mozilla.firefox, team_id: 43AQ936H96, is_platform: false, is_signed: true, env: {DYLD_INSERT_LIBRARIES: /tmp/T1574006MOS.dylib}}}
+  - desc: normal Firefox launch without the variable
+    events:
+      - name: CreateProcess
+        proc: {pid: 3813, ppid: 3800, exe: /Applications/Firefox.app/Contents/MacOS/firefox, name: firefox, uid: 501, euid: 501, signing_id: org.mozilla.firefox, team_id: 43AQ936H96, is_platform: false, is_signed: true, env: {HOME: /Users/rifqi}}

@@ -1,0 +1,18 @@
+# Apple platform noise. Each exclusion is limited to the event types where
+# the process is noisy and to Apple platform binaries, so a renamed copy of the
+# binary outside the platform is still seen.
+exclude:
+  - name: Spotlight indexers reading files
+    events: [OpenFile]
+    condition: >
+      ps.is_platform and ps.signing_id in ('com.apple.mdworker_shared', 'com.apple.mds', 'com.apple.mdworker')
+
+  - name: Time Machine backup reads
+    events: [OpenFile]
+    condition: ps.is_platform and ps.signing_id = 'com.apple.backupd'
+
+  - name: Apple software update writes under its own staging area
+    events: [CreateFile, WriteFile, RenameFile, DeleteFile]
+    condition: >
+      ps.is_platform and ps.signing_id in ('com.apple.softwareupdated', 'com.apple.mobile.softwareupdated')
+      and file.path startswith '/Library/Updates/'

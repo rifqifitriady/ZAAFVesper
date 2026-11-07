@@ -1,0 +1,20 @@
+match:
+  - desc: 'chflags hidden /var/tmp/T1564.001_mac.txt (ART T1564.001 #6)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 3901, ppid: 3900, exe: /usr/bin/chflags, name: chflags, cmdline: "chflags hidden /var/tmp/T1564.001_mac.txt", args: [chflags, hidden, /var/tmp/T1564.001_mac.txt], uid: 501, euid: 501, signing_id: com.apple.chflags, is_platform: true, is_signed: true}
+  - desc: 'setfile -a V /tmp/evil (ART T1564.001 #5)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 3902, ppid: 3900, exe: /usr/bin/SetFile, name: SetFile, cmdline: "setfile -a V /tmp/evil", args: [setfile, -a, V, /tmp/evil], uid: 501, euid: 501, signing_id: com.apple.SetFile, is_platform: true, is_signed: true}
+nomatch:
+  - desc: benign lookalike - chflags nohidden ~/Library
+    events:
+      - name: CreateProcess
+        proc: {pid: 3911, ppid: 3910, exe: /usr/bin/chflags, name: chflags, cmdline: "chflags nohidden /Users/rifqi/Library", args: [chflags, nohidden, /Users/rifqi/Library], uid: 501, euid: 501, signing_id: com.apple.chflags, is_platform: true, is_signed: true}
+  - desc: benign lookalike - SetFile -a v (lowercase, makes visible) and chflags uchg
+    events:
+      - name: CreateProcess
+        proc: {pid: 3912, ppid: 3910, exe: /usr/bin/SetFile, name: SetFile, cmdline: "SetFile -a v /tmp/evil", args: [SetFile, -a, v, /tmp/evil], uid: 501, euid: 501, signing_id: com.apple.SetFile, is_platform: true, is_signed: true}
+      - name: CreateProcess
+        proc: {pid: 3913, ppid: 3910, exe: /usr/bin/chflags, name: chflags, cmdline: "chflags uchg notes.txt", args: [chflags, uchg, notes.txt], uid: 501, euid: 501, signing_id: com.apple.chflags, is_platform: true, is_signed: true}

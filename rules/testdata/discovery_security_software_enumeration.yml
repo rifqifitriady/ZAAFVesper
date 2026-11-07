@@ -1,0 +1,14 @@
+match:
+  - desc: 'ps aux | egrep ''Little\ Snitch|CbOsxSensorService|falcond|...'' (ART T1518.001 #3)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 5001, ppid: 5000, exe: /usr/bin/egrep, name: egrep, cmdline: "egrep Little\\ Snitch|CbOsxSensorService|falcond|nessusd|santad|CbDefense|td-agent|packetbeat|filebeat|auditbeat|osqueryd|BlockBlock|LuLu", args: [egrep, "Little\\ Snitch|CbOsxSensorService|falcond|nessusd|santad|CbDefense|td-agent|packetbeat|filebeat|auditbeat|osqueryd|BlockBlock|LuLu"], uid: 501, euid: 501, signing_id: com.apple.egrep, is_platform: true, is_signed: true}
+nomatch:
+  - desc: benign lookalike - grep for an ordinary process name
+    events:
+      - name: CreateProcess
+        proc: {pid: 5011, ppid: 5010, exe: /usr/bin/grep, name: grep, cmdline: "grep -i postgres", args: [grep, -i, postgres], uid: 501, euid: 501, signing_id: com.apple.grep, is_platform: true, is_signed: true}
+  - desc: benign lookalike - launchctl list (the producer side of the pipe) is not matched
+    events:
+      - name: CreateProcess
+        proc: {pid: 5012, ppid: 5010, exe: /bin/launchctl, name: launchctl, cmdline: "launchctl list", args: [launchctl, list], uid: 501, euid: 501, signing_id: com.apple.xpc.launchctl, is_platform: true, is_signed: true}

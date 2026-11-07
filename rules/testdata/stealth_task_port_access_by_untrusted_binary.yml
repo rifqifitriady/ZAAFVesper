@@ -1,0 +1,32 @@
+match:
+  - desc: ad-hoc signed binary from /tmp takes Safari's task port
+    events:
+      - name: OpenProcess
+        proc: {pid: 4201, ppid: 4200, exe: /private/tmp/inj, name: inj, uid: 501, euid: 501, signing_id: inj-555549440a1b, is_platform: false, is_signed: false}
+        target: {pid: 700, ppid: 1, exe: /Applications/Safari.app/Contents/MacOS/Safari, name: Safari, signing_id: com.apple.Safari, is_platform: true, is_signed: true}
+  - desc: Developer ID signed app creates a thread inside Finder
+    events:
+      - name: CreateRemoteThread
+        proc: {pid: 4202, ppid: 1, exe: /Applications/Tweak.app/Contents/MacOS/Tweak, name: Tweak, uid: 501, euid: 501, signing_id: com.example.tweak, team_id: ABCDE12345, is_platform: false, is_signed: true}
+        target: {pid: 610, ppid: 1, exe: /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder, name: Finder, signing_id: com.apple.finder, is_platform: true, is_signed: true}
+  - desc: forged - self-signed binary (is_signed true, no Team ID) claiming com.apple.debugserver takes a task port
+    events:
+      - name: OpenProcess
+        proc: {pid: 4203, ppid: 1, exe: /Users/Shared/debugserver, name: debugserver, uid: 501, euid: 501, signing_id: com.apple.debugserver, is_platform: false, is_signed: true}
+        target: {pid: 610, ppid: 1, exe: /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder, name: Finder, signing_id: com.apple.finder, is_platform: true, is_signed: true}
+nomatch:
+  - desc: benign lookalike - Xcode's debugserver (Apple Team ID 59GAB85EFG) attaches to a debug build
+    events:
+      - name: OpenProcess
+        proc: {pid: 4211, ppid: 4210, exe: /Applications/Xcode.app/Contents/SharedFrameworks/LLDB.framework/Versions/A/Resources/debugserver, name: debugserver, uid: 501, euid: 501, signing_id: com.apple.debugserver, team_id: 59GAB85EFG, is_platform: false, is_signed: true}
+        target: {pid: 4212, ppid: 4211, exe: /Users/rifqi/Library/Developer/Xcode/DerivedData/App/Build/Products/Debug/App.app/Contents/MacOS/App, name: App, is_platform: false, is_signed: false}
+  - desc: benign lookalike - Developer ID system monitor (Team ID present) reads task info
+    events:
+      - name: OpenProcess
+        proc: {pid: 4213, ppid: 1, exe: /Applications/iStat Menus.app/Contents/MacOS/iStat Menus, name: iStat Menus, uid: 501, euid: 501, signing_id: com.bjango.istatmenus, team_id: Y93TK974AT, is_platform: false, is_signed: true}
+        target: {pid: 700, ppid: 1, exe: /Applications/Safari.app/Contents/MacOS/Safari, name: Safari, signing_id: com.apple.Safari, is_platform: true, is_signed: true}
+  - desc: Apple platform lldb ptrace attach
+    events:
+      - name: Ptrace
+        proc: {pid: 4214, ppid: 4210, exe: /usr/bin/lldb, name: lldb, uid: 501, euid: 501, signing_id: com.apple.lldb, is_platform: true, is_signed: true}
+        target: {pid: 4212, ppid: 4211, exe: /Users/rifqi/src/app, name: app, is_platform: false, is_signed: false}

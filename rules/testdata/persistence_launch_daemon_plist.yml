@@ -1,0 +1,27 @@
+match:
+  - desc: 'sudo cp drops the atomic plist into /Library/LaunchDaemons (ART T1543.004 #1)'
+    events:
+      - name: CreateFile
+        proc: {pid: 2201, ppid: 2200, exe: /bin/cp, name: cp, cmdline: "cp atomicredteam_T1543_004.plist /Library/LaunchDaemons/com.atomicredteam.plist", args: [cp, atomicredteam_T1543_004.plist, /Library/LaunchDaemons/com.atomicredteam.plist], uid: 0, euid: 0, signing_id: com.apple.cp, is_platform: true, is_signed: true}
+        file: {path: /Library/LaunchDaemons/com.atomicredteam.plist}
+  - desc: third-party .pkg payload written by installd - fires by design (installd installs any package)
+    events:
+      - name: CreateFile
+        proc: {pid: 900, ppid: 1, exe: /System/Library/PrivateFrameworks/PackageKit.framework/Versions/A/Resources/installd, name: installd, uid: 0, euid: 0, signing_id: com.apple.installd, is_platform: true, is_signed: true}
+        file: {path: /Library/LaunchDaemons/com.vendor.agent.plist}
+nomatch:
+  - desc: benign lookalike - Developer ID signed vendor helper writes its daemon (routed to the low-severity companion rule)
+    events:
+      - name: CreateFile
+        proc: {pid: 5100, ppid: 1, exe: /Library/PrivilegedHelperTools/us.zoom.ZoomDaemon, name: us.zoom.ZoomDaemon, uid: 0, euid: 0, signing_id: us.zoom.ZoomDaemon, team_id: BJ4HAAB9B3, is_platform: false, is_signed: true}
+        file: {path: /Library/LaunchDaemons/us.zoom.ZoomDaemon.plist}
+  - desc: benign lookalike - system_installd (Apple-signed packages only, platform identity) installs an Apple daemon
+    events:
+      - name: CreateFile
+        proc: {pid: 901, ppid: 1, exe: /System/Library/PrivateFrameworks/PackageKit.framework/Versions/A/Resources/system_installd, name: system_installd, uid: 0, euid: 0, signing_id: com.apple.system_installd, is_platform: true, is_signed: true}
+        file: {path: /Library/LaunchDaemons/com.apple.remotedesktop.PrivilegeProxy.plist}
+  - desc: plist written to a user LaunchAgents directory is not a daemon
+    events:
+      - name: CreateFile
+        proc: {pid: 2201, ppid: 2200, exe: /bin/cp, name: cp, uid: 501, euid: 501, signing_id: com.apple.cp, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/Library/LaunchAgents/com.example.plist}
