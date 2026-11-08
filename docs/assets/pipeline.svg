@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 420" width="840" height="420" role="img" aria-labelledby="t d">
+  <title id="t">How ZAAFVesper works</title>
+  <desc id="d">Endpoint Security events from eslogger are decoded, enriched by the process tree and evaluated by the rule engine, which also receives YARA matches. Matches become alerts, an optional kill response and a forensic capture. Replay feeds recorded events through the same pipeline without root.</desc>
+  <defs>
+    <marker id="aT" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#1FE5C3"/></marker>
+    <marker id="aM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#FF3EC8"/></marker>
+    <marker id="aV" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#9D6BFF"/></marker>
+    <marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#3B8EFF"/></marker>
+    <radialGradient id="bgGlow" cx="0.75" cy="0.55" r="0.6">
+      <stop offset="0" stop-color="#FF3EC8" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#FF3EC8" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4"/></filter>
+    <clipPath id="card"><rect width="840" height="420" rx="18"/></clipPath>
+  </defs>
+  <style>
+    .sans { font-family: ui-sans-serif, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .ttl { font-size: 16px; font-weight: 700; fill: #FFFFFF; }
+    .sub { font-size: 12.5px; fill: #B7B3D9; }
+    .lbl { font-size: 12px; fill: #CFCBEA; }
+    .box { fill: #12163A; stroke-width: 2; }
+    .wire { fill: none; stroke-width: 2; stroke-linecap: round; }
+    .move { stroke-dasharray: 8 7; animation: run 1.2s linear infinite; }
+    .dash { stroke-dasharray: 5 6; animation: run 1.8s linear infinite; }
+    @keyframes run { to { stroke-dashoffset: -30; } }
+    .pulse { animation: pulse 2.4s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.95; } }
+    @media (prefers-reduced-motion: reduce) {
+      .move, .dash, .pulse { animation: none; }
+      .packet { display: none; }
+    }
+  </style>
+
+  <g clip-path="url(#card)">
+    <rect width="840" height="420" fill="#0A0D26"/>
+    <rect width="840" height="420" fill="url(#bgGlow)"/>
+
+    <!-- wires -->
+    <path class="wire move" d="M262 62 H306" stroke="#1FE5C3" marker-end="url(#aT)"/>
+    <path class="wire move" d="M532 62 H576" stroke="#1FE5C3" marker-end="url(#aT)"/>
+    <path class="wire move" d="M690 102 V166" stroke="#1FE5C3" marker-end="url(#aT)"/>
+    <path class="wire dash" d="M620 102 C620 136, 420 134, 420 166" stroke="#9D6BFF" marker-end="url(#aV)"/>
+    <path class="wire move" d="M532 208 H576" stroke="#FF3EC8" marker-end="url(#aM)"/>
+    <path class="wire dash" d="M150 170 C150 132, 380 140, 380 106" stroke="#9D6BFF" marker-end="url(#aV)"/>
+    <path class="wire move" d="M630 248 C630 288, 150 276, 150 312" stroke="#3B8EFF" marker-end="url(#aB)"/>
+    <path class="wire move" d="M680 248 C680 290, 420 278, 420 312" stroke="#3B8EFF" marker-end="url(#aB)"/>
+    <path class="wire move" d="M740 248 V312" stroke="#1FE5C3" marker-end="url(#aT)"/>
+
+    <!-- wire labels -->
+    <text x="566" y="150" class="sans lbl" text-anchor="middle">exec · file</text>
+    <text x="554" y="198" class="sans lbl" text-anchor="middle">match</text>
+    <text x="252" y="150" class="sans lbl" text-anchor="middle">same pipeline</text>
+    <text x="752" y="140" class="sans lbl">enriched</text>
+    <text x="752" y="286" class="sans lbl">every event</text>
+
+    <!-- travelling events (drawn under the boxes, visible in the gaps) -->
+    <g class="packet">
+      <circle r="5" fill="#5EF0D6" filter="url(#glow)">
+        <animateMotion dur="3.2s" repeatCount="indefinite" path="M150 62 H690 V208"/>
+      </circle>
+      <circle r="3" fill="#FFFFFF">
+        <animateMotion dur="3.2s" repeatCount="indefinite" path="M150 62 H690 V208"/>
+      </circle>
+      <circle r="5" fill="#3B8EFF" filter="url(#glow)">
+        <animateMotion dur="3.2s" begin="1.6s" repeatCount="indefinite" path="M630 208 V248 C630 288, 150 276, 150 312 V354"/>
+      </circle>
+    </g>
+
+    <!-- boxes -->
+    <g class="sans">
+      <rect class="box" x="40" y="24" width="222" height="78" rx="12" stroke="#9D6BFF"/>
+      <text x="58" y="56" class="ttl">Endpoint Security</text>
+      <text x="58" y="80" class="sub">eslogger · 24 event types</text>
+
+      <rect class="box" x="310" y="24" width="222" height="78" rx="12" stroke="#1FE5C3"/>
+      <text x="328" y="56" class="ttl">Decode</text>
+      <text x="328" y="80" class="sub">normalise · cap argv and env</text>
+
+      <rect class="box" x="580" y="24" width="222" height="78" rx="12" stroke="#1FE5C3"/>
+      <text x="598" y="56" class="ttl">Process tree</text>
+      <text x="598" y="80" class="sub">ancestry · signing trust</text>
+
+      <rect class="box" x="40" y="170" width="222" height="78" rx="12" stroke="#9D6BFF" stroke-dasharray="6 5"/>
+      <text x="58" y="202" class="ttl">Replay</text>
+      <text x="58" y="226" class="sub">.rcap or eslogger JSON · no root</text>
+
+      <rect class="box" x="310" y="170" width="222" height="78" rx="12" stroke="#FF3EC8"/>
+      <text x="328" y="202" class="ttl">YARA scanner</text>
+      <text x="328" y="226" class="sub">bound to the file that ran</text>
+
+      <rect class="pulse" x="576" y="166" width="234" height="86" rx="15" fill="none" stroke="#FF3EC8" stroke-width="2" filter="url(#glow)"/>
+      <rect class="box" x="580" y="170" width="226" height="78" rx="12" stroke="#FF3EC8"/>
+      <text x="598" y="202" class="ttl">Rule engine</text>
+      <text x="598" y="226" class="sub">41 rules · sequences · ATT&amp;CK</text>
+
+      <rect class="box" x="40" y="316" width="222" height="78" rx="12" stroke="#3B8EFF"/>
+      <text x="58" y="348" class="ttl">Alerts</text>
+      <text x="58" y="372" class="sub">console · JSONL · high series</text>
+
+      <rect class="box" x="310" y="316" width="222" height="78" rx="12" stroke="#3B8EFF"/>
+      <text x="328" y="348" class="ttl">Response</text>
+      <text x="328" y="372" class="sub">opt-in kill · identity-checked</text>
+
+      <rect class="box" x="580" y="316" width="222" height="78" rx="12" stroke="#1FE5C3"/>
+      <text x="598" y="348" class="ttl">Capture</text>
+      <text x="598" y="372" class="sub">.rcap for forensic replay</text>
+    </g>
+  </g>
+  <rect x="0.75" y="0.75" width="838.5" height="418.5" rx="17.5" fill="none" stroke="#2E3470" stroke-width="1.5"/>
+</svg>
