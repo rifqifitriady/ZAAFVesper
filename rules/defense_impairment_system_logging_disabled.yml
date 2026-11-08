@@ -1,6 +1,7 @@
 name: System logging or audit disabled
 id: 8a2db416-17c5-4e74-985b-fd32d271c920
 version: 1.0.0
+platforms: [macos]
 description: |
   macOS logging or auditing was switched off or reconfigured: launchctl stopped Apple's
   logging daemons (auditd, syslogd, logd, aslmanager, diagnosticd); `log config` set a

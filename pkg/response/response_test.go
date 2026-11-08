@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/ps"
+	"github.com/rifqifitriady/ZAAFVesper/pkg/source/eslogger"
 )
 
 var start = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -142,9 +145,9 @@ func TestGuardRails(t *testing.T) {
 			h.ids[64] = Identity{CSKnown: true, StartTime: start, Exe: "/Applications/Other.app/Contents/MacOS/Other"}
 			return p
 		}, nil},
-		{"platform current image", func(h *harness) *event.Proc {
+		{"platform current image via KillProc (platform at detection not known from ES): refused", func(h *harness) *event.Proc {
 			p := h.proc(73, "/tmp/p")
-			h.ids[73] = Identity{CSKnown: true, CSFlags: csPlatformBinary | 1, StartTime: start, Exe: "/tmp/p"}
+			h.ids[73] = Identity{CSKnown: true, CSFlags: csPlatformBinary | 1, StartTime: start, Exe: "/bin/zsh"}
 			return p
 		}, ErrProtected},
 		{"code-signing status unreadable", func(h *harness) *event.Proc {
@@ -163,9 +166,15 @@ func TestGuardRails(t *testing.T) {
 			h.ids[76] = Identity{CSKnown: true, StartTime: start, ExeErr: ErrExeUnlinked}
 			return p
 		}, nil},
-		{"unlinked platform image", func(h *harness) *event.Proc {
+		{"unlinked platform image via KillProc (platform at detection not known from ES): refused", func(h *harness) *event.Proc {
 			p := h.proc(77, "/tmp/p")
 			h.ids[77] = Identity{CSKnown: true, CSFlags: csPlatformBinary, StartTime: start, ExeErr: ErrExeUnlinked}
+			return p
+		}, ErrProtected},
+		{"unlinked platform image, platform at event", func(h *harness) *event.Proc {
+			p := h.proc(83, "/bin/zsh")
+			p.IsPlatform = true
+			h.ids[83] = Identity{CSKnown: true, CSFlags: csPlatformBinary, StartTime: start, ExeErr: ErrExeUnlinked}
 			return p
 		}, ErrProtected},
 		{"team id without signing category", func(h *harness) *event.Proc {
@@ -233,6 +242,228 @@ func TestGuardRails(t *testing.T) {
 	}
 }
 
+// TestExecIntoPlatformBinary covers the owner decision of 8 Nov 2026 on
+// finding New-3: a process that was not an Apple platform binary when it
+// matched and has since exec'd into one (same kernel unique id and start
+// time) is killed, with the exec recorded in the decision's detail. A
+// platform image at event time, a protected path or name of the current
+// image, an identity mismatch and the always-protected pids still refuse.
+func TestExecIntoPlatformBinary(t *testing.T) {
+	platformNow := func(h *harness, pid int32, exe string) {
+		h.ids[pid] = Identity{CSKnown: true, CSFlags: csPlatformBinary, StartTime: start, Exe: exe}
+	}
+	type tc struct {
+		name   string
+		p      func(h *harness) *event.Proc
+		err    error
+		detail string // substring of the logged detail
+	}
+	cases := []tc{
+		{"untrusted at event, now /bin/zsh: killed", func(h *harness) *event.Proc {
+			p := h.proc(4300, "/tmp/payload")
+			platformNow(h, 4300, "/bin/zsh")
+			return p
+		}, nil, "exec'd into an Apple platform binary after detection"},
+		{"untrusted at event, now /usr/bin/osascript: killed", func(h *harness) *event.Proc {
+			p := h.proc(4301, "/Users/Shared/.svc/svc")
+			platformNow(h, 4301, "/usr/bin/osascript")
+			return p
+		}, nil, `executable now "/usr/bin/osascript"`},
+		{"platform at event, still platform: refused", func(h *harness) *event.Proc {
+			p := h.proc(4302, "/bin/zsh")
+			p.IsPlatform = true
+			platformNow(h, 4302, "/bin/zsh")
+			return p
+		}, ErrProtected, "Apple platform binary"},
+		{"platform at event, now an untrusted image: refused (event-time image decides)", func(h *harness) *event.Proc {
+			p := h.proc(4303, "/bin/zsh")
+			p.IsPlatform = true
+			h.ids[4303] = Identity{CSKnown: true, StartTime: start, Exe: "/tmp/payload"}
+			return p
+		}, ErrProtected, "Apple platform binary"},
+		{"now under /usr/libexec: refused", func(h *harness) *event.Proc {
+			p := h.proc(4304, "/tmp/payload")
+			platformNow(h, 4304, "/usr/libexec/sshd-keygen-wrapper")
+			return p
+		}, ErrProtected, "protected path /usr/libexec/"},
+		{"now under /System: refused", func(h *harness) *event.Proc {
+			p := h.proc(4305, "/tmp/payload")
+			platformNow(h, 4305, "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder")
+			return p
+		}, ErrProtected, "protected path /System/"},
+		{"now under /sbin: refused", func(h *harness) *event.Proc {
+			p := h.proc(4306, "/tmp/payload")
+			platformNow(h, 4306, "/sbin/launchd")
+			return p
+		}, ErrProtected, "protected path /sbin/"},
+		{"now /usr/sbin: refused", func(h *harness) *event.Proc {
+			p := h.proc(4307, "/tmp/payload")
+			platformNow(h, 4307, "/usr/sbin/sshd")
+			return p
+		}, ErrProtected, "protected path /usr/sbin/"},
+		{"now eslogger: refused", func(h *harness) *event.Proc {
+			p := h.proc(4308, "/tmp/payload")
+			platformNow(h, 4308, "/usr/bin/eslogger")
+			return p
+		}, ErrProtected, "protected executable"},
+		{"now a platform image with a protected name: refused", func(h *harness) *event.Proc {
+			p := h.proc(4309, "/tmp/payload")
+			platformNow(h, 4309, "/private/var/x/WindowServer")
+			return p
+		}, ErrProtected, "protected name WindowServer"},
+		{"kernel unique id differs: refused", func(h *harness) *event.Proc {
+			p := h.proc(4310, "/tmp/payload")
+			platformNow(h, 4310, "/bin/zsh")
+			h.uniqNow[4310] = uniq(4310) + 7
+			return p
+		}, ErrMismatch, "kernel unique id"},
+		{"start time differs: refused", func(h *harness) *event.Proc {
+			p := h.proc(4311, "/tmp/payload")
+			h.ids[4311] = Identity{CSKnown: true, CSFlags: csPlatformBinary, StartTime: start.Add(2 * time.Millisecond), Exe: "/bin/zsh"}
+			return p
+		}, ErrMismatch, "start time"},
+		{"path of the platform image unreadable: refused", func(h *harness) *event.Proc {
+			p := h.proc(4312, "/tmp/payload")
+			h.ids[4312] = Identity{CSKnown: true, CSFlags: csPlatformBinary, StartTime: start, ExeErr: syscall.EPERM}
+			return p
+		}, ErrUnknownProc, "protection unknown"},
+		{"unlinked platform image: killed", func(h *harness) *event.Proc {
+			p := h.proc(4314, "/tmp/payload")
+			h.ids[4314] = Identity{CSKnown: true, CSFlags: csPlatformBinary, StartTime: start, ExeErr: ErrExeUnlinked}
+			return p
+		}, nil, "exec'd into an Apple platform binary after detection"},
+		{"pid 1: refused", func(h *harness) *event.Proc {
+			p := h.proc(1, "/tmp/payload")
+			platformNow(h, 1, "/bin/zsh")
+			return p
+		}, ErrProtected, "pid <= 1"},
+		{"own pid: refused", func(h *harness) *event.Proc {
+			pid := int32(os.Getpid())
+			p := h.proc(pid, "/tmp/payload")
+			platformNow(h, pid, "/bin/zsh")
+			return p
+		}, ErrProtected, "protected pid"},
+		{"launchd by name at event: refused", func(h *harness) *event.Proc {
+			p := h.proc(4313, "/tmp/payload")
+			p.Name = "launchd"
+			platformNow(h, 4313, "/bin/zsh")
+			return p
+		}, ErrProtected, "protected name launchd"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(false, nil)
+			p := c.p(h)
+			err := h.r.KillEvent(&event.Event{Name: event.CreateFile, Source: ESSource, Proc: p}, "rule-x", "rule X")
+			if !errors.Is(err, c.err) && !(err == nil && c.err == nil) {
+				t.Fatalf("err = %v, want %v (logs %+v)", err, c.err, h.logs)
+			}
+			if len(h.logs) != 1 || !strings.Contains(h.logs[0].Detail, c.detail) {
+				t.Fatalf("detail does not contain %q: %+v", c.detail, h.logs)
+			}
+			if c.err == nil && (len(h.killed) != 1 || h.killed[0] != int(p.PID) || h.logs[0].Outcome != OutcomeKilled) {
+				t.Fatalf("killed = %v, logs %+v", h.killed, h.logs)
+			}
+			if c.err != nil && len(h.killed) != 0 {
+				t.Fatalf("refused process killed: %v", h.killed)
+			}
+		})
+	}
+	// Security note N1: IsPlatform false is only proof when it came from
+	// Endpoint Security. A Proc from another source, or without one, is
+	// refused once its current image is a platform binary.
+	for _, src := range []string{"", "fixture", "yara", "zaafvesper"} {
+		t.Run("platform flag not from eslogger (source "+strconv.Quote(src)+"): refused", func(t *testing.T) {
+			h := newHarness(false, nil)
+			p := h.proc(4340, "/tmp/payload")
+			platformNow(h, 4340, "/bin/zsh")
+			err := h.r.KillEvent(&event.Event{Name: event.CreateFile, Source: src, Proc: p}, "rule-x", "rule X")
+			if !errors.Is(err, ErrProtected) || len(h.killed) != 0 || !strings.Contains(h.logs[0].Detail, "not known from Endpoint Security") {
+				t.Fatalf("err %v killed %v logs %+v", err, h.killed, h.logs)
+			}
+		})
+	}
+	t.Run("KillProc and Kill(pid) never kill after an exec into a platform binary", func(t *testing.T) {
+		h := newHarness(false, nil)
+		p := h.proc(4341, "/tmp/payload")
+		platformNow(h, 4341, "/bin/zsh")
+		if err := h.r.KillProc(p, "rule X"); !errors.Is(err, ErrProtected) || len(h.killed) != 0 {
+			t.Fatalf("KillProc: %v %v", err, h.killed)
+		}
+	})
+	t.Run("dry run records the exec too", func(t *testing.T) {
+		h := newHarness(true, nil)
+		p := h.proc(4320, "/tmp/payload")
+		platformNow(h, 4320, "/bin/zsh")
+		if err := h.r.KillEvent(&event.Event{Source: ESSource, Proc: p}, "rule-x", "rule X"); err != nil || len(h.killed) != 0 {
+			t.Fatalf("dry run: %v %v", err, h.killed)
+		}
+		if h.logs[0].Outcome != OutcomeDryRun || !strings.Contains(h.logs[0].Detail, "exec'd into an Apple platform binary") {
+			t.Fatalf("dry-run decision: %+v", h.logs[0])
+		}
+	})
+	t.Run("parent exec'd into a platform shell after detection: killed", func(t *testing.T) {
+		h := newHarness(false, nil)
+		par := h.proc(4330, "/Volumes/Installer/Installer.app/Contents/MacOS/Installer")
+		platformNow(h, 4330, "/bin/sh")
+		c := h.proc(4331, "/usr/bin/osascript")
+		c.IsPlatform, c.PPID, c.Parent = true, 4330, par
+		if err := h.r.KillParent(&event.Event{Name: event.CreateProcess, Source: ESSource, Proc: c}, "rule-x", "rule X"); err != nil {
+			t.Fatalf("parent not killed: %v %+v", err, h.logs)
+		}
+		if len(h.killed) != 1 || h.killed[0] != 4330 || !strings.Contains(h.logs[0].Detail, "exec'd into an Apple platform binary") {
+			t.Fatalf("killed %v logs %+v", h.killed, h.logs)
+		}
+		// The same parent with an event not from eslogger: refused.
+		h2 := newHarness(false, nil)
+		par2 := h2.proc(4330, "/Volumes/Installer/Installer.app/Contents/MacOS/Installer")
+		platformNow(h2, 4330, "/bin/sh")
+		c2 := h2.proc(4331, "/usr/bin/osascript")
+		c2.IsPlatform, c2.PPID, c2.Parent = true, 4330, par2
+		if err := h2.r.KillParent(&event.Event{Name: event.CreateProcess, Source: "fixture", Proc: c2}, "rule-x", "rule X"); !errors.Is(err, ErrProtected) || len(h2.killed) != 0 {
+			t.Fatalf("non-eslogger parent: %v %v", err, h2.killed)
+		}
+	})
+}
+
+// TestVerifyPlatformAtEventBackup (judge issue 9): decide refuses a platform
+// image at event time in protectedReason before verify runs, so verify's own
+// refusal of that case is a backup. Called directly here so it is covered.
+func TestVerifyPlatformAtEventBackup(t *testing.T) {
+	h := newHarness(false, nil)
+	p := h.proc(4350, "/bin/zsh")
+	p.IsPlatform = true
+	h.ids[4350] = Identity{CSKnown: true, CSFlags: csPlatformBinary, StartTime: start, Exe: "/bin/zsh"}
+	for _, known := range []bool{true, false} {
+		outcome, detail, _, err := h.r.verify(p, known)
+		if outcome != OutcomeProtected || !errors.Is(err, ErrProtected) || !strings.Contains(detail, "at event time") {
+			t.Fatalf("known=%v: %s %q %v", known, outcome, detail, err)
+		}
+	}
+	// Not platform at event, known from ES: allowed with the note.
+	p.IsPlatform = false
+	if outcome, _, note, err := h.r.verify(p, true); err != nil || outcome != "" || !strings.Contains(note, "exec'd into an Apple platform binary") {
+		t.Fatalf("allowed path: %q %q %v", outcome, note, err)
+	}
+}
+
+// TestESSourceMatchesDecoder: ESSource is the Source the eslogger decoder
+// writes, so the N1 gate opens for real eslogger events.
+func TestESSourceMatchesDecoder(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "eslogger", "exec.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	line, _, _ := strings.Cut(string(data), "\n")
+	e, ok, err := eslogger.Decode([]byte(line))
+	if err != nil || !ok || e == nil {
+		t.Fatalf("decode: %v %v", ok, err)
+	}
+	if e.Source != ESSource {
+		t.Fatalf("decoder source %q, ESSource %q", e.Source, ESSource)
+	}
+}
+
 func TestKillEventUnverified(t *testing.T) {
 	h := newHarness(false, nil)
 	e := &event.Event{Name: event.CreateFile, Proc: h.proc(4242, "/tmp/payload"),
@@ -291,6 +522,12 @@ func TestKillParent(t *testing.T) {
 		{"platform parent protected", func(h *harness) *event.Event {
 			p := h.proc(4999, "/bin/zsh")
 			p.IsPlatform = true
+			return child(h, p)
+		}, ErrProtected, 0},
+		{"launchd parent (pid 1, launchd-spawned prompt) refused: alert-only", func(h *harness) *event.Event {
+			p := h.proc(1, "/sbin/launchd")
+			p.IsPlatform = true
+			p.Name = "launchd"
 			return child(h, p)
 		}, ErrProtected, 0},
 		{"parent pid reused", func(h *harness) *event.Event {
@@ -511,6 +748,22 @@ func TestHelperSleep(t *testing.T) {
 	time.Sleep(30 * time.Second)
 }
 
+// TestHelperExecSleep is the child process of the exec subtest of
+// TestKillEvasionRealProcesses: it waits for a line on stdin, then exec's
+// /bin/sleep (an Apple platform binary) in the same process.
+func TestHelperExecSleep(t *testing.T) {
+	if os.Getenv("ZAAFVESPER_HELPER_EXEC") != "1" {
+		t.Skip("helper process only")
+	}
+	fmt.Println("helper-ready")
+	if _, err := bufio.NewReader(os.Stdin).ReadString('\n'); err != nil {
+		os.Exit(2)
+	}
+	err := syscall.Exec("/bin/sleep", []string{"sleep", "30"}, os.Environ())
+	fmt.Fprintln(os.Stderr, "exec:", err)
+	os.Exit(3)
+}
+
 // TestIdentifyChild checks a child started through a symbolic link with a
 // misleading argv[0]: the kernel path is the real file, the start time and
 // inode are read, and the process is not a platform binary.
@@ -621,8 +874,10 @@ func copyExe(t *testing.T, dst string) {
 
 // TestKillEvasionRealProcesses is the security review's round-3 harness as a
 // regression test: a process that renames, deletes or replaces its own
-// binary after exec is still killed (KillFunc is a stub), a platform image
-// is refused, and a start time 2 ms off (pid reuse) is refused.
+// binary after exec is still killed (KillFunc is a stub), a process that
+// exec's into a platform image after detection is killed while one that was
+// a platform image at event time is refused, and a start time 2 ms off (pid
+// reuse) is refused.
 func TestKillEvasionRealProcesses(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("darwin only")
@@ -675,26 +930,68 @@ func TestKillEvasionRealProcesses(t *testing.T) {
 			}
 		})
 	}
-	t.Run("platform current image", func(t *testing.T) {
-		cmd := exec.Command("/bin/sleep", "30")
+	// New-3 (owner decision 8 Nov 2026): a copied, non-platform binary
+	// matches, then exec's into /bin/sleep (an Apple platform binary). The
+	// kernel unique id and start time survive the exec, so the kill goes
+	// through (stub KillFunc) and the exec is recorded; the same process with
+	// a platform image at event time is refused.
+	t.Run("exec into platform binary after detection", func(t *testing.T) {
+		bin := filepath.Join(dir, "payload-exec")
+		copyExe(t, bin)
+		cmd := exec.Command(bin, "-test.run=^TestHelperExecSleep$")
+		cmd.Env = append(os.Environ(), "ZAAFVESPER_HELPER_EXEC=1")
+		in, err := cmd.StdinPipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := cmd.StdoutPipe()
+		if err != nil {
+			t.Fatal(err)
+		}
 		if err := cmd.Start(); err != nil {
 			t.Fatal(err)
 		}
-		defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
+		t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+		if line, err := bufio.NewReader(out).ReadString('\n'); err != nil || !strings.Contains(line, "helper-ready") {
+			t.Fatalf("helper did not start: %q %v", line, err)
+		}
 		pid := int32(cmd.Process.Pid)
-		var id Identity
+		id0, err := identify(pid)
+		if err != nil || id0.Exe != bin || !id0.UniqueKnown || !id0.CSKnown || id0.CSFlags&csPlatformBinary != 0 {
+			t.Fatalf("before exec: %+v %v", id0, err)
+		}
+		ev := &event.Proc{PID: pid, Exe: id0.Exe, StartTime: id0.StartTime, UniqueID: id0.UniqueID, ExeDev: id0.Dev, ExeIno: id0.Ino}
+		if _, err := io.WriteString(in, "exec\n"); err != nil {
+			t.Fatal(err)
+		}
+		var id1 Identity
 		for i := 0; i < 100; i++ {
-			if id, err = identify(pid); err == nil && id.Exe == "/bin/sleep" {
+			if id1, err = identify(pid); err == nil && id1.Exe == "/bin/sleep" {
 				break
 			}
 			time.Sleep(20 * time.Millisecond)
 		}
-		// The event lies: a non-platform binary under /tmp.
-		ev := &event.Proc{PID: pid, Exe: "/tmp/sleep", StartTime: id.StartTime, UniqueID: id.UniqueID}
+		if id1.Exe != "/bin/sleep" || !id1.CSKnown || id1.CSFlags&csPlatformBinary == 0 {
+			t.Fatalf("after exec: %+v %v", id1, err)
+		}
+		t.Logf("unique id before %d after %d; start before %s after %s", id0.UniqueID, id1.UniqueID, id0.StartTime, id1.StartTime)
 		var killed []int
 		var logs []Decision
 		if err := newResponder(&killed, &logs).KillProc(ev, "test"); !errors.Is(err, ErrProtected) || len(killed) != 0 {
-			t.Fatalf("platform image: %v %v %+v", err, killed, logs)
+			t.Fatalf("KillProc (platform at detection unknown) not refused: %v %v %+v", err, killed, logs)
+		}
+		killed, logs = nil, nil
+		if err := newResponder(&killed, &logs).KillEvent(&event.Event{Source: ESSource, Proc: ev}, "rule-x", "test"); err != nil || len(killed) != 1 || killed[0] != int(pid) {
+			t.Fatalf("exec'd into platform binary: not killed: %v %v %+v", err, killed, logs)
+		}
+		if !strings.Contains(logs[0].Detail, "exec'd into an Apple platform binary after detection") {
+			t.Fatalf("exec not recorded: %+v", logs[0])
+		}
+		plat := *ev
+		plat.IsPlatform = true
+		killed, logs = nil, nil
+		if err := newResponder(&killed, &logs).KillEvent(&event.Event{Source: ESSource, Proc: &plat}, "rule-x", "test"); !errors.Is(err, ErrProtected) || len(killed) != 0 {
+			t.Fatalf("platform at event: %v %v %+v", err, killed, logs)
 		}
 	})
 	t.Run("unique id differs", func(t *testing.T) {

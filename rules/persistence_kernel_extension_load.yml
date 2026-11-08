@@ -1,6 +1,7 @@
 name: Third-party kernel extension loaded
 id: f1a987b9-0a90-407c-8d7c-1ade21d1ae13
 version: 1.0.0
+platforms: [macos]
 description: |
   The kernel loaded a kernel extension. The only exclusion is an Apple bundle identifier
   (com.apple.*) loaded by an Apple platform process. The bundle identifier is chosen by the

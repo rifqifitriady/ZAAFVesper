@@ -5,6 +5,7 @@ package event
 
 import (
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -40,6 +41,31 @@ const (
 	// events). evt.arg[condition] names the condition, evt.arg[detail]
 	// describes it. Never subscribed at a source.
 	SensorDegraded = "SensorDegraded"
+
+	// Network (macOS: socket polling; Windows/Linux: Sysmon 3 and 22).
+	NetworkConnect = "NetworkConnect" // outbound connection
+	NetworkAccept  = "NetworkAccept"  // listening socket or inbound connection
+	DNSQuery       = "DNSQuery"
+
+	// Windows and Linux (Sysmon). macOS kernel extensions stay LoadKext.
+	ImageLoad         = "ImageLoad"
+	DriverLoad        = "DriverLoad"
+	RegistryCreateKey = "RegistryCreateKey"
+	RegistryDeleteKey = "RegistryDeleteKey"
+	RegistrySetValue  = "RegistrySetValue"
+	RegistryRename    = "RegistryRename"
+	PipeCreate        = "PipeCreate"
+	PipeConnect       = "PipeConnect"
+	WMIEvent          = "WMIEvent"
+	ProcessTamper     = "ProcessTamper"
+	FileStreamCreate  = "FileStreamCreate"
+)
+
+// Platforms (evt.platform).
+const (
+	PlatformMacOS   = "macos"
+	PlatformWindows = "windows"
+	PlatformLinux   = "linux"
 )
 
 // Code-signing validation categories (ps.cs_category), from Endpoint
@@ -75,6 +101,20 @@ func Category(name string) string {
 		return "threat"
 	case SensorDegraded:
 		return "sensor"
+	case NetworkConnect, NetworkAccept, DNSQuery:
+		return "network"
+	case ImageLoad, DriverLoad:
+		return "module"
+	case RegistryCreateKey, RegistryDeleteKey, RegistrySetValue, RegistryRename:
+		return "registry"
+	case PipeCreate, PipeConnect:
+		return "pipe"
+	case WMIEvent:
+		return "wmi"
+	case ProcessTamper:
+		return "process"
+	case FileStreamCreate:
+		return "file"
 	}
 	return "other"
 }
@@ -130,6 +170,15 @@ type Proc struct {
 	Env        map[string]string `json:"env,omitempty" yaml:"env,omitempty"`
 	Parent     *Proc             `json:"parent,omitempty" yaml:"parent,omitempty"`
 	Ancestors  []string          `json:"ancestors,omitempty" yaml:"ancestors,omitempty"`
+	// Windows and Linux (Sysmon) process attributes; empty on macOS, and the
+	// rule fields then resolve to nil.
+	GUID         string `json:"guid,omitempty" yaml:"guid,omitempty"`
+	Hashes       string `json:"hashes,omitempty" yaml:"hashes,omitempty"`
+	Integrity    string `json:"integrity,omitempty" yaml:"integrity,omitempty"`
+	Company      string `json:"company,omitempty" yaml:"company,omitempty"`
+	Product      string `json:"product,omitempty" yaml:"product,omitempty"`
+	Description  string `json:"description,omitempty" yaml:"description,omitempty"`
+	OriginalName string `json:"original_name,omitempty" yaml:"original_name,omitempty"`
 }
 
 // File describes the file object of a file event.
@@ -154,6 +203,42 @@ type Yara struct {
 	Target    string            `json:"target" yaml:"target"` // scanned file path
 }
 
+// Net describes a network connection (NetworkConnect, NetworkAccept).
+type Net struct {
+	Proto     string `json:"proto,omitempty" yaml:"proto,omitempty"`         // tcp, udp
+	Direction string `json:"direction,omitempty" yaml:"direction,omitempty"` // outbound, inbound, listen
+	SrcIP     string `json:"sip,omitempty" yaml:"sip,omitempty"`
+	SrcPort   uint16 `json:"sport,omitempty" yaml:"sport,omitempty"`
+	DstIP     string `json:"dip,omitempty" yaml:"dip,omitempty"`
+	DstPort   uint16 `json:"dport,omitempty" yaml:"dport,omitempty"`
+	DstHost   string `json:"dhost,omitempty" yaml:"dhost,omitempty"` // resolved name when known
+}
+
+// DNS describes a name lookup (DNSQuery).
+type DNS struct {
+	Query   string   `json:"query" yaml:"query"`
+	Type    string   `json:"type,omitempty" yaml:"type,omitempty"`
+	Answers []string `json:"answers,omitempty" yaml:"answers,omitempty"`
+	Status  string   `json:"status,omitempty" yaml:"status,omitempty"`
+}
+
+// Registry describes a Windows registry change (Registry* events).
+type Registry struct {
+	Key    string `json:"key" yaml:"key"`
+	Value  string `json:"value,omitempty" yaml:"value,omitempty"`
+	Data   string `json:"data,omitempty" yaml:"data,omitempty"`
+	NewKey string `json:"new_key,omitempty" yaml:"new_key,omitempty"`
+}
+
+// Module describes a loaded image or driver (ImageLoad, DriverLoad).
+type Module struct {
+	Path            string `json:"path" yaml:"path"`
+	Signed          *bool  `json:"signed,omitempty" yaml:"signed,omitempty"`
+	Signature       string `json:"signature,omitempty" yaml:"signature,omitempty"`
+	SignatureStatus string `json:"signature_status,omitempty" yaml:"signature_status,omitempty"`
+	Hashes          string `json:"hashes,omitempty" yaml:"hashes,omitempty"`
+}
+
 // Event is one normalized system event.
 type Event struct {
 	Seq    uint64            `json:"seq" yaml:"seq"`
@@ -165,6 +250,13 @@ type Event struct {
 	File   *File             `json:"file,omitempty" yaml:"file,omitempty"`
 	Args   map[string]string `json:"args,omitempty" yaml:"args,omitempty"` // evt.arg[key]
 	Yara   *Yara             `json:"yara,omitempty" yaml:"yara,omitempty"`
+	// Platform is the source platform (Platform* constants); empty in old
+	// captures and fixtures, where evt.platform resolves to nil.
+	Platform string    `json:"platform,omitempty" yaml:"platform,omitempty"`
+	Net      *Net      `json:"net,omitempty" yaml:"net,omitempty"`
+	DNS      *DNS      `json:"dns,omitempty" yaml:"dns,omitempty"`
+	Registry *Registry `json:"registry,omitempty" yaml:"registry,omitempty"`
+	Module   *Module   `json:"module,omitempty" yaml:"module,omitempty"`
 }
 
 // Value is the result of resolving a field: string, int64, bool or []string.
@@ -224,6 +316,8 @@ var procKinds = map[string]FieldKind{
 	"is_signed": KindBool, "tty": KindString, "ancestors": KindStrings,
 	"cs_category": KindString, "original_ppid": KindInt,
 	"ancestors_untrusted": KindBool,
+	"guid":                KindString, "hashes": KindString, "integrity": KindString, "company": KindString,
+	"product": KindString, "description": KindString, "original_name": KindString,
 }
 
 func procGetter(attr string) func(*Proc) Value {
@@ -264,6 +358,20 @@ func procGetter(attr string) func(*Proc) Value {
 		return func(p *Proc) Value { return p.TTY }
 	case "ancestors":
 		return func(p *Proc) Value { return p.Ancestors }
+	case "guid":
+		return func(p *Proc) Value { return nonEmpty(p.GUID) }
+	case "hashes":
+		return func(p *Proc) Value { return nonEmpty(p.Hashes) }
+	case "integrity":
+		return func(p *Proc) Value { return nonEmpty(p.Integrity) }
+	case "company":
+		return func(p *Proc) Value { return nonEmpty(p.Company) }
+	case "product":
+		return func(p *Proc) Value { return nonEmpty(p.Product) }
+	case "description":
+		return func(p *Proc) Value { return nonEmpty(p.Description) }
+	case "original_name":
+		return func(p *Proc) Value { return nonEmpty(p.OriginalName) }
 	case "ancestors_untrusted":
 		return func(p *Proc) Value { return p.AncestorsUntrusted }
 	case "original_ppid":
@@ -322,6 +430,103 @@ func init() {
 	fields["yara.namespace"] = fieldDef{KindString, yaraField(func(y *Yara) Value { return y.Namespace })}
 	fields["yara.tags"] = fieldDef{KindStrings, yaraField(func(y *Yara) Value { return y.Tags })}
 	fields["yara.target"] = fieldDef{KindString, yaraField(func(y *Yara) Value { return y.Target })}
+
+	fields["evt.platform"] = fieldDef{KindString, func(e *Event) Value { return nonEmpty(e.Platform) }}
+
+	netF := func(get func(*Net) Value) func(*Event) Value {
+		return func(e *Event) Value {
+			if e.Net == nil {
+				return nil
+			}
+			return get(e.Net)
+		}
+	}
+	fields["net.proto"] = fieldDef{KindString, netF(func(n *Net) Value { return nonEmpty(n.Proto) })}
+	fields["net.direction"] = fieldDef{KindString, netF(func(n *Net) Value { return nonEmpty(n.Direction) })}
+	fields["net.sip"] = fieldDef{KindString, netF(func(n *Net) Value { return nonEmpty(n.SrcIP) })}
+	fields["net.sport"] = fieldDef{KindInt, netF(func(n *Net) Value { return nonZeroPort(n.SrcPort) })}
+	fields["net.dip"] = fieldDef{KindString, netF(func(n *Net) Value { return nonEmpty(n.DstIP) })}
+	fields["net.dport"] = fieldDef{KindInt, netF(func(n *Net) Value { return nonZeroPort(n.DstPort) })}
+	fields["net.dhost"] = fieldDef{KindString, netF(func(n *Net) Value { return nonEmpty(n.DstHost) })}
+
+	dnsF := func(get func(*DNS) Value) func(*Event) Value {
+		return func(e *Event) Value {
+			if e.DNS == nil {
+				return nil
+			}
+			return get(e.DNS)
+		}
+	}
+	fields["dns.query"] = fieldDef{KindString, dnsF(func(d *DNS) Value { return nonEmpty(d.Query) })}
+	fields["dns.type"] = fieldDef{KindString, dnsF(func(d *DNS) Value { return nonEmpty(d.Type) })}
+	fields["dns.answers"] = fieldDef{KindStrings, dnsF(func(d *DNS) Value { return d.Answers })}
+	fields["dns.status"] = fieldDef{KindString, dnsF(func(d *DNS) Value { return nonEmpty(d.Status) })}
+
+	regF := func(get func(*Registry) Value) func(*Event) Value {
+		return func(e *Event) Value {
+			if e.Registry == nil {
+				return nil
+			}
+			return get(e.Registry)
+		}
+	}
+	fields["registry.key"] = fieldDef{KindString, regF(func(r *Registry) Value { return nonEmpty(r.Key) })}
+	fields["registry.value"] = fieldDef{KindString, regF(func(r *Registry) Value { return nonEmpty(r.Value) })}
+	fields["registry.data"] = fieldDef{KindString, regF(func(r *Registry) Value { return nonEmpty(r.Data) })}
+	fields["registry.new_key"] = fieldDef{KindString, regF(func(r *Registry) Value { return nonEmpty(r.NewKey) })}
+
+	modF := func(get func(*Module) Value) func(*Event) Value {
+		return func(e *Event) Value {
+			if e.Module == nil {
+				return nil
+			}
+			return get(e.Module)
+		}
+	}
+	fields["image.path"] = fieldDef{KindString, modF(func(m *Module) Value { return nonEmpty(m.Path) })}
+	fields["image.signed"] = fieldDef{KindBool, modF(func(m *Module) Value {
+		if m.Signed == nil {
+			return nil
+		}
+		return *m.Signed
+	})}
+	fields["image.signature"] = fieldDef{KindString, modF(func(m *Module) Value { return nonEmpty(m.Signature) })}
+	fields["image.signature_status"] = fieldDef{KindString, modF(func(m *Module) Value { return nonEmpty(m.SignatureStatus) })}
+	fields["image.hashes"] = fieldDef{KindString, modF(func(m *Module) Value { return nonEmpty(m.Hashes) })}
+}
+
+// nonZeroPort maps port 0 (unreported) to nil.
+func nonZeroPort(p uint16) Value {
+	if p == 0 {
+		return nil
+	}
+	return int64(p)
+}
+
+// Names returns every canonical event name, sorted. The rule compiler and
+// the Sigma map use it, so the list lives in one place.
+func Names() []string {
+	out := append([]string(nil), names...)
+	sort.Strings(out)
+	return out
+}
+
+var names = []string{
+	CreateProcess, Fork, TerminateProcess, OpenFile, CreateFile, WriteFile, RenameFile, DeleteFile,
+	SetXattr, DeleteXattr, SetMode, SetOwner, OpenProcess, Signal, Ptrace, CreateRemoteThread,
+	AddLaunchItem, Mount, LoadKext, Authenticate, Sudo, ModifyTCC, XProtectDetect, YaraMatch,
+	SensorDegraded, NetworkConnect, NetworkAccept, DNSQuery, ImageLoad, DriverLoad,
+	RegistryCreateKey, RegistryDeleteKey, RegistrySetValue, RegistryRename,
+	PipeCreate, PipeConnect, WMIEvent, ProcessTamper, FileStreamCreate,
+}
+
+// nonEmpty maps "" to nil (absent), so comparisons on an unreported
+// attribute are false under the rule language's nil semantics.
+func nonEmpty(s string) Value {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // LookupField reports whether name is a known static field and its kind.

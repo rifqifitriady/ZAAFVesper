@@ -1,6 +1,7 @@
 name: Setuid or setgid bit set with chmod
 id: 4ae946f1-7e57-435d-b6c5-80c4820a5640
 version: 1.0.0
+platforms: [macos]
 description: |
   chmod was run with a mode that sets the setuid or setgid bit (u+s, g+xs, 4755, 6755,
   ...). Combined with a root-owned binary this gives a persistent privilege-escalation

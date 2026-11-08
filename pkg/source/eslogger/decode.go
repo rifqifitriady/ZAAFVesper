@@ -205,11 +205,12 @@ func decode(line []byte, gseq *uint64) (e *event.Event, ok bool, err error) {
 	}
 
 	e = &event.Event{
-		Seq:    uint64(m.GlobalSeqNum),
-		Time:   jtimeT(m.Time),
-		Name:   t.canonical,
-		Source: "eslogger",
-		Proc:   m.Process.toProc(),
+		Seq:      uint64(m.GlobalSeqNum),
+		Time:     jtimeT(m.Time),
+		Name:     t.canonical,
+		Source:   "eslogger",
+		Platform: event.PlatformMacOS,
+		Proc:     m.Process.toProc(),
 	}
 	if e.Seq == 0 {
 		e.Seq = uint64(m.SeqNum)

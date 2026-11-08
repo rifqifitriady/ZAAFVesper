@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -48,22 +49,29 @@ type Scenario struct {
 	Events []*event.Event `yaml:"events"`
 }
 
-// FixtureFile is rules/testdata/<rule-file-stem>.yml.
+// FixtureFile is <rule dir>/testdata/<rule-file-stem>.yml.
 type FixtureFile struct {
 	Match   []Scenario `yaml:"match"`
 	NoMatch []Scenario `yaml:"nomatch"`
 }
 
 // FixturePath returns the fixture path for a rule file, and whether it exists.
+// The fixture lives in a testdata/ directory next to the rule file, so rules
+// in subdirectories (rules/windows/x.yml) have rules/windows/testdata/x.yml.
+// rulesDir is kept for callers and used when ruleFile has no directory.
 func FixturePath(rulesDir, ruleFile string) (string, bool) {
 	stem := strings.TrimSuffix(filepath.Base(ruleFile), filepath.Ext(ruleFile))
+	dir := filepath.Dir(ruleFile)
+	if dir == "." || dir == "" {
+		dir = rulesDir
+	}
 	for _, ext := range []string{".yml", ".yaml"} {
-		p := filepath.Join(rulesDir, "testdata", stem+ext)
+		p := filepath.Join(dir, "testdata", stem+ext)
 		if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() {
 			return p, true
 		}
 	}
-	return filepath.Join(rulesDir, "testdata", stem+".yml"), false
+	return filepath.Join(dir, "testdata", stem+".yml"), false
 }
 
 // LoadFixture reads a fixture file strictly (unknown keys are errors, so a
@@ -158,7 +166,9 @@ func RunFixtures(rulesDir string) ([]FixtureResult, error) {
 	}
 	var out []FixtureResult
 	used := map[string]bool{}
+	ruleDirs := map[string]bool{filepath.Clean(rulesDir): true}
 	for _, r := range rs.Rules {
+		ruleDirs[filepath.Clean(filepath.Dir(r.File))] = true
 		base := FixtureResult{RuleID: r.ID, RuleName: r.Name, RuleFile: r.File}
 		path, ok := FixturePath(rulesDir, r.File)
 		base.FixtureFile = path
@@ -191,7 +201,16 @@ func RunFixtures(rulesDir string) ([]FixtureResult, error) {
 		}
 	}
 	// Fixture files without a rule are reported, they usually mean a rename.
-	if files, err := yamlFiles(filepath.Join(rulesDir, "testdata")); err == nil {
+	dirs := make([]string, 0, len(ruleDirs))
+	for d := range ruleDirs {
+		dirs = append(dirs, d)
+	}
+	sort.Strings(dirs)
+	for _, d := range dirs {
+		files, err := yamlFiles(filepath.Join(d, "testdata"))
+		if err != nil {
+			continue
+		}
 		for _, f := range files {
 			if !used[filepath.Clean(f)] {
 				out = append(out, FixtureResult{FixtureFile: f, Kind: KindFixture, Err: "fixture has no rule file with the same name"})

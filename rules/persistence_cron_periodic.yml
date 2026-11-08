@@ -1,6 +1,7 @@
 name: Cron or periodic job installed
 id: 29d10c7c-cb24-459d-8008-43e0311d40c8
 version: 1.0.0
+platforms: [macos]
 description: |
   A crontab was replaced with `crontab <file>` / `crontab -`, or a file was written to a
   cron or periodic location (/private/var/at/tabs, /etc/crontab, /etc/periodic/*,

@@ -1,6 +1,7 @@
 name: YARA signature match
 id: 4dcf71fe-f872-4847-b91a-639da0d9c389
 version: 1.0.0
+platforms: [macos]
 description: |
   ZAAFVesper's YARA scanner matched a rule from rules/yara/ against an executed binary or a
   file written to a watched folder (/tmp, Downloads, /Users/Shared). The YARA rule's own

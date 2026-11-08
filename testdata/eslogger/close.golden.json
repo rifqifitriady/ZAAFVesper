@@ -47,7 +47,8 @@
     },
     "args": {
       "via": "close"
-    }
+    },
+    "platform": "macos"
   },
   null
 ]

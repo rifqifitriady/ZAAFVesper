@@ -1,6 +1,7 @@
 name: Shell history file deleted
 id: 9889fe8e-48e3-4b10-b8dd-38949b8afb9b
 version: 1.0.0
+platforms: [macos]
 description: |
   A shell history file (~/.bash_history, ~/.zsh_history, ...) was deleted, either with
   rm/unlink or by `ln -sf /dev/null ~/.bash_history` (ln unlinks the file first). Removing

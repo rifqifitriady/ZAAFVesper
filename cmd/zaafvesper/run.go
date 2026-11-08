@@ -266,6 +266,7 @@ func buildSensor(o runOptions, stdout, stderr io.Writer) (*sensor, error) {
 	if err != nil {
 		return nil, err
 	}
+	rs.Platform = hostPlatform() // rules declaring other platforms stay off
 	excl, err := config.CompileExclusions(cfg.Exclude, rs.Macros)
 	if err != nil {
 		return nil, err
@@ -283,9 +284,21 @@ func buildSensor(o runOptions, stdout, stderr io.Writer) (*sensor, error) {
 		excl:     excl,
 		enricher: snap,
 		dedup:    alert.NewDeduper(o.dedupWindow),
-		errw:     stderr,
+		// Per rule and minute: the first 20 alerts, and the first alert of
+		// every new source (up to 64), are written in full; repeats are
+		// summarised (owner decision R5-1, refined after the security
+		// review). Wall clock (or the test clock), so the 2-second tick can
+		// end a window.
+		agg:  alert.NewAggregator(alert.DefaultAggregateLimit, alert.DefaultAggregateWindow, wallClock(o.clock)),
+		errw: stderr,
 	}
 	s.p = p
+	// A rule whose 64 source slots fill up in a minute may be hiding a
+	// real alert behind decoys: say so, as a SensorDegraded event that is
+	// never aggregated (security review, finding 2).
+	p.agg.OnSourcesExhausted(func(ruleID, ruleName string) {
+		p.degradedFrom(condSourcesExhausted, fmt.Sprintf("rule %q (%s) saw %d alert sources in one window; alerts from further new sources are only summarised", ruleName, ruleID, alert.MaxAggregateSources))
+	})
 	if o.clock != nil {
 		p.deg.clock = o.clock
 		if c, ok := any(snap).(interface{ SetClock(func() time.Time) }); ok {
@@ -416,6 +429,14 @@ func buildSensor(o runOptions, stdout, stderr io.Writer) (*sensor, error) {
 	return s, nil
 }
 
+// wallClock returns c, or time.Now when c is nil.
+func wallClock(c func() time.Time) func() time.Time {
+	if c != nil {
+		return c
+	}
+	return time.Now
+}
+
 func runSensor(ctx context.Context, o runOptions, stdout, stderr io.Writer) error {
 	s, err := buildSensor(o, stdout, stderr)
 	if err != nil {
@@ -458,7 +479,8 @@ loop:
 		case <-statsTick.C:
 			p.periodicStats(stderr)
 		case <-flush.C:
-			p.drainDegraded() // reports from YARA workers while idle
+			p.flushAggregates(time.Now(), false) // summaries of windows that ended
+			p.drainDegraded()                    // reports from YARA workers while idle
 			if p.capture != nil {
 				_ = p.capture.Flush()
 			}
@@ -489,6 +511,7 @@ drain:
 		}
 		break
 	}
+	p.flushAggregates(time.Now(), true) // one summary per rule still holding alerts
 	p.drainDegraded()
 	closeErr := s.close()
 	p.printStats(stderr, s.extraStats())

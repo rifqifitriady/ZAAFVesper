@@ -42,7 +42,9 @@ var (
 )
 
 // ProtectedNames are process names that are never killed. Names are an extra
-// layer only; the platform-binary flag and the path prefixes are the main gate.
+// layer only; the platform-binary flag at event time and the path prefixes are
+// the main gate. A current image that is an Apple platform binary with one of
+// these base names is refused too.
 var ProtectedNames = []string{"kernel_task", "launchd", "WindowServer", "loginwindow", "eslogger"}
 
 // ProtectedExePrefixes are executable path prefixes that are never killed.
@@ -72,6 +74,13 @@ const maxLogKeys = 4096
 // handed out sequentially, so a pid is not reused within a millisecond: the
 // pid plus its start time to the millisecond binds one process incarnation.
 const StartTolerance = time.Millisecond
+
+// ESSource is event.Event.Source of events decoded from eslogger. Every
+// es_process_t carries is_platform_binary, so for such an event (and for
+// process-table entries learned from such events) Proc.IsPlatform == false
+// is a positive statement, not a Go zero value. The eslogger decoder sets
+// this value (TestESSourceMatchesDecoder).
+const ESSource = "eslogger"
 
 // csPlatformBinary is CS_PLATFORM_BINARY from <kern/cs_blobs.h>.
 const csPlatformBinary = 0x04000000
@@ -222,7 +231,7 @@ func (r *Responder) Kill(pid int32, reason string) error {
 			return r.KillProc(&cp, reason)
 		}
 	}
-	return r.decide(&event.Proc{PID: pid}, TargetProcess, "", reason, "identity unknown")
+	return r.decide(&event.Proc{PID: pid}, TargetProcess, "", reason, "identity unknown", false)
 }
 
 // KillEvent kills the process of e (normally the event that completed an
@@ -231,12 +240,12 @@ func (r *Responder) Kill(pid int32, reason string) error {
 // killed. rule (the rule id) selects the per-rule kill budget.
 func (r *Responder) KillEvent(e *event.Event, rule, reason string) error {
 	if e == nil || e.Proc == nil {
-		return r.decide(&event.Proc{}, TargetProcess, rule, reason, "event has no process")
+		return r.decide(&event.Proc{}, TargetProcess, rule, reason, "event has no process", false)
 	}
 	if e.Proc.Seeded || e.Args[ps.ArgIdentity] == ps.Unverified {
-		return r.decide(e.Proc, TargetProcess, rule, reason, "process identity is unverified (seeded at start from kern.procargs2)")
+		return r.decide(e.Proc, TargetProcess, rule, reason, "process identity is unverified (seeded at start from kern.procargs2)", false)
 	}
-	return r.decide(e.Proc, TargetProcess, rule, reason, "")
+	return r.decide(e.Proc, TargetProcess, rule, reason, "", e.Source == ESSource)
 }
 
 // KillParent kills the parent of e's process (rules with action
@@ -246,32 +255,38 @@ func (r *Responder) KillEvent(e *event.Event, rule, reason string) error {
 // applies to the parent. rule selects the per-rule kill budget.
 func (r *Responder) KillParent(e *event.Event, rule, reason string) error {
 	if e == nil || e.Proc == nil {
-		return r.decide(&event.Proc{}, TargetParent, rule, reason, "event has no process")
+		return r.decide(&event.Proc{}, TargetParent, rule, reason, "event has no process", false)
 	}
 	par := e.Proc.Parent
 	if par == nil {
-		return r.decide(&event.Proc{PID: e.Proc.PPID}, TargetParent, rule, reason, "parent process is unknown (not in the process table)")
+		return r.decide(&event.Proc{PID: e.Proc.PPID}, TargetParent, rule, reason, "parent process is unknown (not in the process table)", false)
 	}
 	cp := *par
 	if cp.PID == 0 {
 		cp.PID = e.Proc.PPID
 	}
 	if cp.PID != e.Proc.PPID {
-		return r.decide(&cp, TargetParent, rule, reason, fmt.Sprintf("parent pid %d does not match ppid %d", cp.PID, e.Proc.PPID))
+		return r.decide(&cp, TargetParent, rule, reason, fmt.Sprintf("parent pid %d does not match ppid %d", cp.PID, e.Proc.PPID), false)
 	}
 	if cp.Seeded || e.Args[ps.ArgParentIdentity] == ps.Unverified {
-		return r.decide(&cp, TargetParent, rule, reason, "parent identity is unverified (seeded at start from kern.procargs2)")
+		return r.decide(&cp, TargetParent, rule, reason, "parent identity is unverified (seeded at start from kern.procargs2)", false)
 	}
-	return r.decide(&cp, TargetParent, rule, reason, "")
+	// The parent comes from the process table. With an eslogger event, the
+	// table was built from eslogger events (exec, fork and every other event
+	// carry is_platform_binary; fork and observe copy it with the image), and
+	// seeded entries were refused above, so its IsPlatform is known.
+	return r.decide(&cp, TargetParent, rule, reason, "", e.Source == ESSource)
 }
 
 // KillProc kills the process described by p unless a guard rail refuses.
-// It is not tied to a rule: only the global kill budget applies.
+// It is not tied to a rule: only the global kill budget applies. p carries
+// no event source, so whether it was a platform binary at detection is not
+// known: a current platform image is refused (no exec-into-platform kill).
 func (r *Responder) KillProc(p *event.Proc, reason string) error {
 	if p == nil {
-		return r.decide(&event.Proc{}, TargetProcess, "", reason, "no process")
+		return r.decide(&event.Proc{}, TargetProcess, "", reason, "no process", false)
 	}
-	return r.decide(p, TargetProcess, "", reason, "")
+	return r.decide(p, TargetProcess, "", reason, "", false)
 }
 
 func nameOf(p *event.Proc) string {
@@ -335,14 +350,26 @@ func (r *Responder) protectedReason(p *event.Proc) string {
 //     reboot) must equal the one recorded when the process table learned
 //     the process; no recorded id, or one that cannot be read now, refuses
 //     the kill. The start time must also match within StartTolerance (1 ms).
-//   - Protection of the current image: refused when csops says it is an
-//     Apple platform binary, when proc_pidpath names a protected path, or
-//     when either cannot be read (unknown protection: fail closed). An
-//     unlinked image (proc_pidpath ENOENT) is not on a protected path.
+//   - Protection of the current image: refused when proc_pidpath names a
+//     protected path, when the current image's base name is a protected
+//     name while it is an Apple platform binary, or when the code-signing
+//     status or the path cannot be read (unknown protection: fail closed).
+//     An unlinked image (proc_pidpath ENOENT) is not on a protected path.
+//   - Exec into an Apple platform binary after detection (owner decision
+//     8 Nov 2026, finding New-3): when csops says the current image is a
+//     platform binary but the image at event time was not (p.IsPlatform is
+//     false; a platform image at event time is refused earlier by
+//     protectedReason), the kill is allowed, but only when platformKnown
+//     says p.IsPlatform came from Endpoint Security (security note N1: a
+//     false from the Go zero value proves nothing). The kernel unique id and the
+//     start time above already proved it is the same process that matched,
+//     so the malware is not saved by exec'ing into /bin/zsh or osascript.
+//     The decision's detail records it. Protected paths and names of the
+//     current image still refuse.
 //   - A different path, a renamed, deleted or replaced file is NOT a
 //     refusal (malware must not escape by renaming itself); it is returned
 //     as a note for the decision's detail.
-func (r *Responder) verify(p *event.Proc) (outcome, detail, note string, err error) {
+func (r *Responder) verify(p *event.Proc, platformKnown bool) (outcome, detail, note string, err error) {
 	if p.UniqueID == 0 {
 		return OutcomeUnknown, "kernel unique id not recorded for this process", "", ErrUnknownProc
 	}
@@ -370,8 +397,15 @@ func (r *Responder) verify(p *event.Proc) (outcome, detail, note string, err err
 	if !id.CSKnown {
 		return OutcomeUnknown, "cannot read the code-signing status of the current image (csops); protection unknown", "", ErrUnknownProc
 	}
-	if id.CSFlags&csPlatformBinary != 0 {
-		return OutcomeProtected, "Apple platform binary (current image)", "", ErrProtected
+	platformNow := id.CSFlags&csPlatformBinary != 0
+	if platformNow && p.IsPlatform {
+		// Backup only: decide never gets here (protectedReason refuses a
+		// platform image at event time first). Kept so verify alone never
+		// allows it; TestVerifyPlatformAtEventBackup calls verify directly.
+		return OutcomeProtected, "Apple platform binary (current image and at event time)", "", ErrProtected
+	}
+	if platformNow && !platformKnown {
+		return OutcomeProtected, "Apple platform binary (current image); whether it was one at detection is not known from Endpoint Security", "", ErrProtected
 	}
 	var notes []string
 	switch {
@@ -383,9 +417,20 @@ func (r *Responder) verify(p *event.Proc) (outcome, detail, note string, err err
 		if why := protectedExe(id.Exe); why != "" {
 			return OutcomeProtected, why + " (current image)", "", ErrProtected
 		}
+		if platformNow {
+			base := filepath.Base(id.Exe)
+			for _, n := range ProtectedNames {
+				if base == n {
+					return OutcomeProtected, "protected name " + n + " (current image, Apple platform binary)", "", ErrProtected
+				}
+			}
+		}
 		if id.Exe != p.Exe {
 			notes = append(notes, fmt.Sprintf("executable now %q, event %q", id.Exe, p.Exe))
 		}
+	}
+	if platformNow {
+		notes = append(notes, "process exec'd into an Apple platform binary after detection (not a platform binary at event time; kernel unique id and start time match the event)")
 	}
 	if (p.ExeDev != 0 || p.ExeIno != 0) && id.ExeErr == nil {
 		// dev_t is 32 bits on macOS; compare the low 32 bits.
@@ -411,7 +456,10 @@ func pruneWindow(ts []time.Time, now time.Time) []time.Time {
 
 // decide applies every guard rail in order and logs the decision. A
 // non-empty unknown means the identity is already known to be unusable.
-func (r *Responder) decide(p *event.Proc, target, rule, reason, unknown string) error {
+// platformKnown says p.IsPlatform comes from Endpoint Security (see
+// ESSource); only then may a process that exec'd into a platform binary
+// after detection be killed.
+func (r *Responder) decide(p *event.Proc, target, rule, reason, unknown string, platformKnown bool) error {
 	var notice string
 	defer func() { // after the unlock below
 		if notice != "" && r.cfg.OnDegraded != nil {
@@ -450,7 +498,7 @@ func (r *Responder) decide(p *event.Proc, target, rule, reason, unknown string) 
 	if p.TeamID != "" && p.CSCategory == "" {
 		return finish(OutcomeSigningUnknown, "signing category unreported; kill disabled (a Team ID without a validation category cannot be told from a forged one)", ErrUnknownProc)
 	}
-	outcome, detail, note, err := r.verify(p)
+	outcome, detail, note, err := r.verify(p, platformKnown)
 	if err != nil {
 		return finish(outcome, detail, err)
 	}

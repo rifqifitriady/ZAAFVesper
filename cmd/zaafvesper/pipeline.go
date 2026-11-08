@@ -30,11 +30,12 @@ type pipeline struct {
 	scanner   source.Scanner      // nil: no YARA
 	responder *response.Responder // nil: response off (always nil in replay)
 	dedup     *alert.Deduper      // nil: every alert is delivered
+	agg       *alert.Aggregator   // nil: no per-rule aggregation
 	errw      io.Writer
 	deg       degradedState // SensorDegraded reports (see degraded.go)
 
 	events, excluded, alerts, suppressed, sinkErrs, captureErrs, submitted uint64
-	fallbackLines                                                          uint64
+	fallbackLines, aggregated, summaries                                   uint64
 	captureStopped                                                         bool
 }
 
@@ -80,25 +81,68 @@ func (p *pipeline) handle(e *event.Event, fromScanner bool) {
 		p.submitted++
 	}
 	for _, a := range p.engine.Process(e) {
-		// Deduplication only quiets the output: the response decision is
-		// taken for every alert, repeat or not. SensorDegraded events are
-		// already rate-limited per condition and all carry ZAAFVesper's own
-		// pid, so they are never deduplicated.
-		if p.dedup != nil && e.Name != event.SensorDegraded && !p.dedup.Allow(a) {
+		// Deduplication and aggregation only quiet the output: the response
+		// decision is taken for every alert, repeat or not, held back or
+		// not. SensorDegraded events are already rate-limited per condition
+		// (20 a minute each, 120 in all, es_events_dropped never) and all
+		// carry ZAAFVesper's own pid, so they are neither deduplicated nor
+		// aggregated.
+		switch {
+		case p.dedup != nil && e.Name != event.SensorDegraded && !p.dedup.Allow(a):
 			p.suppressed++ // same rule, same process, inside the window
-		} else {
-			p.alerts++
-			for _, s := range p.sinks {
-				if err := s.Send(a); err != nil {
-					p.sinkErrs++
-					if p.sinkErrs == 1 {
-						say(p.errw, "alert sink: %v", err)
-					}
-				}
+		case p.agg != nil && e.Name != event.SensorDegraded:
+			write, sums := p.agg.Add(a)
+			for _, s := range sums {
+				p.writeSummary(s)
 			}
-			p.fallbackAlert(a)
+			if write {
+				p.deliver(a)
+			} else {
+				p.aggregated++ // counted in the rule's next summary
+			}
+		default:
+			p.deliver(a)
 		}
 		p.respond(a)
+	}
+}
+
+// deliver writes a to every sink (and the stderr fallback line).
+func (p *pipeline) deliver(a *rules.Alert) {
+	p.alerts++
+	for _, s := range p.sinks {
+		if err := s.Send(a); err != nil {
+			p.sinkErrs++
+			if p.sinkErrs == 1 {
+				say(p.errw, "alert sink: %v", err)
+			}
+		}
+	}
+	p.fallbackAlert(a)
+}
+
+// writeSummary delivers one per-rule summary alert of the aggregator.
+func (p *pipeline) writeSummary(a *rules.Alert) {
+	p.summaries++
+	p.deliver(a)
+}
+
+// flushAggregates writes the summaries of aggregation windows that are over
+// at now (all of them when final: shutdown, end of a replay). run calls it
+// on its 2-second tick, so a summary follows the end of its minute closely
+// even when the rule does not fire again.
+func (p *pipeline) flushAggregates(now time.Time, final bool) {
+	if p.agg == nil {
+		return
+	}
+	var sums []*rules.Alert
+	if final {
+		sums = p.agg.Flush(now)
+	} else {
+		sums = p.agg.Tick(now)
+	}
+	for _, s := range sums {
+		p.writeSummary(s)
 	}
 }
 
@@ -178,6 +222,10 @@ func (p *pipeline) printStats(w io.Writer, extra map[string]map[string]uint64) {
 	if p.dedup != nil {
 		printCounter(w, "suppressed duplicates by rule", p.dedup.Suppressed())
 	}
+	if p.agg != nil {
+		say(w, "stats: aggregated=%d aggregate_summaries=%d", p.aggregated, p.summaries)
+		printCounter(w, "aggregated alerts by rule", p.agg.Held())
+	}
 	printCounter(w, "sensor degraded", p.deg.stats())
 	for _, s := range p.sinks {
 		if j, ok := s.(*alert.JSONL); ok {
@@ -208,6 +256,9 @@ func (p *pipeline) printStats(w io.Writer, extra map[string]map[string]uint64) {
 // shutdown: degraded reports (including what the limits suppressed),
 // alert-file and response counters. run calls it every statsEvery.
 func (p *pipeline) periodicStats(w io.Writer) {
+	if p.agg != nil {
+		printCounter(w, "aggregated alerts by rule", p.agg.Held())
+	}
 	printCounter(w, "sensor degraded", p.deg.stats())
 	for _, s := range p.sinks {
 		if j, ok := s.(*alert.JSONL); ok {

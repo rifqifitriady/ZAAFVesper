@@ -1,6 +1,7 @@
 name: Shell start-up file modified by non-editor process
 id: 43c54c4b-3ed8-4c6c-a0d6-eb507bf0170f
 version: 1.2.0
+platforms: [macos]
 description: |
   A shell start-up file (~/.zshrc, ~/.bash_profile, /etc/zprofile, ...) was written or
   replaced by something other than a trusted text editor. Code appended there runs in

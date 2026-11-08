@@ -1,6 +1,7 @@
 name: Launch Daemon persistence via plist write
 id: 3bbbda85-d32e-4ae9-b6b9-86f0a980a562
 version: 1.1.0
+platforms: [macos]
 description: |
   A property list was created, modified or renamed into /Library/LaunchDaemons. Daemons
   run as root at boot, so a new one means root-level persistence. Apple's launchd/BTM

@@ -1,6 +1,7 @@
 name: Gatekeeper or quarantine disabled system-wide
 id: 5d413305-1332-4505-8ca5-bd67bae2f219
 version: 1.0.0
+platforms: [macos]
 description: |
   spctl was asked to disable assessments globally (--master-disable, --global-disable,
   --disable), or `defaults` turned off file quarantine (LSQuarantine) or Gatekeeper

@@ -1,6 +1,7 @@
 name: System or audit logs cleared
 id: fe858ade-745c-4eef-b646-95dea43d277f
 version: 1.0.0
+platforms: [macos]
 description: |
   Apple's system logs (/var/log/system.log, install.log, asl, launchd, ...), the BSM audit
   trail (/var/audit) or the unified log store were deleted, moved out (e.g.

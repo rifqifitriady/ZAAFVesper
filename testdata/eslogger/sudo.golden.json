@@ -47,6 +47,7 @@
       "sudo_success": "false",
       "sudo_to_uid": "0",
       "sudo_to_user": "root"
-    }
+    },
+    "platform": "macos"
   }
 ]

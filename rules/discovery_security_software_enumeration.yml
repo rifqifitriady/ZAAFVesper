@@ -1,6 +1,7 @@
 name: Security software enumeration
 id: eb0c51ab-1dc9-491a-a1da-d2f828645a54
 version: 1.0.0
+platforms: [macos]
 description: |
   grep/egrep/pgrep (typically fed by `ps aux` or `launchctl list`) searched for the
   process names of security products (Little Snitch, LuLu, BlockBlock, CrowdStrike,

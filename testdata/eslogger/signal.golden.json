@@ -73,6 +73,7 @@
     "args": {
       "signal": "9",
       "signal_name": "SIGKILL"
-    }
+    },
+    "platform": "macos"
   }
 ]

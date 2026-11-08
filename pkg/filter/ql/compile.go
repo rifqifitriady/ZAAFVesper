@@ -13,15 +13,7 @@ import (
 
 // knownEvents are the canonical event names; a literal compared with evt.name
 // must be one of these, so a typo is a compile error instead of a silent miss.
-var knownEvents = []string{
-	event.CreateProcess, event.Fork, event.TerminateProcess, event.OpenFile,
-	event.CreateFile, event.WriteFile, event.RenameFile, event.DeleteFile,
-	event.SetXattr, event.DeleteXattr, event.SetMode, event.SetOwner,
-	event.OpenProcess, event.Signal, event.Ptrace, event.CreateRemoteThread,
-	event.AddLaunchItem, event.Mount, event.LoadKext, event.Authenticate,
-	event.Sudo, event.ModifyTCC, event.XProtectDetect, event.YaraMatch,
-	event.SensorDegraded,
-}
+var knownEvents = event.Names()
 
 // KnownEvents returns the canonical event names, sorted.
 func KnownEvents() []string {

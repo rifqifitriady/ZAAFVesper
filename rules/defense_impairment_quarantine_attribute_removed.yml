@@ -1,6 +1,7 @@
 name: Quarantine attribute removed from file
 id: 34f08a45-25b5-44aa-afa2-e67bcf4622ef
 version: 1.0.0
+platforms: [macos]
 description: |
   The com.apple.quarantine extended attribute was deleted from a file. Without it
   Gatekeeper never assesses the file, so droppers and "copy this into Terminal"

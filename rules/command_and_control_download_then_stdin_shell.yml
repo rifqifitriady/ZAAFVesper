@@ -1,6 +1,7 @@
 name: Download followed by stdin-fed shell
 id: 37f1b379-c1d0-4131-a03b-6a9c96d82ef7
 version: 1.0.0
+platforms: [macos]
 description: |
   Sequence: curl/wget/nscurl fetches a URL and, within 30 seconds, a sibling process
   (same parent) starts a shell or interpreter that reads its program from stdin

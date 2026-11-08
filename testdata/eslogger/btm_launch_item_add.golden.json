@@ -50,6 +50,7 @@
       "launch_item_uid": "501",
       "launch_item_url": "file:///Users/alice/Library/LaunchAgents/com.example.updater.plist",
       "reporter_exe": "/System/Library/PrivateFrameworks/BackgroundTaskManagement.framework/Resources/backgroundtaskmanagementd"
-    }
+    },
+    "platform": "macos"
   }
 ]

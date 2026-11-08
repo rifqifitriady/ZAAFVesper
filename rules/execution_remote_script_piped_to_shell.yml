@@ -1,6 +1,7 @@
 name: Downloaded or decoded script piped into a shell
 id: bced8bc9-f2a7-4ffc-a564-38a7cf2af260
 version: 1.0.0
+platforms: [macos]
 description: |
   A shell was started with a command line that downloads (curl, wget, nscurl) or
   base64-decodes content and pipes it straight into a shell or interpreter, e.g.

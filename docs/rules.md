@@ -12,6 +12,16 @@ T1562 and T1562.001 to **T1685**, T1562.004 to **T1686**, T1070.002 to **T1685.0
 T1562.003 to T1690. Every `technique.id`/`tactic.id` pair below was checked against that
 file: not revoked, name identical, tactic is one of the technique's tactics.
 
+## Rule layout and platforms
+
+- **Where rules live.** Rules are loaded from `rules/*.yml` and, recursively, from rule subdirectories such as `rules/windows/` or `rules/sigma/macos/`. The directories `macros/`, `testdata/` and `yara/`, and dot directories, are never read as rules. Symbolic links are not followed, and as root the whole tree must pass the ownership and ACL checks. Macros are shared: they come only from `rules/macros/`.
+- **Fixtures.** Each rule's fixture file sits next to it, in `<rule dir>/testdata/<rule file name>.yml`. For example, `rules/windows/x.yml` is tested by `rules/windows/testdata/x.yml`. A fixture file without a rule of the same name is reported, per directory.
+- **`platforms:`** is optional and takes a list of `macos`, `windows` and `linux`; any other value is a load error. When the key is left out, the rule applies to every platform. The built-in macOS rules declare `platforms: [macos]`, and the two sensor-health rules declare none.
+  - `run` loads only the rules for the platform it runs on.
+  - `replay` defaults to the host platform; `--platform windows|linux|macos|all` overrides it.
+  - `rules validate` and `rules test` check every rule on every platform, so a Windows rule's fixtures run on a Mac.
+- **Events and fields.** The canonical event names and fields shared by all platforms are defined in `pkg/event`. The mapping from Sigma log sources and field names is in `pkg/sigmamap`. A field the source did not report resolves to nil, so a comparison on it is false.
+
 ## Rule table
 
 Seq = sequence rule. Action = response taken only when ZAAFVesper runs with `--enable-response`.
@@ -110,7 +120,7 @@ authenticate sudo modify_tcc xprotect_detect yara_match sensor_degraded`.
 Composite macros: `file_written` (CreateFile or WriteFile), `apple_trusted_process`,
 `apple_package_installer`, `verified_team_id`, `parent_verified_team_id`,
 `no_developer_identity`, `parent_no_developer_identity`, `apple_developer_tool`, `parent_apple_developer_tool`,
-`parent_from_user_writable`, `ancestor_from_user_writable`, `ancestor_chain_incomplete`, `reparented`, `generic_reader_process`,
+`parent_from_user_writable`, `ancestor_from_user_writable`, `ancestor_chain_incomplete`, `reparented`, `launchd_parent`, `generic_reader_process`,
 `spawn_osascript`, `developer_id_signed`,
 `osascript_credential_prompt`, `untrusted_prompt_origin`, `trusted_editor`.
 
@@ -312,10 +322,19 @@ process snapshot), `yara.meta[attack]` and `yara.meta[description]` (output only
   `reparented` (`ps.ppid = 1 and ps.original_ppid != 1`, from `es_process_t.original_ppid`)
   makes that an untrusted origin, so the critical rule fires and the high rule does not.
   The kill target is then the parent, launchd, which is protected: **a double-forked
-  prompt is alert-only.** A prompt that launchd starts directly (a LaunchAgent,
-  `original_ppid` 1) is unchanged. When the source does not report `original_ppid` the
-  field is nil and a reparented prompt is NOT detected as reparented (it stays on the high
-  rule); the decoder must fill it for this to work.
+  prompt is alert-only.** When the source does not report `original_ppid` the field is nil
+  and `reparented` is false, but such a prompt is still critical through `launchd_parent`
+  (below).
+- **Password prompt, parent is launchd (F3 residual, owner decision 8 Nov 2026)**: macro
+  `launchd_parent` (`ps.ppid = 1 and ps.parent.exe = '/sbin/launchd'`) is part of
+  `untrusted_prompt_origin`. A credential prompt that launchd starts directly (a
+  LaunchAgent or LaunchDaemon, `original_ppid` 1) is therefore critical, and the high rule
+  does not fire (the two rules stay exact complements). Writing a user LaunchAgent plist is
+  how a payload gets this parent, and no legitimate launch job collects the login password
+  through osascript. The kill target is launchd (pid 1), which the response layer always
+  refuses, so this case is **alert-only**. A prompt from Terminal -> login -> zsh, every
+  ancestor trusted, stays high. Expected false positives: a vendor launch job that runs an
+  osascript password dialog now raises a critical alert instead of a high one.
 - **Password prompt, untrusted ancestor (security review New-2)**: path globs miss payloads
   in user- or admin-writable places outside `user_writable_exe_globs` (`~/Documents`,
   `/Applications/X.app`, `/opt/homebrew/bin`) that run the prompt through a platform shell
@@ -327,7 +346,7 @@ process snapshot), `yara.meta[attack]` and `yara.meta[description]` (output only
   process table built during replay (so a replay must see the ancestors' exec events or
   bootstrap data); fixtures set it by hand as pkg/ps would. The path and parent conditions
   stay as additional signals. A Developer ID ancestor without a reported category makes
-  this true (fails closed). The launchd-parented prompt residual (F3) is left to the owner.
+  this true (fails closed). The launchd-parented prompt residual (F3) was decided by the owner on 8 Nov 2026: see the next item.
 - **Sensor degraded** (medium) and **Executable replaced right after exec** (high) alert
   on ZAAFVesper's own synthetic `SensorDegraded` events. Components limit their reports
   per (condition, pid or path); the pipeline allows each condition 20 events a minute
@@ -340,10 +359,10 @@ process snapshot), `yara.meta[attack]` and `yara.meta[description]` (output only
 
 ## How the fixtures were checked
 
-- `zaafvesper rules validate --rules rules`: 41 rules, 4 sequences, 67 macros/lists, 0 warnings
-  (round 3, 8 Nov 2026).
-- `zaafvesper rules test --rules rules`: 261 scenarios, 261 passed, 0 failed (194 before
-  round 2, 250 after round 2, 253 after round 3). Includes the security reviewer's SEC-R3
+- `zaafvesper rules validate --rules rules`: 41 rules, 4 sequences, 68 macros/lists, 0 warnings
+  (round 5, 8 Nov 2026).
+- `zaafvesper rules test --rules rules`: 263 scenarios, 263 passed, 0 failed (194 before
+  round 2, 250 after round 2, 253 after round 3, 261 after round 4). Includes the security reviewer's SEC-R3
   (double fork, script(1)+vim) and three SEC-R4 (untrusted ancestor) fixtures.
 - Every `technique.id`/`tactic.id` re-checked against `enterprise-attack.json`; every
   `tests.atomic` GUID is indexed under the rule's technique (or its parent).
@@ -359,7 +378,9 @@ process snapshot), `yara.meta[attack]` and `yara.meta[description]` (output only
   fixtures fail. Round 3: dropping `reparented` from `untrusted_prompt_origin` makes the
   SEC-R3 double-fork match and its high-rule nomatch fail. Round 4: dropping
   `ps.ancestors_untrusted = true` makes the three SEC-R4 matches and their high-rule
-  nomatches fail.
+  nomatches fail. Round 5: dropping `launchd_parent` from `untrusted_prompt_origin` makes
+  all six launchd-parented scenarios fail (three critical matches and their three
+  high-rule nomatches).
 
 Fixtures are synthetic events written to mirror what each cited atomic does (as eslogger
 would report it). They prove the rule logic, not the decoder: a real capture is still needed
@@ -399,3 +420,14 @@ exact complement `credential_access_osascript_password_prompt`: `untrusted_promp
 also includes `ps.ancestors_untrusted = true`. Fixtures: the reviewer's three SEC-R4
 scenarios (critical match / high nomatch) and a Terminal -> login -> zsh -> osascript
 prompt with every ancestor trusted (high match / critical nomatch).
+
+## Round 5 changes (8 Nov 2026, owner decisions)
+
+Bumped to 1.4.0: `credential_access_osascript_password_prompt_untrusted_origin` and its
+exact complement `credential_access_osascript_password_prompt`: new macro
+`launchd_parent` in `untrusted_prompt_origin`, so a credential prompt whose parent is
+launchd (a LaunchAgent or LaunchDaemon start, `original_ppid` 1, or no `original_ppid`
+reported) is critical and alert-only (the kill target, launchd, is always refused).
+Fixtures: the two launchd-parented prompts that were high matches / critical nomatches
+moved to critical match / high nomatch, plus a new JXA LaunchAgent pair. The Terminal ->
+login -> zsh -> osascript prompt stays high (match there, nomatch on the critical rule).

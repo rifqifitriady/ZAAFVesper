@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-0A0D26?style=for-the-badge&logo=apple&logoColor=white)](#requirements) [![Go](https://img.shields.io/badge/Go-1.27-1FE5C3?style=for-the-badge&logo=go&logoColor=0A0D26)](go.mod) [![License](https://img.shields.io/badge/license-Apache--2.0-9D6BFF?style=for-the-badge)](LICENSE) [![Status](https://img.shields.io/badge/status-pre--release-FF3EC8?style=for-the-badge)](#project-status)
 
-[![Rules](https://img.shields.io/badge/detection%20rules-41-3B8EFF?style=flat-square)](docs/rules.md) [![Fixtures](https://img.shields.io/badge/rule%20fixtures-261%20passing-1FE5C3?style=flat-square)](rules/testdata) [![ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-32%20techniques-FF3EC8?style=flat-square)](#detection-coverage) [![Atomic](https://img.shields.io/badge/Atomic%20Red%20Team-28%20rules%20linked-9D6BFF?style=flat-square)](https://github.com/redcanaryco/atomic-red-team)
+[![Rules](https://img.shields.io/badge/detection%20rules-41-3B8EFF?style=flat-square)](docs/rules.md) [![Fixtures](https://img.shields.io/badge/rule%20fixtures-263%20passing-1FE5C3?style=flat-square)](rules/testdata) [![ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-32%20techniques-FF3EC8?style=flat-square)](#detection-coverage) [![Atomic](https://img.shields.io/badge/Atomic%20Red%20Team-28%20rules%20linked-9D6BFF?style=flat-square)](https://github.com/redcanaryco/atomic-red-team)
 
 **[Quick start](#quick-start)** · **[How it works](#how-it-works)** · **[Coverage](#detection-coverage)** · **[Writing rules](#writing-rules)** · **[Security](#security-model)** · **[Operations guide](docs/operations.md)**
 
@@ -64,7 +64,7 @@ Record events to a compressed `.rcap` file. Later, replay that capture or raw `e
 <td valign="top">
 
 **Careful, opt-in response**<br>
-Off by default. A rule may kill the offending process or its untrusted parent. The pid is first re-checked against the kernel, and the kill is refused for Apple platform or protected binaries. Kills are rate-limited per rule.
+Off by default. A rule may kill the offending process or its untrusted parent. The pid is first re-checked against the kernel. The kill is refused for a process that was an Apple platform binary when it was detected, and for protected system paths. Kills are rate-limited per rule.
 
 </td>
 </tr>
@@ -173,7 +173,7 @@ ZAAFVesper runs as root, so the sensor itself is treated as an attack surface. I
 - **Install:** root never builds anything. The package contains no scripts and everything in it is root-owned. The LaunchDaemon cannot be stopped from your normal account.
 - **Before start:** the binary, rules and configuration are checked up to `/` for root ownership, mode bits and ACLs that grant write. Each file is then read through one `O_NOFOLLOW` descriptor.
 - **Bounded memory:** argv, env, the process table, sequences, the YARA queue and the alert files all have caps. Event text is sanitised before it reaches a terminal.
-- **Kills:** a kill is checked against the kernel's unique process id and start time, and the image running at that moment must not be an Apple platform or protected binary.
+- **Kills:** a kill is checked against the kernel's unique process id and start time. A process that was an Apple platform binary when it was detected is never killed, and neither is one whose current image lies on a protected system path. A detected process that later execs into an Apple binary such as `/bin/zsh` is still killed once its identity was recorded (only when Endpoint Security reported that it was not an Apple binary when it was detected); an exec that happens before the sensor recorded the process escapes the kill, not the alert.
 
 The status of every finding, with the tests that back it, is in **[docs/security/open-findings.md](docs/security/open-findings.md)**. The largest open item is the build chain: the package is built on the same account it protects, and it is unsigned. Closing that needs a signed and notarized CI build.
 

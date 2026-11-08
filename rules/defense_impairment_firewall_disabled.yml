@@ -1,6 +1,7 @@
 name: macOS firewall disabled
 id: 6ef019a4-b93c-44f4-aad1-f050a787a1a4
 version: 1.0.0
+platforms: [macos]
 description: |
   The Application Firewall was turned off (socketfilterfw --setglobalstate off, or
   `defaults write com.apple.alf globalstate -int 0`), its launchd job was unloaded, or the

@@ -1,6 +1,7 @@
 name: Non-interactive screen capture from script or untrusted parent
 id: aea9e10f-835b-40ed-9863-d11e4b5f0074
 version: 1.0.0
+platforms: [macos]
 description: |
   /usr/sbin/screencapture was started without an interactive selection mode (-i, -W,
   -U) by something other than Apple's screenshot UI. Spyware and stealers take silent

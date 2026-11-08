@@ -1,6 +1,7 @@
 name: Event Monitor (emond) rule persistence
 id: a1dd2511-8cf0-4c41-8b64-9024fa0dab10
 version: 1.0.0
+platforms: [macos]
 description: |
   A rule file was written to /etc/emond.d/rules or a client marker to
   /private/var/db/emondClients. emond executes rule actions as root, and touching a file

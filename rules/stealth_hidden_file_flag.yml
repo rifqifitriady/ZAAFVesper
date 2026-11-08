@@ -1,6 +1,7 @@
 name: File hidden with chflags or SetFile
 id: 3934e901-b4c2-4bd4-9250-9b5fd955016e
 version: 1.0.0
+platforms: [macos]
 description: |
   `chflags hidden <path>` or `SetFile -a V <path>` set the Finder "invisible" flag so a
   payload or staging directory does not show in Finder. `chflags nohidden` (the common

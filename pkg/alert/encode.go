@@ -192,7 +192,8 @@ func identityProc(p *event.Proc) *event.Proc {
 func identityAlert(a *rules.Alert) *rules.Alert {
 	c := capper{lim: secondPass}
 	stub := &rules.Alert{RuleID: a.RuleID, RuleName: a.RuleName, Severity: a.Severity, Time: a.Time,
-		Output: c.str(a.Output), Labels: a.Labels, Actions: a.Actions, Truncated: true}
+		Output: c.str(a.Output), Labels: a.Labels, Actions: a.Actions, Truncated: true,
+		Aggregated: a.Aggregated, Count: a.Count}
 	for _, e := range a.Events {
 		if e == nil {
 			continue

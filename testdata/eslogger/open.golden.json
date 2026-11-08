@@ -47,7 +47,8 @@
       "open_access": "read",
       "open_flag_names": "FREAD",
       "open_flags": "1"
-    }
+    },
+    "platform": "macos"
   },
   {
     "seq": 1008,
@@ -97,6 +98,7 @@
       "open_access": "readwrite",
       "open_flag_names": "FREAD|FWRITE",
       "open_flags": "3"
-    }
+    },
+    "platform": "macos"
   }
 ]

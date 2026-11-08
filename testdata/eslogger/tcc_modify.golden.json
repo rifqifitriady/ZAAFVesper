@@ -46,6 +46,7 @@
       "tcc_right": "allowed",
       "tcc_service": "kTCCServiceSystemPolicyAllFiles",
       "tcc_update_type": "create"
-    }
+    },
+    "platform": "macos"
   }
 ]

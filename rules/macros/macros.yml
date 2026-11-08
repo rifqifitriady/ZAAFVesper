@@ -324,18 +324,30 @@
 - macro: reparented
   expr: (ps.ppid = 1 and ps.original_ppid != 1)
 
+# The parent is launchd itself (ppid 1, parent /sbin/launchd): a LaunchAgent or
+# LaunchDaemon started the process directly, or a double fork reparented it
+# (then `reparented` also holds when original_ppid is reported). A password
+# prompt has no legitimate reason to come straight from a launch job, and a
+# user-writable LaunchAgent plist is how a payload gets that parent, so the
+# owner decided (8 Nov 2026, F3 residual) to treat it as an untrusted origin.
+# The kill target is then launchd, which the response layer always refuses:
+# alert-only.
+- macro: launchd_parent
+  expr: (ps.ppid = 1 and ps.parent.exe = '/sbin/launchd')
+
 # The prompt comes from an untrusted origin: a parent without verified developer
 # identity (unsigned, ad-hoc, self-signed, forged Team ID, unreported category),
 # an UNKNOWN parent (not in the process table), a parent or ancestor running
 # from a user-writable location or mounted image, or an ancestor chain that does
 # not reach launchd (an ancestor is unknown), or a process reparented to launchd
-# by a double fork, or ps.ancestors_untrusted (computed by pkg/ps: some ancestor
+# by a double fork, or a parent that is launchd itself (launchd_parent), or
+# ps.ancestors_untrusted (computed by pkg/ps: some ancestor
 # up to launchd is neither a platform binary nor a verified vendor identity, or
 # the chain is incomplete). Path globs stay as extra signals. Unknown = untrusted, so flooding
 # the process table to evict the payload cannot downgrade this to the
 # high-severity companion rule.
 - macro: untrusted_prompt_origin
-  expr: (parent_no_developer_identity or parent_from_user_writable or ancestor_from_user_writable or ancestor_chain_incomplete or reparented or ps.ancestors_untrusted = true)
+  expr: (parent_no_developer_identity or parent_from_user_writable or ancestor_from_user_writable or ancestor_chain_incomplete or reparented or launchd_parent or ps.ancestors_untrusted = true)
 
 # Text editors trusted to write shell start-up files: only vendor GUI editors
 # with an identity an attacker cannot choose - that vendor's signing ID, Team ID

@@ -107,6 +107,9 @@ func format(a *rules.Alert, color bool) string {
 	if len(a.Actions) > 0 {
 		meta = append(meta, "actions="+Sanitize(strings.Join(a.Actions, ",")))
 	}
+	if a.Aggregated {
+		meta = append(meta, fmt.Sprintf("aggregated=%d", a.Count))
+	}
 	fmt.Fprintf(&b, "    %s\n", strings.Join(meta, " "))
 	for i, e := range a.Events {
 		prefix := "    "

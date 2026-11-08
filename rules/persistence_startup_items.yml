@@ -1,6 +1,7 @@
 name: StartupItems persistence
 id: 1077d373-6cd8-4040-8c1e-3e063474bf54
 version: 1.0.0
+platforms: [macos]
 description: |
   A file was created, modified or renamed into a StartupItems directory. StartupItems
   are deprecated and nothing current installs them, so any write is suspicious. The

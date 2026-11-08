@@ -45,6 +45,7 @@
       "mount_from": "/dev/disk4s2",
       "mount_fstype": "hfs",
       "mount_path": "/Volumes/Installer"
-    }
+    },
+    "platform": "macos"
   }
 ]

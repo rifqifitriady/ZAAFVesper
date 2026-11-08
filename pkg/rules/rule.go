@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/filter/ql"
 )
 
@@ -70,7 +71,10 @@ type Rule struct {
 	Tests            Tests             `yaml:"tests"`
 	MinEngineVersion string            `yaml:"min-engine-version"`
 	Enabled          *bool             `yaml:"enabled"`
-	Notes            string            `yaml:"notes"`
+	// Platforms limits the rule to these platforms (macos, windows, linux);
+	// empty means every platform.
+	Platforms []string `yaml:"platforms"`
+	Notes     string   `yaml:"notes"`
 
 	// File is the path the rule was loaded from.
 	File string `yaml:"-"`
@@ -82,6 +86,19 @@ type Rule struct {
 
 // IsEnabled reports whether the rule is active (default true).
 func (r *Rule) IsEnabled() bool { return r.Enabled == nil || *r.Enabled }
+
+// AppliesTo reports whether the rule runs on platform (event.Platform*).
+func (r *Rule) AppliesTo(platform string) bool {
+	if len(r.Platforms) == 0 {
+		return true
+	}
+	for _, p := range r.Platforms {
+		if p == platform {
+			return true
+		}
+	}
+	return false
+}
 
 // IsSequence reports whether the rule is a sequence rule.
 func (r *Rule) IsSequence() bool { return r.seq != nil }
@@ -202,6 +219,11 @@ func (r *Rule) validate() []error {
 					bad("labels.tactic.id %q does not match TA1234", id)
 				}
 			}
+		}
+	}
+	for _, p := range r.Platforms {
+		if p != event.PlatformMacOS && p != event.PlatformWindows && p != event.PlatformLinux {
+			bad("platforms: %q is not macos, windows or linux", p)
 		}
 	}
 	for _, a := range r.Action {

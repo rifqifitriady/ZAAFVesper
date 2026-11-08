@@ -1,6 +1,7 @@
 name: Binary dropped in a temp or shared folder and executed without developer identity
 id: 4c8d26ca-f48c-4da1-b3b4-e1648b057ecb
 version: 1.1.0
+platforms: [macos]
 description: |
   Sequence: a file is created in /tmp, /var/tmp or /Users/Shared and, within ten
   minutes, that same path is executed as a process without verified developer identity

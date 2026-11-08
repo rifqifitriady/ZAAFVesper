@@ -67,6 +67,7 @@
         "is_signed": false,
         "start_time": "0001-01-01T00:00:00Z"
       }
-    }
+    },
+    "platform": "macos"
   }
 ]

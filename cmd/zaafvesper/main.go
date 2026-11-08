@@ -33,6 +33,7 @@ usage:
             [--json-max-bytes n] [--keep-env] [--enable-response] [--dry-run-response]
             [--no-yara] [--dedup-window 10s] [--no-color] [--no-console]
   zaafvesper replay [--rules dir] [--config file] [--json alerts.jsonl] [--keep-env] [--no-color]
+               [--platform macos|windows|linux|all (default: this host)]
                <file.rcap|events.jsonl|eslogger.jsonl>
   zaafvesper rules list|validate|test [--rules dir | dir] [--config file] [-v]
   zaafvesper coverage --navigator layer.json|- [--rules dir]

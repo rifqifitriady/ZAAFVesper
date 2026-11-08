@@ -20,7 +20,10 @@ const MaxRuleFileSize = 1 << 20
 
 // Ruleset is the set of rules and macros loaded from a rules directory.
 type Ruleset struct {
-	Dir        string
+	Dir string
+	// Platform, when set (event.Platform* value), limits Enabled to rules
+	// that apply to that platform. Empty means every platform.
+	Platform   string
 	Rules      []*Rule // all rules, sorted by file name; see Enabled
 	Macros     *ql.Macros
 	MacroFiles []string
@@ -30,7 +33,7 @@ type Ruleset struct {
 func (rs *Ruleset) Enabled() []*Rule {
 	var out []*Rule
 	for _, r := range rs.Rules {
-		if r.IsEnabled() {
+		if r.IsEnabled() && (rs.Platform == "" || r.AppliesTo(rs.Platform)) {
 			out = append(out, r)
 		}
 	}
@@ -93,9 +96,41 @@ func decodeStrict(data []byte, v any) error {
 	return nil
 }
 
-// LoadDir loads macros from dir/macros/*.yml and rules from dir/*.yml.
-// Subdirectories such as testdata/ and yara/ are ignored. All problems are
-// reported together.
+// skipRuleDir reports whether a subdirectory of a rules tree holds something
+// other than rules.
+func skipRuleDir(name string) bool {
+	return name == "macros" || name == "testdata" || name == "yara" || strings.HasPrefix(name, ".")
+}
+
+// ruleFiles lists rule files in dir and, recursively, in its subdirectories
+// (e.g. rules/windows/, rules/sigma/macos/), skipping macros/, testdata/,
+// yara/ and dot directories. Symbolic links are not followed. Sorted.
+func ruleFiles(dir string) ([]string, error) {
+	out, err := yamlFiles(dir)
+	if err != nil {
+		return nil, err
+	}
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range ents {
+		if !e.IsDir() || skipRuleDir(e.Name()) {
+			continue
+		}
+		sub, err := ruleFiles(filepath.Join(dir, e.Name()))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sub...)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// LoadDir loads macros from dir/macros/*.yml and rules from dir/*.yml and
+// from rule subdirectories (see ruleFiles); macros/, testdata/ and yara/ are
+// not rules. All problems are reported together.
 func LoadDir(dir string) (*Ruleset, error) {
 	rs := &Ruleset{Dir: dir}
 	macroFiles, err := yamlFiles(filepath.Join(dir, "macros"))
@@ -109,7 +144,7 @@ func LoadDir(dir string) (*Ruleset, error) {
 	}
 	rs.Macros = m
 
-	files, err := yamlFiles(dir)
+	files, err := ruleFiles(dir)
 	if err != nil {
 		return nil, err
 	}

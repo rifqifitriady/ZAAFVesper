@@ -39,6 +39,7 @@
     },
     "args": {
       "exit_status": "256"
-    }
+    },
+    "platform": "macos"
   }
 ]

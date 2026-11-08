@@ -1,6 +1,7 @@
 name: launchctl submits a job or loads a plist from a temp folder
 id: a26e8cde-fced-46c3-8058-4e2520fb4563
 version: 1.0.0
+platforms: [macos]
 description: |
   `launchctl submit` (an ad-hoc launchd job with no plist on disk) or
   `launchctl load/bootstrap` of a property list that lives in /tmp, /var/tmp,

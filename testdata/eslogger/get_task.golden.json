@@ -70,6 +70,7 @@
     },
     "args": {
       "task_type": "task_for_pid"
-    }
+    },
+    "platform": "macos"
   }
 ]

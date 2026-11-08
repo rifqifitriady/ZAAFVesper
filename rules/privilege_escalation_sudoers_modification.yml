@@ -1,6 +1,7 @@
 name: Sudoers modified outside visudo
 id: f59b4b8c-c5ac-432b-aead-e11b7ae8cb54
 version: 1.0.0
+platforms: [macos]
 description: |
   /etc/sudoers or a file in /etc/sudoers.d was written or replaced by something other than
   /usr/sbin/visudo. Attackers add NOPASSWD entries, `timestamp_timeout=-1` or

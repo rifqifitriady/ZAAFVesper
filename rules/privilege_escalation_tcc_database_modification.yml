@@ -1,6 +1,7 @@
 name: TCC database modified outside tccd
 id: 3d4f88d3-77cf-4811-ac42-e74e81c9cfea
 version: 1.0.0
+platforms: [macos]
 description: |
   A system or user TCC.db (the privacy permission store) was written or replaced by a
   process other than tccd, or sqlite3 was run with a write statement against it. Writing

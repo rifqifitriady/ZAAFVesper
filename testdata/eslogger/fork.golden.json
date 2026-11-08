@@ -40,6 +40,7 @@
     },
     "args": {
       "parent_pid": "4100"
-    }
+    },
+    "platform": "macos"
   }
 ]

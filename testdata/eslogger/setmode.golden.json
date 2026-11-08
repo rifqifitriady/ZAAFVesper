@@ -47,6 +47,7 @@
     },
     "args": {
       "mode": "4755"
-    }
+    },
+    "platform": "macos"
   }
 ]

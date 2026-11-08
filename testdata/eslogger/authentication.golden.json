@@ -45,7 +45,8 @@
       "auth_success": "false",
       "auth_type": "od",
       "reporter_exe": "/usr/libexec/opendirectoryd"
-    }
+    },
+    "platform": "macos"
   },
   {
     "seq": 1029,
@@ -92,6 +93,7 @@
       "auth_uid": "501",
       "instigator_pid": "6000",
       "reporter_exe": "/usr/libexec/biometrickitd"
-    }
+    },
+    "platform": "macos"
   }
 ]

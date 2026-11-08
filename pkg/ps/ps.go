@@ -353,7 +353,14 @@ func (s *Snapshotter) fork(child *event.Proc) {
 			child.Env, inherited = pp.Env, true
 		}
 		if child.Exe == "" {
-			child.Exe, child.Name = pp.Exe, pp.Name
+			// No image in the fork event: the child runs its parent's
+			// image, so it takes the whole image identity, not only the
+			// path (a path without IsPlatform would read as "not a
+			// platform binary"; security note N1). An image copied from a
+			// seeded (unverified) parent carries no Endpoint Security
+			// signing data, so the child is unverified too.
+			copyImage(child, pp)
+			inherited = true
 		}
 		unverified = par.unverified && inherited
 	}
@@ -468,11 +475,22 @@ func (s *Snapshotter) observe(p *event.Proc) {
 		p.Env = t.Env
 	}
 	if p.Exe == "" {
-		p.Exe, p.Name = t.Exe, t.Name
+		// The event carried no image: its signing fields are absent too,
+		// so take the recorded image identity with the path (N1).
+		copyImage(p, t)
 	}
 	s.trackFat(en)
 	s.resize(en)
 	s.enforce(p.PID)
+}
+
+// copyImage copies the image identity of src into dst: path, name, signing
+// fields, platform flag and the executable's file identity.
+func copyImage(dst, src *event.Proc) {
+	dst.Exe, dst.Name = src.Exe, src.Name
+	dst.SigningID, dst.TeamID, dst.CDHash = src.SigningID, src.TeamID, src.CDHash
+	dst.IsPlatform, dst.IsSigned, dst.CSCategory = src.IsPlatform, src.IsSigned, src.CSCategory
+	dst.ExeDev, dst.ExeIno, dst.ExeCtimeNs = src.ExeDev, src.ExeIno, src.ExeCtimeNs
 }
 
 func (s *Snapshotter) markExited(pid int32, ts time.Time) {

@@ -1,6 +1,7 @@
 name: Login Item registered shortly after osascript ran
 id: 569e7a3f-be92-45ae-a653-880f11e1f0ed
 version: 1.0.0
+platforms: [macos]
 description: |
   Sequence: osascript runs, and within 30 seconds Background Task Management registers a
   new user/login item. Catches AppleScript persistence delivered as a compiled script or

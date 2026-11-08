@@ -25,6 +25,7 @@
     },
     "args": {
       "kext_id": "com.example.driver.Rootkit"
-    }
+    },
+    "platform": "macos"
   }
 ]

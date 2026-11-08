@@ -1,6 +1,7 @@
 name: Security tool or sensor stopped
 id: 78de8058-e4d6-435d-9bd5-63610f16a812
 version: 1.0.0
+platforms: [macos]
 description: |
   launchctl unload/bootout/remove/disable/kill targeting a security product's launchd job,
   pkill/killall of a security agent or of ZAAFVesper's own eslogger, or Microsoft Defender's

@@ -39,6 +39,10 @@ var neverSuppressed = map[string]bool{"es_events_dropped": true}
 // while reports are being suppressed; its detail lists the counts.
 const condSuppressed = "degraded_suppressed"
 
+// condSourcesExhausted is raised when a rule's alert aggregation runs out of
+// source slots within a window (see alert.Aggregator.OnSourcesExhausted).
+const condSourcesExhausted = "aggregate_sources_exhausted"
+
 // maxDegradedDetail caps evt.arg[detail].
 const maxDegradedDetail = 1024
 

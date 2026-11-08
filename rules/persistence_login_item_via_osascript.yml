@@ -1,6 +1,7 @@
 name: Login Item added via inline AppleScript
 id: ba25a914-e7f0-4477-8540-b1905a061759
 version: 1.0.0
+platforms: [macos]
 description: |
   osascript was started with an inline script that creates a login item through System
   Events (AppleScript "make login item" or JXA "loginItem"). Malware uses this one-liner

@@ -48,6 +48,7 @@
     "args": {
       "owner_gid": "0",
       "owner_uid": "0"
-    }
+    },
+    "platform": "macos"
   }
 ]

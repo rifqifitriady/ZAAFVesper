@@ -23,6 +23,11 @@ type Alert struct {
 	// Truncated is set by the JSONL sink when it shortened string fields to
 	// keep the serialized alert under its per-alert cap.
 	Truncated bool `json:"truncated,omitempty"`
+	// Aggregated marks a summary alert written by the alert aggregator
+	// (pkg/alert Aggregator) in place of Count alerts of the same rule that
+	// were held back in one window. It has no events.
+	Aggregated bool   `json:"aggregated,omitempty"`
+	Count      uint64 `json:"count,omitempty"`
 }
 
 // Last returns the event that completed the match.
