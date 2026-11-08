@@ -1,14 +1,16 @@
 name: Launch item plist written by a Developer ID signed process
 id: e883f620-832f-4dcd-b9a4-95cfb2933039
-version: 1.0.0
+version: 1.1.0
 description: |
-  Companion to the Launch Agent and Launch Daemon rules. A process signed with a Team ID
-  (Developer ID, not an Apple platform binary, not a script interpreter) created or
+  Companion to the Launch Agent and Launch Daemon rules. A process signed with a verified Team ID
+  (signing category Developer ID or App Store, not an Apple platform binary, not a script
+  interpreter) created or
   replaced a plist in a LaunchAgents or LaunchDaemons directory. Most of these are app
   installers and updaters, so the severity is low; the event is kept, not dropped,
   because notarized malware with a valid Developer ID exists and a Team ID is not proof
   of good intent. Review new Team IDs; allow-list known vendors locally as Team ID +
-  signing ID pairs.
+  signing ID pairs. A Team ID without a verified category (self-signed forgery, or
+  category not reported) is not routed here; the high-severity rule keeps it.
 labels:
   tactic.id: TA0003
   tactic.name: Persistence

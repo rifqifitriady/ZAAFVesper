@@ -1,13 +1,15 @@
 name: Process started with DYLD_INSERT_LIBRARIES
 id: aa125b5e-d64c-481b-80f1-958c01d52292
-version: 1.0.0
+version: 1.1.0
 description: |
   A process was executed with DYLD_INSERT_LIBRARIES in its environment, or env/launchctl
   was used to set it. dyld loads the listed dylibs into the new process before main(), a
   classic way to hijack an app that lacks the hardened runtime. Children that merely
   inherit the variable from a parent that already had it are suppressed, so one injection
   raises one alert. Xcode debugging tools (debugserver, Instruments) are excluded only when
-  they carry Apple's Team ID 59GAB85EFG; they are not platform binaries.
+  they carry Apple's Team ID 59GAB85EFG with a Developer ID / App Store signing category;
+  they are not platform binaries. An unknown parent (not in the process table) is never
+  excluded.
   Requires the decoder to fill ps.env from eslogger exec events.
 labels:
   tactic.id: TA0005

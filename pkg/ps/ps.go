@@ -6,7 +6,16 @@
 // mistaken for the process that used it before. It is bounded twice: at most
 // MaxEntries processes and about MaxBytes of retained strings. Exited
 // processes are kept for ExitTTL so that late events and children can still
-// resolve them, and are the first to go when a bound is hit.
+// resolve them.
+//
+// Under byte pressure the table first sheds the details (args, cmdline, env,
+// cwd) of exited entries, then of the oldest live ones, and keeps an identity
+// skeleton (pid, ppid, pidversion, exe, name, uid/euid, signing data,
+// cs_category, start time, executable stat, seeded). Whole entries are
+// evicted (exited first) only when nothing is left to shed, so a flood of
+// processes with huge argv cannot push a live parent out of the table. Every
+// forced shed or eviction reports `proctable_pressure` to the OnDegraded hook
+// (at most once a minute).
 //
 // Processes seeded at start (bootstrap) take their exe, argv and environment
 // from kern.procargs2, which the process itself can rewrite. Until an exec
@@ -17,6 +26,7 @@ package ps
 
 import (
 	"container/list"
+	"fmt"
 	"os/user"
 	"strconv"
 	"sync"
@@ -40,7 +50,13 @@ const (
 	sweepEvery = 5 * time.Second
 	// entryOverhead approximates the fixed cost of one entry.
 	entryOverhead = 512
+	// degradedEvery rate-limits the OnDegraded hook per condition.
+	degradedEvery = time.Minute
 )
+
+// CondPressure is the OnDegraded condition reported when a table bound
+// forces details to be shed or entries to be evicted.
+const CondPressure = "proctable_pressure"
 
 // Values of the identity markers in evt.arg.
 const (
@@ -61,9 +77,10 @@ type entry struct {
 	proc       event.Proc // Parent and Ancestors always nil
 	parent     parentRef  // from parent_audit_token when the source provided it
 	exited     time.Time  // zero while alive
-	unverified bool       // image details came from kern.procargs2, not from ES
+	unverified bool       // image details came from kern.procargs2, not from ES (mirrored in proc.Seeded)
 	size       int64
 	elem       *list.Element // in Snapshotter.live or Snapshotter.dead; Value is the pid
+	fatElem    *list.Element // in fatLive/fatDead while the entry has sheddable details
 }
 
 // parentRef identifies a parent incarnation; pv 0 means "unknown, accept any".
@@ -85,20 +102,39 @@ type Snapshotter struct {
 	now       func() time.Time
 	lastSweep time.Time
 	evictions uint64
+	shed      uint64
+
+	// Entries that still hold sheddable details, in the same order as
+	// live/dead: shedding walks these, so it never rescans skeletons.
+	fatLive, fatDead *list.List
+
+	onDegraded   func(condition, detail string)
+	lastDegraded map[string]time.Time
+	pressure     bool // a bound forced a shed or eviction since the last report
 
 	users      map[int64]string
 	lookupUser func(uid int64) string
 
 	bootstrapped int
 	bootErr      error
+
+	// Live-mode kernel readers (nil in replay and tests unless injected).
+	readUniq func(pid int32) (uniqueID uint64, pidversion uint32, err error)
+	readPlat func(pid int32) (bool, error)
 }
 
 // NewSnapshotter returns a snapshotter. If bootstrap is true it seeds the table
 // from the running processes (sysctl kern.proc.all + kern.procargs2); those
 // entries are marked unverified.
+//
+// bootstrap also selects live mode: the table then reads each new process's
+// kernel unique id (Proc.UniqueID) and, for seeded processes, the kernel's
+// platform-binary flag. Replay (bootstrap false) reads nothing from the
+// running system.
 func NewSnapshotter(bootstrap bool) *Snapshotter {
 	s := newSnapshotter(MaxEntries, MaxBytes)
 	if bootstrap {
+		s.readUniq, s.readPlat = readUniqueIdentifiers, readPlatform
 		procs, err := listProcesses()
 		s.bootErr = err
 		for i := range procs {
@@ -117,6 +153,8 @@ func newSnapshotter(max int, maxBytes int64) *Snapshotter {
 		procs:      make(map[int32]*entry),
 		live:       list.New(),
 		dead:       list.New(),
+		fatLive:    list.New(),
+		fatDead:    list.New(),
 		max:        max,
 		maxBytes:   maxBytes,
 		ttl:        ExitTTL,
@@ -126,12 +164,56 @@ func newSnapshotter(max int, maxBytes int64) *Snapshotter {
 	}
 }
 
-// seed inserts a bootstrap process (unverified identity).
+// seed inserts a bootstrap process (unverified identity, Proc.Seeded). In
+// live mode its IsPlatform comes from the kernel (csops), so a platform
+// ancestor that existed before the sensor does not make every descendant's
+// ancestry untrusted.
 func (s *Snapshotter) seed(p event.Proc) {
+	if s.readPlat != nil {
+		if plat, err := s.readPlat(p.PID); err == nil {
+			p.IsPlatform = plat
+		}
+	}
 	s.put(&p)
 	if en, ok := s.procs[p.PID]; ok {
-		en.unverified = true
+		en.setUnverified(true)
 	}
+}
+
+// setUnverified keeps the unverified mark and Proc.Seeded in step, so the
+// Parent copies handed to rules and response carry it.
+func (en *entry) setUnverified(v bool) {
+	en.unverified = v
+	en.proc.Seeded = v
+}
+
+// OnDegraded registers fn to be told when the table's bounds force it to shed
+// process details or evict entries (condition CondPressure). fn is called
+// synchronously from Enrich, after the table lock is released, at most once
+// per condition per minute; it must not block. nil unregisters.
+func (s *Snapshotter) OnDegraded(fn func(condition, detail string)) {
+	s.mu.Lock()
+	s.onDegraded = fn
+	s.mu.Unlock()
+}
+
+// takeDegraded returns the pending report, if any, applying the rate limit.
+// Called with s.mu held.
+func (s *Snapshotter) takeDegraded() (fn func(string, string), detail string) {
+	if !s.pressure || s.onDegraded == nil {
+		return nil, ""
+	}
+	s.pressure = false
+	now := s.now()
+	if last, ok := s.lastDegraded[CondPressure]; ok && now.Sub(last) < degradedEvery && !now.Before(last) {
+		return nil, ""
+	}
+	if s.lastDegraded == nil {
+		s.lastDegraded = map[string]time.Time{}
+	}
+	s.lastDegraded[CondPressure] = now
+	return s.onDegraded, fmt.Sprintf("entries=%d bytes=%d max_entries=%d max_bytes=%d shed=%d evictions=%d",
+		len(s.procs), s.bytes, s.max, s.maxBytes, s.shed, s.evictions)
 }
 
 // BootstrapStats reports how many processes were seeded at start and the
@@ -148,7 +230,8 @@ func (s *Snapshotter) Len() int {
 	return len(s.procs)
 }
 
-// Stats reports table counters: entries, bytes (approximate), evictions.
+// Stats reports table counters: entries, bytes (approximate), evictions,
+// shed (entries whose details were dropped under byte pressure).
 func (s *Snapshotter) Stats() map[string]uint64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -156,6 +239,7 @@ func (s *Snapshotter) Stats() map[string]uint64 {
 		"entries":   uint64(len(s.procs)),
 		"bytes":     uint64(s.bytes),
 		"evictions": s.evictions,
+		"shed":      s.shed,
 	}
 }
 
@@ -170,15 +254,36 @@ func (s *Snapshotter) Lookup(pid int32) (event.Proc, bool) {
 }
 
 // Enrich updates the table from e and fills e.Proc (and e.Target) with
-// Parent, Ancestors, UUID, Username and, for events that do not carry them,
-// Args/Cmdline/Cwd/Env from the table.
+// Parent, Ancestors, UUID, Username, Seeded and, for events that do not
+// carry them, Args/Cmdline/Cwd/Env from the table. When the process's parent
+// is not in the table (or its pid now belongs to another incarnation),
+// e.Proc.Parent is nil, so every ps.parent.* field is nil.
+//
+// AncestorsUntrusted (ps.ancestors_untrusted, and on the Parent copy for the
+// parent's own chain) is true when the chain up to launchd is incomplete
+// (an unknown or recycled parent before pid 1, a cycle, or more than
+// MaxAncestors levels) or holds a process that is neither a platform binary
+// nor a Developer ID / App Store signed one with a Team ID.
+//
+// Parent is always the current parent (ppid / parent_audit_token). A process
+// reparented to launchd by a double fork gets launchd as Parent and
+// Ancestors; its fork-time parent is only in ps.original_ppid
+// (Proc.OriginalPPID, copied onto Parent copies too), which rules use to
+// catch the double fork.
 func (s *Snapshotter) Enrich(e *event.Event) {
 	if e == nil {
 		return
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.enrich(e)
+	fn, detail := s.takeDegraded()
+	s.mu.Unlock()
+	if fn != nil {
+		fn(CondPressure, detail) // outside the lock: fn may call back into s
+	}
+}
 
+func (s *Snapshotter) enrich(e *event.Event) {
 	ts := e.Time
 	if ts.IsZero() {
 		ts = s.now()
@@ -197,8 +302,14 @@ func (s *Snapshotter) Enrich(e *event.Event) {
 		default:
 			s.observe(p)
 		}
-		if en, ok := s.procs[p.PID]; ok && en.unverified && samePID(&en.proc, p) {
-			setArg(e, ArgIdentity, Unverified)
+		if en, ok := s.procs[p.PID]; ok && samePID(&en.proc, p) {
+			if p.UniqueID == 0 {
+				p.UniqueID = en.proc.UniqueID
+			}
+			if en.unverified {
+				setArg(e, ArgIdentity, Unverified)
+				p.Seeded = true
+			}
 		}
 		if par := s.decorate(p, true); par != nil && par.unverified {
 			setArg(e, ArgParentIdentity, Unverified)
@@ -206,8 +317,14 @@ func (s *Snapshotter) Enrich(e *event.Event) {
 	}
 	if t := e.Target; t != nil && t.PID > 0 {
 		s.observe(t)
-		if en, ok := s.procs[t.PID]; ok && en.unverified && samePID(&en.proc, t) {
-			setArg(e, ArgTargetIdentity, Unverified)
+		if en, ok := s.procs[t.PID]; ok && samePID(&en.proc, t) {
+			if t.UniqueID == 0 {
+				t.UniqueID = en.proc.UniqueID
+			}
+			if en.unverified {
+				setArg(e, ArgTargetIdentity, Unverified)
+				t.Seeded = true
+			}
 		}
 		s.decorate(t, false)
 	}
@@ -242,7 +359,7 @@ func (s *Snapshotter) fork(child *event.Proc) {
 	}
 	s.put(child)
 	if en, ok := s.procs[child.PID]; ok {
-		en.unverified = unverified
+		en.setUnverified(unverified)
 	}
 }
 
@@ -250,8 +367,10 @@ func (s *Snapshotter) fork(child *event.Proc) {
 // entry). The new image counts as verified.
 func (s *Snapshotter) put(p *event.Proc) {
 	cp := *p
-	cp.Parent, cp.Ancestors = nil, nil
+	cp.Parent, cp.Ancestors, cp.AncestorsUntrusted = nil, nil, false
+	cp.UniqueID = s.uniqueID(p)
 	ref := stubRef(p)
+	cp.Seeded = false
 	if en, ok := s.procs[p.PID]; ok {
 		en.proc, en.parent, en.unverified = cp, ref, false
 		if !en.exited.IsZero() {
@@ -261,6 +380,8 @@ func (s *Snapshotter) put(p *event.Proc) {
 		} else {
 			s.live.MoveToBack(en.elem)
 		}
+		s.untrackFat(en) // re-imaged: back of the shedding order too
+		s.trackFat(en)
 		s.resize(en)
 		s.enforce(p.PID)
 		return
@@ -271,6 +392,21 @@ func (s *Snapshotter) put(p *event.Proc) {
 	en.elem = s.live.PushBack(p.PID)
 	s.procs[p.PID] = en
 	s.bytes += en.size
+	s.trackFat(en)
+}
+
+// uniqueID returns p's kernel unique id: the event's, else (live mode) read
+// from the kernel when the kernel's pidversion for p.PID is the event's, so
+// a pid recycled before the read never lends its id. 0 when unknown.
+func (s *Snapshotter) uniqueID(p *event.Proc) uint64 {
+	if p.UniqueID != 0 || s.readUniq == nil {
+		return p.UniqueID
+	}
+	id, pv, err := s.readUniq(p.PID)
+	if err != nil || (p.PIDVersion != 0 && pv != p.PIDVersion) {
+		return 0
+	}
+	return id
 }
 
 // observe merges what a non-lifecycle event says about p into the table and
@@ -290,18 +426,28 @@ func (s *Snapshotter) observe(p *event.Proc) {
 		if t.Exe != p.Exe {
 			// A different image than the one we recorded: old details are wrong.
 			t.Args, t.Cmdline, t.Env, t.Cwd = nil, "", nil, ""
-			en.unverified = false
+			t.ExeDev, t.ExeIno, t.ExeCtimeNs = 0, 0, 0
+			en.setUnverified(false)
 		}
 		t.Exe, t.Name = p.Exe, p.Name
 		t.SigningID, t.TeamID, t.CDHash = p.SigningID, p.TeamID, p.CDHash
-		t.IsPlatform, t.IsSigned = p.IsPlatform, p.IsSigned
+		t.IsPlatform, t.IsSigned, t.CSCategory = p.IsPlatform, p.IsSigned, p.CSCategory
 		t.UID, t.EUID = p.UID, p.EUID
+		if p.ExeIno != 0 {
+			t.ExeDev, t.ExeIno, t.ExeCtimeNs = p.ExeDev, p.ExeIno, p.ExeCtimeNs
+		}
 	}
 	if p.PIDVersion != 0 {
 		t.PIDVersion = p.PIDVersion
 	}
 	if p.PPID != 0 {
 		t.PPID = p.PPID
+	}
+	if p.OriginalPPID != 0 {
+		t.OriginalPPID = p.OriginalPPID
+	}
+	if p.UniqueID != 0 {
+		t.UniqueID = p.UniqueID
 	}
 	if p.TTY != "" {
 		t.TTY = p.TTY
@@ -324,6 +470,7 @@ func (s *Snapshotter) observe(p *event.Proc) {
 	if p.Exe == "" {
 		p.Exe, p.Name = t.Exe, t.Name
 	}
+	s.trackFat(en)
 	s.resize(en)
 	s.enforce(p.PID)
 }
@@ -336,6 +483,10 @@ func (s *Snapshotter) markExited(pid int32, ts time.Time) {
 	s.live.Remove(en.elem)
 	en.exited = ts
 	en.elem = s.dead.PushBack(pid)
+	if en.fatElem != nil {
+		s.fatLive.Remove(en.fatElem)
+		en.fatElem = s.fatDead.PushBack(pid)
+	}
 }
 
 // samePID reports whether a and b are the same process incarnation. A zero
@@ -358,34 +509,58 @@ func (s *Snapshotter) decorate(p *event.Proc, withParent bool) *entry {
 		return nil
 	}
 	ref := s.parentOf(p)
-	p.Parent, p.Ancestors = nil, nil
-	var parent *entry
+	p.Parent, p.Ancestors, p.AncestorsUntrusted = nil, nil, false
+	// Walk the chain up to launchd (bounded by MaxAncestors).
+	var chain []*entry
+	complete := p.PID == 1
 	seen := map[int32]bool{p.PID: true}
-	for len(p.Ancestors) < MaxAncestors && ref.pid > 0 && !seen[ref.pid] {
+	for len(chain) < MaxAncestors && ref.pid > 0 && !seen[ref.pid] {
 		en := s.resolve(ref)
 		if en == nil {
 			break // unknown, or the pid now belongs to a different process
 		}
 		seen[ref.pid] = true
-		if p.Parent == nil {
-			parent = en
-			par := en.proc
-			par.Parent, par.Ancestors = nil, nil
-			if par.UUID == 0 {
-				par.UUID = UUID(par.PID, par.PIDVersion)
-			}
-			if par.Username == "" {
-				par.Username = s.username(par.UID)
-			}
-			p.Parent = &par
-		}
-		p.Ancestors = append(p.Ancestors, en.proc.Exe)
+		chain = append(chain, en)
 		if ref.pid == 1 {
-			break // launchd
+			complete = true // launchd
+			break
 		}
 		ref = en.parentRefOrPPID()
 	}
-	return parent
+	// untrustedFrom[i]: the chain from chain[i] up is incomplete or holds a
+	// process that is neither a platform binary nor a verified vendor.
+	untrustedFrom := make([]bool, len(chain)+1)
+	untrustedFrom[len(chain)] = !complete
+	for i := len(chain) - 1; i >= 0; i-- {
+		untrustedFrom[i] = untrustedFrom[i+1] || !trustedAncestor(&chain[i].proc)
+	}
+	p.AncestorsUntrusted = untrustedFrom[0]
+	if len(chain) == 0 {
+		return nil
+	}
+	par := chain[0].proc
+	par.Parent, par.Ancestors = nil, nil
+	par.AncestorsUntrusted = untrustedFrom[1]
+	if par.UUID == 0 {
+		par.UUID = UUID(par.PID, par.PIDVersion)
+	}
+	if par.Username == "" {
+		par.Username = s.username(par.UID)
+	}
+	p.Parent = &par
+	p.Ancestors = make([]string, len(chain))
+	for i, en := range chain {
+		p.Ancestors[i] = en.proc.Exe
+	}
+	return chain[0]
+}
+
+// trustedAncestor: launchd (pid 1), an Apple platform binary, or code with a
+// Team ID that Apple's CA chain authorised (Developer ID or App Store). The
+// identity skeleton holds all of these, so shed entries still count.
+func trustedAncestor(q *event.Proc) bool {
+	return q.PID == 1 || q.IsPlatform ||
+		q.TeamID != "" && (q.CSCategory == event.CSDeveloperID || q.CSCategory == event.CSAppStore)
 }
 
 // stubRef reads the parent stub the source put in p.Parent (pid and
@@ -499,26 +674,94 @@ func (s *Snapshotter) resize(en *entry) {
 	en.size = n
 }
 
-// makeRoom evicts until one more entry of size n fits.
+// makeRoom sheds details, then evicts, until one more entry of size n fits.
 func (s *Snapshotter) makeRoom(n int64) {
-	for len(s.procs) > 0 && (len(s.procs) >= s.max || s.bytes+n > s.maxBytes) {
+	for len(s.procs) > 0 && len(s.procs) >= s.max {
 		if !s.evictOne(-1) {
-			return
+			break
+		}
+	}
+	for len(s.procs) > 0 && s.bytes+n > s.maxBytes {
+		if !s.shedOne(-1) && !s.evictOne(-1) {
+			break
 		}
 	}
 }
 
-// enforce evicts other entries while the table is over a bound.
+// enforce sheds details of, then evicts, other entries while the table is
+// over a bound.
 func (s *Snapshotter) enforce(keep int32) {
-	for len(s.procs) > s.max || s.bytes > s.maxBytes {
+	for len(s.procs) > s.max {
 		if !s.evictOne(keep) {
-			return
+			break
 		}
 	}
+	for s.bytes > s.maxBytes {
+		if !s.shedOne(keep) && !s.evictOne(keep) {
+			break
+		}
+	}
+}
+
+// hasDetails reports whether p holds anything shedOne would drop.
+func hasDetails(p *event.Proc) bool {
+	return len(p.Args) > 0 || p.Cmdline != "" || p.Env != nil || p.Cwd != ""
+}
+
+// trackFat puts en on the shedding list matching its state when it holds
+// details and is not listed yet, and takes it off when it holds none.
+func (s *Snapshotter) trackFat(en *entry) {
+	if !hasDetails(&en.proc) {
+		s.untrackFat(en)
+		return
+	}
+	if en.fatElem != nil {
+		return
+	}
+	if en.exited.IsZero() {
+		en.fatElem = s.fatLive.PushBack(en.proc.PID)
+	} else {
+		en.fatElem = s.fatDead.PushBack(en.proc.PID)
+	}
+}
+
+func (s *Snapshotter) untrackFat(en *entry) {
+	if en.fatElem == nil {
+		return
+	}
+	// Remove is a no-op on the list that does not hold the element, so this
+	// stays right even when called while en is changing lists.
+	s.fatLive.Remove(en.fatElem)
+	s.fatDead.Remove(en.fatElem)
+	en.fatElem = nil
+}
+
+// shedOne drops the args, cmdline, env and cwd of the earliest-exited entry
+// that still has them, else of the oldest live one other than keep, leaving
+// its identity skeleton in the table. O(1) amortized.
+func (s *Snapshotter) shedOne(keep int32) bool {
+	for _, l := range []*list.List{s.fatDead, s.fatLive} {
+		for el := l.Front(); el != nil; el = el.Next() {
+			pid := el.Value.(int32)
+			if pid == keep {
+				continue
+			}
+			en := s.procs[pid]
+			s.untrackFat(en)
+			t := &en.proc
+			t.Args, t.Cmdline, t.Env, t.Cwd = nil, "", nil, ""
+			s.resize(en)
+			s.shed++
+			s.pressure = true
+			return true
+		}
+	}
+	return false
 }
 
 // evictOne removes the earliest-exited entry, else the least recently
-// (re)imaged live one other than launchd, the kernel and keep. O(1) amortized.
+// (re)imaged live one other than launchd, the kernel and keep. It is the last
+// resort: callers shed details first. O(1) amortized.
 func (s *Snapshotter) evictOne(keep int32) bool {
 	for _, l := range []*list.List{s.dead, s.live} {
 		for el := l.Front(); el != nil; el = el.Next() {
@@ -528,6 +771,7 @@ func (s *Snapshotter) evictOne(keep int32) bool {
 			}
 			s.remove(pid)
 			s.evictions++
+			s.pressure = true
 			return true
 		}
 	}
@@ -539,6 +783,7 @@ func (s *Snapshotter) remove(pid int32) {
 	if !ok {
 		return
 	}
+	s.untrackFat(en)
 	if en.exited.IsZero() {
 		s.live.Remove(en.elem)
 	} else {
@@ -569,4 +814,16 @@ func (s *Snapshotter) sweep(now time.Time) {
 		s.remove(el.Value.(int32))
 		el = next
 	}
+}
+
+// SetClock replaces the table's clock (sweeps, the degraded-report rate
+// limit, timestamps of events without one). Call it before the first event;
+// tests use it to avoid depending on the wall clock.
+func (s *Snapshotter) SetClock(now func() time.Time) {
+	if now == nil {
+		return
+	}
+	s.mu.Lock()
+	s.now = now
+	s.mu.Unlock()
 }

@@ -38,10 +38,13 @@ type rawToken struct {
 }
 
 type rawStat struct {
-	Mode jnum `json:"st_mode"`
-	Size jnum `json:"st_size"`
-	UID  jnum `json:"st_uid"`
-	GID  jnum `json:"st_gid"`
+	Dev   jnum  `json:"st_dev"`
+	Ino   jnum  `json:"st_ino"`
+	Mode  jnum  `json:"st_mode"`
+	Size  jnum  `json:"st_size"`
+	UID   jnum  `json:"st_uid"`
+	GID   jnum  `json:"st_gid"`
+	Ctime jtime `json:"st_ctimespec"`
 }
 
 // rawFile mirrors es_file_t.
@@ -69,6 +72,10 @@ type rawProcess struct {
 	StartTime        jtime     `json:"start_time"`
 	ResponsibleToken *rawToken `json:"responsible_audit_token"`
 	ParentToken      *rawToken `json:"parent_audit_token"`
+	// CSCategory is es_cs_validation_category_t (message version >= 10).
+	// A pointer, so an absent or null field stays distinguishable from 0
+	// (ES_CS_VALIDATION_CATEGORY_INVALID).
+	CSCategory *jnum `json:"cs_validation_category"`
 }
 
 // rawDestination mirrors the destination union of es_event_create_t and

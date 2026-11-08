@@ -9,11 +9,21 @@ match:
       - name: RenameFile
         proc: {pid: 3300, ppid: 1, exe: /Volumes/Installer/Setup.app/Contents/MacOS/Setup, name: Setup, uid: 501, euid: 501, is_platform: false, is_signed: false}
         file: {path: /private/tmp/.x1, dest: /Library/LaunchAgents/com.apple.updates.plist}
+  - desc: forged - Google's Team ID on a self-signed writer (cs_category local_signing) stays high
+    events:
+      - name: CreateFile
+        proc: {pid: 4140, ppid: 1, exe: /Users/Shared/GoogleSoftwareUpdateAgent, name: GoogleSoftwareUpdateAgent, uid: 501, euid: 501, signing_id: com.google.Keystone.Agent, team_id: EQHXZ8M8AV, is_platform: false, is_signed: true, cs_category: local_signing}
+        file: {path: /Users/rifqi/Library/LaunchAgents/com.google.keystone.agent.plist}
+  - desc: Team ID with no reported signing category stays high (fail closed)
+    events:
+      - name: CreateFile
+        proc: {pid: 4141, ppid: 1, exe: /Users/Shared/GoogleSoftwareUpdateAgent, name: GoogleSoftwareUpdateAgent, uid: 501, euid: 501, signing_id: com.google.Keystone.Agent, team_id: EQHXZ8M8AV, is_platform: false, is_signed: true}
+        file: {path: /Users/rifqi/Library/LaunchAgents/com.google.keystone.agent.plist}
 nomatch:
   - desc: benign lookalike - Google Keystone (Developer ID, team EQHXZ8M8AV) installs its updater agent
     events:
       - name: CreateFile
-        proc: {pid: 4100, ppid: 1, exe: /Users/rifqi/Library/Google/GoogleSoftwareUpdate/GoogleSoftwareUpdate.bundle/Contents/Helpers/GoogleSoftwareUpdateAgent.app/Contents/MacOS/GoogleSoftwareUpdateAgent, name: GoogleSoftwareUpdateAgent, uid: 501, euid: 501, signing_id: com.google.Keystone.Agent, team_id: EQHXZ8M8AV, is_platform: false, is_signed: true}
+        proc: {pid: 4100, ppid: 1, exe: /Users/rifqi/Library/Google/GoogleSoftwareUpdate/GoogleSoftwareUpdate.bundle/Contents/Helpers/GoogleSoftwareUpdateAgent.app/Contents/MacOS/GoogleSoftwareUpdateAgent, name: GoogleSoftwareUpdateAgent, uid: 501, euid: 501, signing_id: com.google.Keystone.Agent, team_id: EQHXZ8M8AV, cs_category: developer_id, is_platform: false, is_signed: true}
         file: {path: /Users/rifqi/Library/LaunchAgents/com.google.keystone.agent.plist}
   - desc: backgroundtaskmanagementd rewrites an agent plist
     events:

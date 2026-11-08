@@ -1,0 +1,35 @@
+match:
+  - desc: process-table flood - the table is over budget and shedding context
+    events:
+      - name: SensorDegraded
+        args: {condition: proctable_pressure, detail: "process table over budget: 301 MB used of 256 MB, shedding args/env, 912 entries evicted"}
+  - desc: alert flood - alert output capped
+    events:
+      - name: SensorDegraded
+        args: {condition: alerts_capped, detail: "alert file reached --json-max-bytes, further alerts dropped"}
+  - desc: capture file capped
+    events:
+      - name: SensorDegraded
+        args: {condition: capture_capped, detail: "capture reached its size cap, events no longer recorded"}
+  - desc: YARA queue full - scans skipped
+    events:
+      - name: SensorDegraded
+        args: {condition: yara_queue_full, detail: "exec scan queue full, scan of /private/tmp/x skipped"}
+  - desc: executable on a network share not scanned
+    events:
+      - name: SensorDegraded
+        args: {condition: yara_skipped_nonlocal, detail: "/Volumes/share/tool is on smbfs, not scanned"}
+  - desc: degraded event without a condition still alerts (fail closed)
+    events:
+      - name: SensorDegraded
+        args: {detail: "unknown"}
+nomatch:
+  - desc: executable swapped after exec belongs to the high-severity companion rule
+    events:
+      - name: SensorDegraded
+        args: {condition: yara_exec_replaced, detail: "/private/tmp/x: inode 1234 at exec, 5678 at scan"}
+  - desc: benign lookalike - a YARA match is not a sensor-health event
+    events:
+      - name: YaraMatch
+        proc: {pid: 7001, ppid: 1, exe: /private/tmp/x, name: x, uid: 501, euid: 501, is_platform: false, is_signed: false}
+        yara: {rule: SUSP_Mac_ReverseShell_OneLiner_Nov26, tags: [backdoor, macos], target: /private/tmp/x}

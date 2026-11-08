@@ -67,6 +67,16 @@
 - list: browser_team_ids
   items: ['EQHXZ8M8AV', '43AQ936H96', 'UBF8T346G9', 'KL8N8XSYF4']
 
+# Code-signing validation categories (ps.cs_category, from Endpoint Security's
+# cs_validation_category, macOS 15+) under which a Team ID is backed by an
+# Apple-issued certificate: Developer ID and Mac App Store. A self-signed or
+# locally signed binary that embeds another vendor's Team ID reports
+# local_signing (or another category) and fails. Where Endpoint Security does
+# not report a category the field is nil, the `in` test is false, and every
+# Team ID trust built on it fails closed (more alerts, never fewer).
+- list: vendor_cs_categories
+  items: ['developer_id', 'app_store']
+
 # Apple processes that legitimately read Safari/WebKit cookie and credential stores.
 - list: apple_browser_signing_prefixes
   items: ['com.apple.Safari', 'com.apple.WebKit', 'com.apple.cfnetwork', 'com.apple.nsurlsessiond',
@@ -104,10 +114,6 @@
 # ZAAFVesper's own moving parts: killing these blinds the sensor.
 - list: sensor_self_names
   items: ['eslogger', 'zaafvesper']
-
-# Terminal and GUI text editors that legitimately edit shell start-up files.
-- list: editor_names
-  items: ['vi', 'vim', 'nvim', 'mvim', 'nano', 'pico', 'emacs', 'micro', 'hx', 'ed', 'TextEdit']
 
 # Shell start-up files (T1546.004).
 - list: shell_profile_globs
@@ -200,6 +206,9 @@
   expr: evt.name = 'XProtectDetect'
 - macro: yara_match
   expr: evt.name = 'YaraMatch'
+# Synthetic: ZAAFVesper's own telemetry is degraded (evt.arg[condition], evt.arg[detail]).
+- macro: sensor_degraded
+  expr: evt.name = 'SensorDegraded'
 
 # ---------------------------------------------------------------------------
 # Composite macros
@@ -224,28 +233,49 @@
 # Signing semantics (decoder contract, pkg/source/eslogger/README.md): ps.is_signed
 # is true only when CS_SIGNED and CS_VALID are set and CS_ADHOC is not. That does
 # NOT mean the certificate chains to Apple: a self-signed certificate also gives
-# is_signed = true. Trust therefore never rests on is_signed or signing_id alone;
-# it rests on ps.is_platform = true (Apple platform binary) or on a specific
-# vendor Team ID paired with that vendor's signing IDs.
+# is_signed = true, and may embed any Team ID it likes (open finding M4). Trust
+# therefore never rests on is_signed, signing_id or team_id alone; it rests on
+# ps.is_platform = true (Apple platform binary) or on a Team ID whose signing
+# category is Developer ID or App Store (macro verified_team_id), usually paired
+# with that vendor's signing IDs.
 #
 # Apple's own non-platform software (Xcode, Command Line Tools, debugserver,
 # clang) is signed with Apple's Team ID 59GAB85EFG (checked with codesign on
 # this Mac, 7 Nov 2026); it is NOT a platform binary.
+#
+# Unknown parent = untrusted (open finding M2). When the parent is not in the
+# process table every ps.parent.* field is nil, and any comparison on it is
+# false (infix negations included). Parent macros below are written so that an
+# absent parent comes out UNTRUSTED: trust is tested positively and negated with
+# a prefix `not`, never with `= false` or `!=`.
 
-# No developer identity: not a platform binary and no Team ID. Covers unsigned,
-# ad-hoc, linker-signed and self-signed code.
+# A Team ID backed by an Apple-issued certificate (Developer ID or App Store).
+# False when the category is unreported (nil): fails closed.
+- macro: verified_team_id
+  expr: (ps.team_id != '' and ps.cs_category in vendor_cs_categories)
+
+- macro: parent_verified_team_id
+  expr: (ps.parent.team_id != '' and ps.parent.cs_category in vendor_cs_categories)
+
+# No verified developer identity: not a platform binary and no verified Team ID.
+# Covers unsigned, ad-hoc, linker-signed and self-signed code, a self-signed
+# certificate carrying a forged Team ID, and (fail closed) any Team ID when the
+# signing category is not reported.
 - macro: no_developer_identity
-  expr: (ps.is_platform = false and ps.team_id = '')
+  expr: (ps.is_platform = false and not (verified_team_id))
 
+# Same for the parent. An absent parent (not in the process table) is TRUE here:
+# both prefix `not`s turn the nil comparisons into true.
 - macro: parent_no_developer_identity
-  expr: (ps.parent.is_platform = false and ps.parent.team_id = '')
+  expr: (not (ps.parent.is_platform = true) and not (parent_verified_team_id))
 
-# Apple-signed, non-platform developer tools (Xcode / CLT), bound to Apple's Team ID.
+# Apple-signed, non-platform developer tools (Xcode / CLT), bound to Apple's Team
+# ID with a verified signing category.
 - macro: apple_developer_tool
-  expr: (ps.is_platform = false and ps.team_id = '59GAB85EFG' and ps.signing_id istartswith 'com.apple.')
+  expr: (ps.is_platform = false and ps.team_id = '59GAB85EFG' and ps.cs_category in vendor_cs_categories and ps.signing_id istartswith 'com.apple.')
 
 - macro: parent_apple_developer_tool
-  expr: (ps.parent.is_platform = false and ps.parent.team_id = '59GAB85EFG' and ps.parent.signing_id istartswith 'com.apple.')
+  expr: (ps.parent.is_platform = false and ps.parent.team_id = '59GAB85EFG' and ps.parent.cs_category in vendor_cs_categories and ps.parent.signing_id istartswith 'com.apple.')
 
 # Executable lives somewhere a normal user can write, or on a mounted image.
 - macro: parent_from_user_writable
@@ -253,6 +283,14 @@
 
 - macro: ancestor_from_user_writable
   expr: ps.ancestors imatches user_writable_exe_globs
+
+# The ancestor chain does not reach launchd: some ancestor is unknown (evicted
+# from the process table, or exited and its pid reused), or the chain hit the
+# 16-entry depth bound. pkg/ps never evicts launchd and stops the chain at the
+# first unknown ancestor, so an unknown ancestor always removes /sbin/launchd.
+# An empty or absent list is TRUE (prefix `not`).
+- macro: ancestor_chain_incomplete
+  expr: not (ps.ancestors = '/sbin/launchd')
 
 # Generic file tools and script interpreters (by name) - the usual readers of a
 # stolen secret when the stealer lives off the land.
@@ -263,12 +301,14 @@
 - macro: spawn_osascript
   expr: spawn_process and ps.exe = '/usr/bin/osascript'
 
-# Has some developer identity (Team ID present, not a platform binary) and is
-# not a script interpreter. NOT a trust anchor: any Developer ID holder (or a
-# self-signed certificate carrying a Team ID) satisfies it. Used only to route
-# such writers to a lower-severity companion rule, never to drop an event.
+# Has a verified developer identity (Developer ID / App Store Team ID, not a
+# platform binary) and is not a script interpreter. NOT a trust anchor: any
+# Developer ID holder satisfies it. Used only to route such writers to a
+# lower-severity companion rule, never to drop an event. A forged Team ID
+# (self-signed, local_signing) or an unreported category does not satisfy it,
+# so such writers stay on the high-severity rule.
 - macro: developer_id_signed
-  expr: ps.is_signed = true and ps.is_platform = false and ps.team_id != '' and not (ps.name imatches script_interpreter_name_globs)
+  expr: ps.is_signed = true and ps.is_platform = false and verified_team_id and not (ps.name imatches script_interpreter_name_globs)
 
 # AppleScript / JXA dialog that asks for a secret.
 - macro: osascript_credential_prompt
@@ -277,20 +317,41 @@
     and ps.cmdline icontains ('default answer', 'defaultAnswer')
     and ps.cmdline icontains ('hidden answer', 'hiddenAnswer', 'password', 'passphrase')
 
-# The prompt comes from an untrusted origin: an unsigned/ad-hoc parent, or a
-# parent or ancestor running from a user-writable location or mounted image.
-- macro: untrusted_prompt_origin
-  expr: (parent_no_developer_identity or parent_from_user_writable or ancestor_from_user_writable)
+# Reparented to launchd: the process's parent is now launchd (pid 1) but it was
+# forked by another process (es_process_t.original_ppid). A double fork hides the
+# real origin behind launchd, so it counts as an unknown origin. An absent
+# original_ppid (nil, not reported) is NOT reparented: `!=` on nil is false.
+- macro: reparented
+  expr: (ps.ppid = 1 and ps.original_ppid != 1)
 
-# Text editors with an identity an attacker cannot choose: an Apple platform
-# binary (vim, nano, TextEdit), or a vendor signing ID paired with that vendor's
-# Team ID. VS Code = Microsoft UBF8T346G9; Sublime Text = Z6D26JE4Y4 (checked with
-# codesign on this Mac). Other editors stay out until their Team ID is verified.
+# The prompt comes from an untrusted origin: a parent without verified developer
+# identity (unsigned, ad-hoc, self-signed, forged Team ID, unreported category),
+# an UNKNOWN parent (not in the process table), a parent or ancestor running
+# from a user-writable location or mounted image, or an ancestor chain that does
+# not reach launchd (an ancestor is unknown), or a process reparented to launchd
+# by a double fork, or ps.ancestors_untrusted (computed by pkg/ps: some ancestor
+# up to launchd is neither a platform binary nor a verified vendor identity, or
+# the chain is incomplete). Path globs stay as extra signals. Unknown = untrusted, so flooding
+# the process table to evict the payload cannot downgrade this to the
+# high-severity companion rule.
+- macro: untrusted_prompt_origin
+  expr: (parent_no_developer_identity or parent_from_user_writable or ancestor_from_user_writable or ancestor_chain_incomplete or reparented or ps.ancestors_untrusted = true)
+
+# Text editors trusted to write shell start-up files: only vendor GUI editors
+# with an identity an attacker cannot choose - that vendor's signing ID, Team ID
+# and a verified signing category. VS Code = Microsoft UBF8T346G9; Sublime Text =
+# Z6D26JE4Y4 (checked with codesign on this Mac). Other editors stay out until
+# their Team ID is verified.
+# Apple platform terminal editors (vi, vim, nano, pico, ed) are NOT trusted since
+# round 3 (finding F4): a payload can drive vim through a pseudo-terminal
+# (script(1)) with VIMINIT or keystrokes, so a TTY and clean argv prove nothing.
+# Real edits of ~/.zshrc in vim or nano therefore alert (medium).
+# Residual: VS Code's Electron binary can run as Node (ELECTRON_RUN_AS_NODE=1)
+# under its genuine signature; not covered.
 - macro: trusted_editor
   expr: >
-    (ps.is_platform = true and ps.name in editor_names)
-    or (ps.team_id = 'UBF8T346G9' and ps.signing_id in ('com.microsoft.VSCode', 'com.microsoft.VSCodeInsiders'))
-    or (ps.team_id = 'Z6D26JE4Y4' and ps.signing_id in ('com.sublimetext.4', 'com.sublimetext.3'))
+    (verified_team_id and ps.team_id = 'UBF8T346G9' and ps.signing_id in ('com.microsoft.VSCode', 'com.microsoft.VSCodeInsiders'))
+    or (verified_team_id and ps.team_id = 'Z6D26JE4Y4' and ps.signing_id in ('com.sublimetext.4', 'com.sublimetext.3'))
 
 # Browser credential, cookie and key stores (T1555.003). Chromium-family profiles
 # share a layout: <root>/<profile>/Login Data, Cookies (or Network/Cookies), Web Data.

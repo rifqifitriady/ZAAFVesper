@@ -41,6 +41,10 @@ const (
 	MaxEnvBytes  = 16 << 10 // total bytes of environment (keys + values) kept per exec
 	maxEnvVars   = 512
 	maxArgs      = 4096
+	// MaxIdentityBytes caps signing_id and team_id. Real ones are short
+	// (a Team ID is 10 characters); an ad-hoc signer chooses its signing ID
+	// freely, so a huge one must not be copied into every event and alert.
+	MaxIdentityBytes = 256
 )
 
 // esType describes one ES notify event ZAAFVesper maps.
@@ -144,6 +148,13 @@ func esEventTypes(canonical []string, withWrite bool) []string {
 // only malformed JSON, an oversized line, or an event_type that contradicts
 // the event key does.
 func Decode(line []byte) (e *event.Event, ok bool, err error) {
+	return decode(line, nil)
+}
+
+// decode is Decode that also stores the message's global_seq_num in *gseq
+// (when gseq is not nil and the line parsed), whether or not the event is
+// kept, so the source can detect sequence gaps across ignored lines too.
+func decode(line []byte, gseq *uint64) (e *event.Event, ok bool, err error) {
 	if len(line) > MaxLineSize {
 		return nil, false, fmt.Errorf("eslogger: line of %d bytes exceeds %d", len(line), MaxLineSize)
 	}
@@ -157,6 +168,9 @@ func Decode(line []byte) (e *event.Event, ok bool, err error) {
 	var m rawMessage
 	if err := unmarshalLenient(line, &m); err != nil {
 		return nil, false, fmt.Errorf("eslogger: %w", err)
+	}
+	if gseq != nil {
+		*gseq = uint64(m.GlobalSeqNum)
 	}
 
 	// Identify the event by its integer type and cross-check with the key.
@@ -208,6 +222,17 @@ func Decode(line []byte) (e *event.Event, ok bool, err error) {
 	if !keep {
 		return nil, false, nil
 	}
+	d.capIdentity(e.Proc, "")
+	d.capIdentity(e.Target, "target_")
+	if m.Version > 0 && m.Version < csCategoryMinVersion {
+		// The field does not exist before version 10; whatever is there is
+		// not a category. Unknown stays unknown (nil), so trust fails closed.
+		for _, p := range []*event.Proc{e.Proc, e.Target} {
+			if p != nil {
+				p.CSCategory = ""
+			}
+		}
+	}
 	if len(e.Args) == 0 {
 		e.Args = nil
 	}
@@ -235,6 +260,22 @@ func (d *decoder) argNonEmpty(k, v string) {
 func (d *decoder) argInt(k string, v int64) { d.arg(k, strconv.FormatInt(v, 10)) }
 
 func (d *decoder) argBool(k string, v bool) { d.arg(k, strconv.FormatBool(v)) }
+
+// capIdentity cuts p's signing_id and team_id to MaxIdentityBytes and marks
+// evt.arg[<prefix>signing_id_truncated] / [<prefix>team_id_truncated].
+func (d *decoder) capIdentity(p *event.Proc, prefix string) {
+	if p == nil {
+		return
+	}
+	if len(p.SigningID) > MaxIdentityBytes {
+		p.SigningID = strings.Clone(p.SigningID[:MaxIdentityBytes])
+		d.arg(prefix+"signing_id_truncated", "true")
+	}
+	if len(p.TeamID) > MaxIdentityBytes {
+		p.TeamID = strings.Clone(p.TeamID[:MaxIdentityBytes])
+		d.arg(prefix+"team_id_truncated", "true")
+	}
+}
 
 // actor makes the instigating process the event's Proc for events that a
 // system daemon reports on someone else's behalf (btm, tcc, authentication),
@@ -531,26 +572,42 @@ func (p *rawProcess) toProc() *event.Proc {
 		return nil // absent, or a non-object value encoding/json skipped
 	}
 	out := &event.Proc{
-		PID:        int32(p.AuditToken.PID),
-		PPID:       int32(p.PPID),
-		PIDVersion: uint32(p.AuditToken.PIDVersion),
-		UID:        int64(uint32(p.AuditToken.RUID)),
-		EUID:       int64(uint32(p.AuditToken.EUID)),
-		SigningID:  string(p.SigningID),
-		TeamID:     string(p.TeamID),
-		CDHash:     string(p.CDHash),
-		IsPlatform: bool(p.IsPlatformBinary),
-		IsSigned:   isSigned(uint32(p.CodesigningFlags)),
-		StartTime:  jtimeT(p.StartTime),
+		PID:  int32(p.AuditToken.PID),
+		PPID: int32(p.PPID),
+		// Parent at fork time; differs from PPID after reparenting (double
+		// fork to launchd). Rules read it as ps.original_ppid.
+		OriginalPPID: int32(p.OriginalPPID),
+		PIDVersion:   uint32(p.AuditToken.PIDVersion),
+		UID:          int64(uint32(p.AuditToken.RUID)),
+		EUID:         int64(uint32(p.AuditToken.EUID)),
+		SigningID:    string(p.SigningID),
+		TeamID:       string(p.TeamID),
+		CDHash:       string(p.CDHash),
+		IsPlatform:   bool(p.IsPlatformBinary),
+		IsSigned:     isSigned(uint32(p.CodesigningFlags)),
+		StartTime:    jtimeT(p.StartTime),
 	}
 	if out.PID != 0 || out.PIDVersion != 0 {
 		out.UUID = uint64(uint32(out.PID))<<32 | uint64(out.PIDVersion)
+	}
+	if p.CSCategory != nil {
+		out.CSCategory = enumName(csCategories, int64(*p.CSCategory))
 	}
 	if p.Executable != nil {
 		out.Exe = string(p.Executable.Path)
 		out.Name = filepath.Base(out.Exe)
 		if out.Exe == "" {
 			out.Name = ""
+		}
+		// Executable identity at exec time, so later consumers (YARA, kill)
+		// can check they act on the file that ran, not whatever is at the
+		// path now. dev_t is 32-bit on Darwin.
+		if st := p.Executable.Stat; st != nil {
+			out.ExeDev = uint64(uint32(st.Dev))
+			out.ExeIno = uint64(st.Ino)
+			if ct := time.Time(st.Ctime); !ct.IsZero() {
+				out.ExeCtimeNs = ct.UnixNano()
+			}
 		}
 	}
 	if p.TTY != nil {
@@ -574,6 +631,13 @@ func (f *rawFile) toFile() *event.File {
 	if f.Stat != nil {
 		out.Mode = uint32(f.Stat.Mode)
 		out.Size = int64(f.Stat.Size)
+		// Identity of the file the event is about (dev_t is 32-bit on
+		// Darwin), so a later scan can check it reads that file.
+		out.Dev = uint64(uint32(f.Stat.Dev))
+		out.Ino = uint64(f.Stat.Ino)
+		if ct := time.Time(f.Stat.Ctime); !ct.IsZero() {
+			out.CtimeNs = ct.UnixNano()
+		}
 	}
 	return out
 }

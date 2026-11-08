@@ -9,11 +9,21 @@ match:
       - name: CreateFile
         proc: {pid: 900, ppid: 1, exe: /System/Library/PrivateFrameworks/PackageKit.framework/Versions/A/Resources/installd, name: installd, uid: 0, euid: 0, signing_id: com.apple.installd, is_platform: true, is_signed: true}
         file: {path: /Library/LaunchDaemons/com.vendor.agent.plist}
+  - desc: forged - Zoom's Team ID on a self-signed writer (cs_category local_signing) stays high
+    events:
+      - name: CreateFile
+        proc: {pid: 5101, ppid: 1, exe: /Library/PrivilegedHelperTools/us.zoom.ZoomDaemon, name: us.zoom.ZoomDaemon, uid: 0, euid: 0, signing_id: us.zoom.ZoomDaemon, team_id: BJ4HAAB9B3, is_platform: false, is_signed: true, cs_category: local_signing}
+        file: {path: /Library/LaunchDaemons/us.zoom.ZoomDaemon.plist}
+  - desc: Team ID with no reported signing category stays high (fail closed)
+    events:
+      - name: CreateFile
+        proc: {pid: 5102, ppid: 1, exe: /Library/PrivilegedHelperTools/us.zoom.ZoomDaemon, name: us.zoom.ZoomDaemon, uid: 0, euid: 0, signing_id: us.zoom.ZoomDaemon, team_id: BJ4HAAB9B3, is_platform: false, is_signed: true}
+        file: {path: /Library/LaunchDaemons/us.zoom.ZoomDaemon.plist}
 nomatch:
   - desc: benign lookalike - Developer ID signed vendor helper writes its daemon (routed to the low-severity companion rule)
     events:
       - name: CreateFile
-        proc: {pid: 5100, ppid: 1, exe: /Library/PrivilegedHelperTools/us.zoom.ZoomDaemon, name: us.zoom.ZoomDaemon, uid: 0, euid: 0, signing_id: us.zoom.ZoomDaemon, team_id: BJ4HAAB9B3, is_platform: false, is_signed: true}
+        proc: {pid: 5100, ppid: 1, exe: /Library/PrivilegedHelperTools/us.zoom.ZoomDaemon, name: us.zoom.ZoomDaemon, uid: 0, euid: 0, signing_id: us.zoom.ZoomDaemon, team_id: BJ4HAAB9B3, cs_category: developer_id, is_platform: false, is_signed: true}
         file: {path: /Library/LaunchDaemons/us.zoom.ZoomDaemon.plist}
   - desc: benign lookalike - system_installd (Apple-signed packages only, platform identity) installs an Apple daemon
     events:

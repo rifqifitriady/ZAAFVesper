@@ -14,16 +14,26 @@ match:
       - name: OpenProcess
         proc: {pid: 4203, ppid: 1, exe: /Users/Shared/debugserver, name: debugserver, uid: 501, euid: 501, signing_id: com.apple.debugserver, is_platform: false, is_signed: true}
         target: {pid: 610, ppid: 1, exe: /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder, name: Finder, signing_id: com.apple.finder, is_platform: true, is_signed: true}
+  - desc: forged - Apple's Team ID 59GAB85EFG on a self-signed debugserver (cs_category local_signing)
+    events:
+      - name: OpenProcess
+        proc: {pid: 4220, ppid: 1, exe: /Users/Shared/debugserver, name: debugserver, uid: 501, euid: 501, signing_id: com.apple.debugserver, team_id: 59GAB85EFG, cs_category: local_signing, is_platform: false, is_signed: true}
+        target: {pid: 610, ppid: 1, exe: /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder, name: Finder, signing_id: com.apple.finder, is_platform: true, is_signed: true}
+  - desc: Developer ID Team ID with no reported signing category fails closed
+    events:
+      - name: OpenProcess
+        proc: {pid: 4221, ppid: 1, exe: /Applications/iStat Menus.app/Contents/MacOS/iStat Menus, name: iStat Menus, uid: 501, euid: 501, signing_id: com.bjango.istatmenus, team_id: Y93TK974AT, is_platform: false, is_signed: true}
+        target: {pid: 610, ppid: 1, exe: /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder, name: Finder, signing_id: com.apple.finder, is_platform: true, is_signed: true}
 nomatch:
   - desc: benign lookalike - Xcode's debugserver (Apple Team ID 59GAB85EFG) attaches to a debug build
     events:
       - name: OpenProcess
-        proc: {pid: 4211, ppid: 4210, exe: /Applications/Xcode.app/Contents/SharedFrameworks/LLDB.framework/Versions/A/Resources/debugserver, name: debugserver, uid: 501, euid: 501, signing_id: com.apple.debugserver, team_id: 59GAB85EFG, is_platform: false, is_signed: true}
+        proc: {pid: 4211, ppid: 4210, exe: /Applications/Xcode.app/Contents/SharedFrameworks/LLDB.framework/Versions/A/Resources/debugserver, name: debugserver, uid: 501, euid: 501, signing_id: com.apple.debugserver, team_id: 59GAB85EFG, cs_category: app_store, is_platform: false, is_signed: true}
         target: {pid: 4212, ppid: 4211, exe: /Users/rifqi/Library/Developer/Xcode/DerivedData/App/Build/Products/Debug/App.app/Contents/MacOS/App, name: App, is_platform: false, is_signed: false}
   - desc: benign lookalike - Developer ID system monitor (Team ID present) reads task info
     events:
       - name: OpenProcess
-        proc: {pid: 4213, ppid: 1, exe: /Applications/iStat Menus.app/Contents/MacOS/iStat Menus, name: iStat Menus, uid: 501, euid: 501, signing_id: com.bjango.istatmenus, team_id: Y93TK974AT, is_platform: false, is_signed: true}
+        proc: {pid: 4213, ppid: 1, exe: /Applications/iStat Menus.app/Contents/MacOS/iStat Menus, name: iStat Menus, uid: 501, euid: 501, signing_id: com.bjango.istatmenus, team_id: Y93TK974AT, cs_category: developer_id, is_platform: false, is_signed: true}
         target: {pid: 700, ppid: 1, exe: /Applications/Safari.app/Contents/MacOS/Safari, name: Safari, signing_id: com.apple.Safari, is_platform: true, is_signed: true}
   - desc: Apple platform lldb ptrace attach
     events:

@@ -20,6 +20,7 @@ var knownEvents = []string{
 	event.OpenProcess, event.Signal, event.Ptrace, event.CreateRemoteThread,
 	event.AddLaunchItem, event.Mount, event.LoadKext, event.Authenticate,
 	event.Sudo, event.ModifyTCC, event.XProtectDetect, event.YaraMatch,
+	event.SensorDegraded,
 }
 
 // KnownEvents returns the canonical event names, sorted.

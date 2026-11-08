@@ -20,9 +20,33 @@ var Severities = []string{"info", "low", "medium", "high", "critical"}
 // ActionKill is the only response action.
 const ActionKill = "kill"
 
+// Kill targets. TargetProcess (or an empty target) kills the process of the
+// event that completed the match; TargetParent kills that process's parent.
+const (
+	TargetProcess = "process"
+	TargetParent  = "parent"
+)
+
 // Action is a response requested by a rule.
 type Action struct {
-	Name string `yaml:"name" json:"name"`
+	Name   string `yaml:"name" json:"name"`
+	Target string `yaml:"target" json:"target,omitempty"`
+}
+
+// KillTarget returns TargetProcess or TargetParent ("" means process).
+func (a Action) KillTarget() string {
+	if a.Target == TargetParent {
+		return TargetParent
+	}
+	return TargetProcess
+}
+
+// String renders the action for display: "kill" or "kill:parent".
+func (a Action) String() string {
+	if a.Name == ActionKill && a.KillTarget() == TargetParent {
+		return a.Name + ":" + TargetParent
+	}
+	return a.Name
 }
 
 // Tests links a rule to the atomic tests that prove it.
@@ -76,11 +100,11 @@ func (r *Rule) EventNames() []string {
 	return r.filter.EventNames()
 }
 
-// Actions returns the action names.
+// Actions returns the actions for display ("kill", "kill:parent").
 func (r *Rule) Actions() []string {
 	out := make([]string, 0, len(r.Action))
 	for _, a := range r.Action {
-		out = append(out, a.Name)
+		out = append(out, a.String())
 	}
 	return out
 }
@@ -183,6 +207,11 @@ func (r *Rule) validate() []error {
 	for _, a := range r.Action {
 		if a.Name != ActionKill {
 			bad("action %q is not supported (only %q)", a.Name, ActionKill)
+		}
+		switch a.Target {
+		case "", TargetProcess, TargetParent:
+		default:
+			bad("action %q target %q must be %q or %q", a.Name, a.Target, TargetProcess, TargetParent)
 		}
 	}
 	for _, g := range r.Tests.Atomic {

@@ -35,6 +35,29 @@ const (
 	ModifyTCC          = "ModifyTCC"
 	XProtectDetect     = "XProtectDetect"
 	YaraMatch          = "YaraMatch"
+	// SensorDegraded is synthetic: ZAAFVesper emits it when its own
+	// telemetry is degraded (process-table pressure, capped output, dropped
+	// events). evt.arg[condition] names the condition, evt.arg[detail]
+	// describes it. Never subscribed at a source.
+	SensorDegraded = "SensorDegraded"
+)
+
+// Code-signing validation categories (ps.cs_category), from Endpoint
+// Security's es_cs_validation_category_t (macOS 15+). Empty means the source
+// did not report one; the field then resolves to nil, so trust conditions
+// that require a category fail closed.
+const (
+	CSInvalid      = "invalid"
+	CSPlatform     = "platform"
+	CSTestFlight   = "testflight"
+	CSDevelopment  = "development"
+	CSAppStore     = "app_store"
+	CSEnterprise   = "enterprise"
+	CSDeveloperID  = "developer_id"
+	CSLocalSigning = "local_signing"
+	CSRosetta      = "rosetta"
+	CSOOPJIT       = "oopjit"
+	CSNone         = "none"
 )
 
 // Category groups event names (evt.category).
@@ -50,29 +73,58 @@ func Category(name string) string {
 		return "auth"
 	case XProtectDetect, YaraMatch:
 		return "threat"
+	case SensorDegraded:
+		return "sensor"
 	}
 	return "other"
 }
 
 // Proc describes a process. Parent is a shallow copy (its own Parent is nil).
 type Proc struct {
-	PID        int32             `json:"pid" yaml:"pid"`
-	PPID       int32             `json:"ppid" yaml:"ppid"`
-	PIDVersion uint32            `json:"pidversion,omitempty" yaml:"pidversion,omitempty"`
-	UUID       uint64            `json:"uuid,omitempty" yaml:"uuid,omitempty"`
-	Exe        string            `json:"exe" yaml:"exe"`
-	Name       string            `json:"name" yaml:"name"`
-	Cmdline    string            `json:"cmdline,omitempty" yaml:"cmdline,omitempty"`
-	Args       []string          `json:"args,omitempty" yaml:"args,omitempty"`
-	Cwd        string            `json:"cwd,omitempty" yaml:"cwd,omitempty"`
-	UID        int64             `json:"uid" yaml:"uid"`
-	EUID       int64             `json:"euid" yaml:"euid"`
-	Username   string            `json:"username,omitempty" yaml:"username,omitempty"`
-	SigningID  string            `json:"signing_id,omitempty" yaml:"signing_id,omitempty"`
-	TeamID     string            `json:"team_id,omitempty" yaml:"team_id,omitempty"`
-	CDHash     string            `json:"cdhash,omitempty" yaml:"cdhash,omitempty"`
-	IsPlatform bool              `json:"is_platform" yaml:"is_platform"`
-	IsSigned   bool              `json:"is_signed" yaml:"is_signed"`
+	PID  int32 `json:"pid" yaml:"pid"`
+	PPID int32 `json:"ppid" yaml:"ppid"`
+	// OriginalPPID is the parent at fork time (es_process_t.original_ppid).
+	// It differs from PPID when the process was reparented, e.g. to launchd
+	// by a double fork. Zero when unknown (the field then resolves to nil).
+	OriginalPPID int32  `json:"original_ppid,omitempty" yaml:"original_ppid,omitempty"`
+	PIDVersion   uint32 `json:"pidversion,omitempty" yaml:"pidversion,omitempty"`
+	UUID         uint64 `json:"uuid,omitempty" yaml:"uuid,omitempty"`
+	// UniqueID is the kernel's per-boot unique process id (p_uniqueid, from
+	// proc_info PROC_PIDUNIQIDENTIFIERINFO), read when the process table
+	// first sees the process. Zero when unknown. The responder compares it
+	// right before a kill.
+	UniqueID uint64 `json:"unique_id,omitempty" yaml:"unique_id,omitempty"`
+	// AncestorsUntrusted is set by the process table: true when any known
+	// ancestor (up to launchd) is neither an Apple platform binary nor a
+	// verified vendor identity (team_id with cs_category developer_id or
+	// app_store), or when the ancestor chain is incomplete.
+	AncestorsUntrusted bool     `json:"ancestors_untrusted,omitempty" yaml:"ancestors_untrusted,omitempty"`
+	Exe                string   `json:"exe" yaml:"exe"`
+	Name               string   `json:"name" yaml:"name"`
+	Cmdline            string   `json:"cmdline,omitempty" yaml:"cmdline,omitempty"`
+	Args               []string `json:"args,omitempty" yaml:"args,omitempty"`
+	Cwd                string   `json:"cwd,omitempty" yaml:"cwd,omitempty"`
+	UID                int64    `json:"uid" yaml:"uid"`
+	EUID               int64    `json:"euid" yaml:"euid"`
+	Username           string   `json:"username,omitempty" yaml:"username,omitempty"`
+	SigningID          string   `json:"signing_id,omitempty" yaml:"signing_id,omitempty"`
+	TeamID             string   `json:"team_id,omitempty" yaml:"team_id,omitempty"`
+	CDHash             string   `json:"cdhash,omitempty" yaml:"cdhash,omitempty"`
+	IsPlatform         bool     `json:"is_platform" yaml:"is_platform"`
+	IsSigned           bool     `json:"is_signed" yaml:"is_signed"`
+	// CSCategory is the code-signing validation category (CS* constants);
+	// empty when the source does not report it.
+	CSCategory string `json:"cs_category,omitempty" yaml:"cs_category,omitempty"`
+	// Seeded marks a process learned at start-up from the kernel
+	// (kern.procargs2) rather than from an exec event; its identity is
+	// unverified and response never acts on it.
+	Seeded bool `json:"seeded,omitempty" yaml:"seeded,omitempty"`
+	// Executable file identity at exec time (from the source's stat of the
+	// executable). Zero when unknown. Used to bind scans and kills to the
+	// file that actually ran, not whatever is at the path later.
+	ExeDev     uint64            `json:"exe_dev,omitempty" yaml:"exe_dev,omitempty"`
+	ExeIno     uint64            `json:"exe_ino,omitempty" yaml:"exe_ino,omitempty"`
+	ExeCtimeNs int64             `json:"exe_ctime_ns,omitempty" yaml:"exe_ctime_ns,omitempty"` // st_ctime, Unix ns
 	TTY        string            `json:"tty,omitempty" yaml:"tty,omitempty"`
 	StartTime  time.Time         `json:"start_time,omitempty" yaml:"start_time,omitempty"`
 	Env        map[string]string `json:"env,omitempty" yaml:"env,omitempty"`
@@ -86,6 +138,11 @@ type File struct {
 	Dest string `json:"dest,omitempty" yaml:"dest,omitempty"` // rename/link destination
 	Mode uint32 `json:"mode,omitempty" yaml:"mode,omitempty"`
 	Size int64  `json:"size,omitempty" yaml:"size,omitempty"`
+	// File identity as reported by the source (zero when unknown), used to
+	// bind scans to the file the event was about.
+	Dev     uint64 `json:"dev,omitempty" yaml:"dev,omitempty"`
+	Ino     uint64 `json:"ino,omitempty" yaml:"ino,omitempty"`
+	CtimeNs int64  `json:"ctime_ns,omitempty" yaml:"ctime_ns,omitempty"`
 }
 
 // Yara carries the result of a YARA signature match (evt.name = YaraMatch).
@@ -165,6 +222,8 @@ var procKinds = map[string]FieldKind{
 	"uid": KindInt, "euid": KindInt, "username": KindString, "signing_id": KindString,
 	"team_id": KindString, "cdhash": KindString, "is_platform": KindBool,
 	"is_signed": KindBool, "tty": KindString, "ancestors": KindStrings,
+	"cs_category": KindString, "original_ppid": KindInt,
+	"ancestors_untrusted": KindBool,
 }
 
 func procGetter(attr string) func(*Proc) Value {
@@ -205,6 +264,22 @@ func procGetter(attr string) func(*Proc) Value {
 		return func(p *Proc) Value { return p.TTY }
 	case "ancestors":
 		return func(p *Proc) Value { return p.Ancestors }
+	case "ancestors_untrusted":
+		return func(p *Proc) Value { return p.AncestorsUntrusted }
+	case "original_ppid":
+		return func(p *Proc) Value {
+			if p.OriginalPPID == 0 {
+				return nil
+			}
+			return int64(p.OriginalPPID)
+		}
+	case "cs_category":
+		return func(p *Proc) Value {
+			if p.CSCategory == "" {
+				return nil
+			}
+			return p.CSCategory
+		}
 	}
 	panic("event: unknown proc attribute " + attr)
 }

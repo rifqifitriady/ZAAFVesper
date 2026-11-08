@@ -1,0 +1,29 @@
+name: Executable replaced right after exec (YARA scan evasion)
+id: 8e65e602-9ef6-4df3-9a58-0f63ca183c8c
+version: 1.0.0
+description: |
+  ZAAFVesper's YARA exec scan found that the file at the executable's path is no longer
+  the file that was executed (device, inode or ctime differ from the identity recorded
+  at exec), so the scan was refused (SensorDegraded, condition yara_exec_replaced). A
+  payload that renames or rewrites its own executable right after exec makes the
+  scanner read a different, harmless file; this is that swap. evt.arg[detail] names the
+  path and what changed.
+  Known benign: an installer or updater replacing a binary just after it started (for
+  example Homebrew upgrading a running tool, or an app updating itself); triage the path
+  and the process that wrote it.
+labels:
+  tactic.id: TA0112
+  tactic.name: Defense Impairment
+  technique.id: T1685
+  technique.name: Disable or Modify Tools
+references:
+  - https://attack.mitre.org/techniques/T1685/
+condition: >
+  sensor_degraded
+  and evt.arg[condition] = 'yara_exec_replaced'
+output: "Executable replaced after exec, YARA scan refused: %evt.arg[condition] (%evt.arg[detail])"
+severity: high
+action: []
+tests:
+  atomic: []
+min-engine-version: 0.1.0

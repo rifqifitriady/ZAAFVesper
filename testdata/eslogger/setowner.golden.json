@@ -7,6 +7,7 @@
     "proc": {
       "pid": 5200,
       "ppid": 4100,
+      "original_ppid": 4100,
       "pidversion": 5201,
       "uuid": 22333829944401,
       "exe": "/usr/sbin/chown",
@@ -17,6 +18,10 @@
       "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
       "is_platform": true,
       "is_signed": true,
+      "cs_category": "platform",
+      "exe_dev": 16777234,
+      "exe_ino": 1152921500312345678,
+      "exe_ctime_ns": 1794034800000000000,
       "start_time": "2026-11-07T07:59:59.5Z",
       "parent": {
         "pid": 4100,
@@ -35,7 +40,10 @@
     "file": {
       "path": "/private/tmp/payload",
       "mode": 33261,
-      "size": 88
+      "size": 88,
+      "dev": 16777234,
+      "ino": 1152921500312345678,
+      "ctime_ns": 1794034800000000000
     },
     "args": {
       "owner_gid": "0",

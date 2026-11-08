@@ -106,7 +106,7 @@ func TestMiddleSymlinkRefused(t *testing.T) {
 
 func TestQueuePriority(t *testing.T) {
 	q := newJobQueue(3)
-	if q.push(job{exec: true}) != pushRejected {
+	if q.push(job{exec: true}) != pushNotRunning {
 		t.Fatal("push before open accepted")
 	}
 	q.open()
@@ -156,7 +156,7 @@ func TestQueuePriority(t *testing.T) {
 	if <-done {
 		t.Error("pop after close returned a job")
 	}
-	if q2.push(job{exec: true}) != pushRejected {
+	if q2.push(job{exec: true}) != pushNotRunning {
 		t.Error("push after close accepted")
 	}
 }
@@ -299,4 +299,17 @@ func TestRuleFilesReadThroughSecureRead(t *testing.T) {
 	if _, err := New(Config{RulesDir: big}); err == nil {
 		t.Error("oversize rule file accepted")
 	}
+}
+
+// TestDotfilesSkipped: AppleDouble companions ("._x.yar") that a package
+// payload may carry are not rule files and must not be compiled.
+func TestDotfilesSkipped(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "a.yar"), "rule a { condition: false }\n")
+	write(t, filepath.Join(dir, "._a.yar"), "\x00\x05\x16\x07 not yara {{{")
+	sc, err := New(Config{RulesDir: dir})
+	if err != nil {
+		t.Fatalf("dotfile must be skipped: %v", err)
+	}
+	sc.Close()
 }

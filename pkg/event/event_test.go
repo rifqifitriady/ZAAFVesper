@@ -57,3 +57,17 @@ func TestRegistryKinds(t *testing.T) {
 		t.Error("kind")
 	}
 }
+
+func TestCSCategoryNilWhenUnknown(t *testing.T) {
+	e := &Event{Name: CreateProcess, Proc: &Proc{PID: 10}}
+	if v := e.Get("ps.cs_category"); v != nil {
+		t.Fatalf("unknown category = %v, want nil", v)
+	}
+	e.Proc.CSCategory = CSDeveloperID
+	if v := e.Get("ps.cs_category"); v != CSDeveloperID {
+		t.Fatalf("got %v", v)
+	}
+	if Category(SensorDegraded) != "sensor" {
+		t.Fatal("SensorDegraded category")
+	}
+}

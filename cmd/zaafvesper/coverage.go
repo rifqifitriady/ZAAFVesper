@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rifqifitriady/ZAAFVesper/pkg/alert"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/config"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/rules"
 )
@@ -64,8 +65,11 @@ func buildLayer(rs *rules.Ruleset) navigatorLayer {
 		if len(names) > max {
 			max = len(names)
 		}
+		// Rule names are rule-controlled: strip C0/C1 and bidi controls
+		// from everything that reaches the layer (JSON escaping alone keeps
+		// bidi overrides, which then render in the Navigator).
 		techs = append(techs, navTechnique{
-			TechniqueID: id, Score: len(names), Comment: strings.Join(names, "; "),
+			TechniqueID: alert.Sanitize(id), Score: len(names), Comment: alert.Sanitize(strings.Join(names, "; ")),
 			Enabled: true, ShowSubtechniques: strings.Contains(id, "."),
 		})
 	}

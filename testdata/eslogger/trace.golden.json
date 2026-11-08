@@ -7,6 +7,7 @@
     "proc": {
       "pid": 5500,
       "ppid": 4100,
+      "original_ppid": 4100,
       "pidversion": 5501,
       "uuid": 23622320133501,
       "exe": "/Applications/Xcode.app/Contents/Developer/usr/bin/lldb",
@@ -18,6 +19,10 @@
       "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
       "is_platform": false,
       "is_signed": true,
+      "cs_category": "developer_id",
+      "exe_dev": 16777234,
+      "exe_ino": 1152921500312345678,
+      "exe_ctime_ns": 1794034800000000000,
       "start_time": "2026-11-07T07:59:59.5Z",
       "parent": {
         "pid": 4100,
@@ -36,6 +41,7 @@
     "target": {
       "pid": 4242,
       "ppid": 4100,
+      "original_ppid": 4100,
       "pidversion": 4243,
       "uuid": 18219251273875,
       "exe": "/usr/bin/curl",
@@ -46,6 +52,10 @@
       "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
       "is_platform": true,
       "is_signed": true,
+      "cs_category": "platform",
+      "exe_dev": 16777234,
+      "exe_ino": 1152921500312345678,
+      "exe_ctime_ns": 1794034800000000000,
       "start_time": "2026-11-07T07:59:59.5Z",
       "parent": {
         "pid": 4100,

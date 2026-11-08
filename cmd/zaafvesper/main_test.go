@@ -252,7 +252,7 @@ func TestSubscription(t *testing.T) {
 		t.Fatalf("subscription = %v", got)
 	}
 	got = subscription([]string{event.Signal}, true)
-	want = []string{event.CreateFile, event.CreateProcess, event.Fork, event.Signal, event.TerminateProcess, event.WriteFile}
+	want = []string{event.CreateFile, event.CreateProcess, event.Fork, event.Mount, event.Signal, event.TerminateProcess, event.WriteFile}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("with yara = %v", got)
 	}
@@ -336,7 +336,7 @@ func TestPipelineResponse(t *testing.T) {
 	resp := response.New(response.Config{
 		KillFunc: func(pid int, _ syscall.Signal) error { killed = append(killed, pid); return nil },
 		Identify: func(pid int32) (response.Identity, error) {
-			return response.Identity{StartTime: t0, Exe: "/tmp/p"}, nil
+			return response.Identity{CSKnown: true, StartTime: t0, Exe: "/tmp/p", UniqueID: uint64(pid), UniqueKnown: true}, nil
 		},
 		Log: func(d response.Decision) { decisions = append(decisions, d) },
 	})
@@ -344,7 +344,9 @@ func TestPipelineResponse(t *testing.T) {
 	var errb bytes.Buffer
 	p := &pipeline{engine: rules.NewEngine(rs, rules.Options{}), excl: excl, responder: resp, errw: &errb,
 		dedup: alert.NewDeduper(10 * time.Second)}
-	proc := func(pid int32, exe string) *event.Proc { return &event.Proc{PID: pid, Exe: exe, StartTime: t0} }
+	proc := func(pid int32, exe string) *event.Proc {
+		return &event.Proc{PID: pid, Exe: exe, StartTime: t0, UniqueID: uint64(pid)}
+	}
 	// Sequence rule without action kill: no kill.
 	p.handle(&event.Event{Name: event.CreateFile, Time: t0, Proc: proc(900, "/usr/bin/curl"), File: &event.File{Path: "/tmp/p"}}, false)
 	p.handle(&event.Event{Name: event.CreateProcess, Time: t0.Add(time.Second), Proc: proc(901, "/tmp/p")}, false)
@@ -356,21 +358,23 @@ func TestPipelineResponse(t *testing.T) {
 	if !reflect.DeepEqual(killed, []int{901}) || len(decisions) != 1 {
 		t.Fatalf("killed = %v decisions = %+v", killed, decisions)
 	}
-	// Duplicate (same rule, same pid, inside the window): no alert, no second kill.
+	// Duplicate (same rule, same process, inside the window): the alert
+	// output is suppressed, but the response decision is still taken (the
+	// test kernel still reports the process, so it is killed again).
 	p.handle(&event.Event{Name: event.CreateFile, Time: t0.Add(3 * time.Second), Proc: proc(901, "/tmp/p"), File: &event.File{Path: "/Library/LaunchAgents/z.plist"}}, false)
-	if len(killed) != 1 || p.suppressed != 1 {
-		t.Fatalf("duplicate: killed = %v suppressed = %d", killed, p.suppressed)
+	if len(killed) != 2 || p.suppressed != 1 || len(decisions) != 2 {
+		t.Fatalf("duplicate: killed = %v suppressed = %d decisions = %d", killed, p.suppressed, len(decisions))
 	}
 	// Protected process: alert fires, kill refused.
 	p.handle(&event.Event{Name: event.CreateFile, Time: t0.Add(4 * time.Second), Proc: proc(77, "/usr/libexec/x"), File: &event.File{Path: "/Library/LaunchAgents/y.plist"}}, false)
-	if len(killed) != 1 || decisions[1].Outcome != response.OutcomeProtected {
+	if len(killed) != 2 || decisions[2].Outcome != response.OutcomeProtected {
 		t.Fatalf("protected process: killed = %v decisions = %+v", killed, decisions)
 	}
 	// Unverified identity (seeded at bootstrap): refused.
 	e := &event.Event{Name: event.CreateFile, Time: t0.Add(5 * time.Second), Proc: proc(902, "/tmp/p"),
 		File: &event.File{Path: "/Library/LaunchAgents/w.plist"}, Args: map[string]string{ps.ArgIdentity: ps.Unverified}}
 	p.handle(e, false)
-	if len(killed) != 1 || decisions[2].Outcome != response.OutcomeUnknown {
+	if len(killed) != 2 || decisions[3].Outcome != response.OutcomeUnknown {
 		t.Fatalf("unverified: killed = %v decisions = %+v", killed, decisions)
 	}
 }
@@ -396,13 +400,15 @@ func TestKillNeedsEnableResponse(t *testing.T) {
 			rulesDir: testRules, rulesGiven: true, configPath: filepath.Join(dir, "none.yml"),
 			enableResponse: c.enable, dryRunResponse: c.dry, noYara: true,
 			killFunc: func(int, syscall.Signal) error { kills++; return nil },
-			identify: func(int32) (response.Identity, error) { return response.Identity{StartTime: t0, Exe: "/tmp/p"}, nil },
+			identify: func(pid int32) (response.Identity, error) {
+				return response.Identity{CSKnown: true, StartTime: t0, Exe: "/tmp/p", UniqueID: uint64(pid), UniqueKnown: true}, nil
+			},
 		}, &out, &errb)
 		if err != nil {
 			t.Fatal(err)
 		}
 		s.p.enricher = nil // feed fully formed events
-		s.p.handle(&event.Event{Name: event.CreateFile, Time: t0, Proc: &event.Proc{PID: 4242, Exe: "/tmp/p", StartTime: t0},
+		s.p.handle(&event.Event{Name: event.CreateFile, Time: t0, Proc: &event.Proc{PID: 4242, Exe: "/tmp/p", StartTime: t0, UniqueID: 4242},
 			File: &event.File{Path: "/Library/LaunchAgents/x.plist"}}, false)
 		_ = s.close()
 		if s.p.alerts != 1 || kills != c.wantKills {
@@ -421,7 +427,7 @@ func TestBuildSensorAsRootRefusesUnsafeBinary(t *testing.T) {
 		t.Skip("running as root")
 	}
 	// The test binary lives in a user-owned temp directory.
-	if err == nil || !strings.Contains(err.Error(), "sudo make install") {
+	if err == nil || !strings.Contains(err.Error(), "make package") {
 		t.Fatalf("unsafe binary accepted as root: %v", err)
 	}
 }
@@ -520,6 +526,9 @@ func TestCaptureMaxBytesKeepsSensorRunning(t *testing.T) {
 	}
 	if strings.Count(errb.String(), "size limit reached") != 1 {
 		t.Fatalf("limit should be logged once: %q", errb.String())
+	}
+	if strings.Count(errb.String(), "sensor degraded: condition=capture_capped") != 1 {
+		t.Fatalf("capture cap should raise one SensorDegraded: %q", errb.String())
 	}
 	r, err := capture.Open(filepath.Join(dir, "c.rcap"))
 	if err != nil {

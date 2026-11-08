@@ -21,7 +21,8 @@ type pushResult int
 const (
 	pushOK            pushResult = iota
 	pushDisplacedFile            // queued; the oldest file job was dropped to make room
-	pushRejected                 // not queued (full, or not running)
+	pushRejected                 // not queued: full
+	pushNotRunning               // not queued: before Start or after Close
 )
 
 func newJobQueue(capacity int) *jobQueue {
@@ -50,7 +51,7 @@ func (q *jobQueue) push(j job) pushResult {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if !q.running {
-		return pushRejected
+		return pushNotRunning
 	}
 	res := pushOK
 	if len(q.exec)+len(q.file) >= q.cap {

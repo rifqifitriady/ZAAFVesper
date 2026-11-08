@@ -78,6 +78,38 @@ type Source struct {
 
 	lines, decoded, ignored, decodeErrors, oversize atomic.Uint64
 	excluded, sent, restarts                        atomic.Uint64
+	seqGaps, missed                                 atomic.Uint64
+
+	// lastSeq is the last global_seq_num seen from the current eslogger
+	// (one ES client); 0 = none yet. Only the reading goroutine uses it.
+	lastSeq  uint64
+	degraded degradedHook
+}
+
+// OnDegraded registers fn to be told when events were lost before reaching
+// ZAAFVesper: CondEventsDropped, when global_seq_num (per ES client, so per
+// eslogger run) skips numbers. fn is called synchronously from the goroutine
+// reading eslogger's output, at most once a minute (the next report counts
+// the suppressed ones); it must not block. nil unregisters.
+func (s *Source) OnDegraded(fn func(condition, detail string)) {
+	s.degraded.set(fn)
+}
+
+// checkSeq tracks global_seq_num and reports gaps. A number that does not
+// increase starts a new sequence (a new client after a restart).
+func (s *Source) checkSeq(seq uint64) {
+	if seq == 0 {
+		return // not reported by this eslogger
+	}
+	last := s.lastSeq
+	s.lastSeq = seq
+	if last == 0 || seq <= last+1 {
+		return
+	}
+	n := seq - last - 1
+	s.seqGaps.Add(1)
+	s.missed.Add(n)
+	s.degraded.report(CondEventsDropped, "", fmt.Sprintf("missed %d events (global_seq_num %d to %d); %d missed in total", n, last+1, seq-1, s.missed.Load()))
 }
 
 // New returns an eslogger source.
@@ -133,7 +165,8 @@ func (s *Source) PID() int32 { return s.pid.Load() }
 func (s *Source) Name() string { return "eslogger" }
 
 // Stats reports counters: lines, decoded, ignored (valid but unmapped),
-// decode_errors, oversize_lines, excluded (early drops), sent, restarts.
+// decode_errors, oversize_lines, excluded (early drops), sent, restarts,
+// seq_gaps and events_missed (global_seq_num gaps and the events in them).
 func (s *Source) Stats() map[string]uint64 {
 	return map[string]uint64{
 		"lines":          s.lines.Load(),
@@ -144,6 +177,8 @@ func (s *Source) Stats() map[string]uint64 {
 		"excluded":       s.excluded.Load(),
 		"sent":           s.sent.Load(),
 		"restarts":       s.restarts.Load(),
+		"seq_gaps":       s.seqGaps.Load(),
+		"events_missed":  s.missed.Load(),
 	}
 }
 
@@ -244,6 +279,7 @@ func (s *Source) runOnce(ctx context.Context, bin string, args []string, out cha
 	if s.cfg.OnStart != nil {
 		s.cfg.OnStart(pid)
 	}
+	s.lastSeq = 0 // a new ES client numbers its messages afresh
 	streamErr := s.consume(ctx, stdout, out)
 	if streamErr != nil {
 		// Stop eslogger if we stopped reading for any reason but ctx.
@@ -341,7 +377,11 @@ func (s *Source) consume(ctx context.Context, r io.Reader, out chan<- *event.Eve
 // handleLine decodes and forwards one line; false means ctx was cancelled.
 func (s *Source) handleLine(ctx context.Context, line []byte, out chan<- *event.Event) bool {
 	s.lines.Add(1)
-	e, ok, err := Decode(line)
+	var seq uint64
+	e, ok, err := decode(line, &seq)
+	if err == nil {
+		s.checkSeq(seq) // ignored lines count too: they used a number
+	}
 	switch {
 	case err != nil:
 		s.decodeErrors.Add(1)

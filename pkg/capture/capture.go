@@ -99,9 +99,15 @@ func Create(path string) (*Writer, error) {
 	if err != nil {
 		return nil, err
 	}
+	return NewFileWriter(f), nil
+}
+
+// NewFileWriter writes a capture to an already created file (for example
+// one created fd-relative in the output directory). Close syncs and closes f.
+func NewFileWriter(f *os.File) *Writer {
 	w := NewWriter(f)
 	w.closer = f
-	return w, nil
+	return w
 }
 
 // Write appends one event.

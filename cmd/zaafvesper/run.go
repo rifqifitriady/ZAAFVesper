@@ -22,6 +22,7 @@ import (
 	"github.com/rifqifitriady/ZAAFVesper/pkg/source"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/source/eslogger"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/yara"
+	"golang.org/x/sys/unix"
 )
 
 // snapshotEvents keep the process table correct; run always subscribes them
@@ -29,19 +30,45 @@ import (
 var snapshotEvents = ps.RequiredEvents()
 
 // syntheticEvents are produced inside ZAAFVesper, never subscribed at the source.
-var syntheticEvents = map[string]bool{event.YaraMatch: true}
+var syntheticEvents = map[string]bool{event.YaraMatch: true, event.SensorDegraded: true}
+
+// statsEvery is how often run prints the degraded, alert-file and response
+// counters to stderr (the daemon's log), not only at shutdown.
+const statsEvery = 10 * time.Minute
+
+// daemonLabel is the LaunchDaemon label and package identifier.
+const daemonLabel = "com.rifqifitriady.zaafvesper"
+
+// Defaults of the output caps.
+const (
+	defaultJSONKeep     = 8
+	defaultJSONHighKeep = 4
+	defaultCaptureKeep  = 2
+)
 
 type runOptions struct {
 	rulesDir, configPath, capturePath, jsonPath string
 	rulesGiven, configGiven                     bool
 	enableResponse, dryRunResponse, noColor     bool
-	noYara, keepEnv                             bool
+	noYara, keepEnv, noConsole                  bool
 	captureMaxBytes                             int64
-	dedupWindow                                 time.Duration
+	// outputDir (--output-dir): alerts-<UTC>.jsonl (and, with captureInDir,
+	// capture-<UTC>.rcap) are created there on each start; alert files
+	// rotate at jsonMaxBytes and at most jsonKeep (captureKeep) are kept.
+	outputDir             string
+	captureInDir          bool
+	jsonMaxBytes          int64
+	jsonKeep, captureKeep int
+	jsonHighKeep          int // alerts-high-*.jsonl files kept (a separate budget)
+	dedupWindow           time.Duration
 	// asRoot applies the root-only checks (executable, config/rules
 	// ownership, eslogger pinning, YARA image check). It is os.Geteuid()==0
 	// in production; tests set it to exercise those paths.
 	asRoot bool
+	// clock, when set (tests), replaces the wall clock of the degraded
+	// limiter, the output directory's 7-day prune age, the alert sinks'
+	// retry timer and, if it offers SetClock, the process table.
+	clock func() time.Time
 	// Test hooks for the responder (nil in production).
 	killFunc func(pid int, sig syscall.Signal) error
 	identify func(pid int32) (response.Identity, error)
@@ -53,7 +80,14 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 	fs.StringVar(&o.rulesDir, "rules", defaultRulesDir, "rules directory")
 	fs.StringVar(&o.configPath, "config", defaultConfigPath, "configuration file")
 	fs.StringVar(&o.capturePath, "capture", "", "write every event to this new .rcap file")
-	fs.StringVar(&o.jsonPath, "json", "", "also write alerts to this new JSONL file")
+	fs.StringVar(&o.jsonPath, "json", "", "also write alerts to this new JSONL file (stops at --json-max-bytes)")
+	fs.StringVar(&o.outputDir, "output-dir", "", "write alerts-<UTC time>.jsonl into this directory (created 0700; root-owned when run as root); rotates at --json-max-bytes")
+	fs.BoolVar(&o.captureInDir, "capture-in-dir", false, "also write capture-<UTC time>.rcap into --output-dir")
+	fs.Int64Var(&o.jsonMaxBytes, "json-max-bytes", alert.DefaultMaxFileBytes, "cap of one JSONL alert file in bytes")
+	fs.IntVar(&o.jsonKeep, "json-keep", defaultJSONKeep, "alert files kept in --output-dir (oldest deleted)")
+	fs.IntVar(&o.jsonHighKeep, "json-high-keep", defaultJSONHighKeep, "high/critical alert files (alerts-high-*.jsonl) kept in --output-dir; a separate budget")
+	fs.IntVar(&o.captureKeep, "capture-keep", defaultCaptureKeep, "capture files kept in --output-dir with --capture-in-dir (oldest deleted)")
+	fs.BoolVar(&o.noConsole, "no-console", false, "do not print alerts on stdout (the LaunchDaemon uses --output-dir instead)")
 	fs.BoolVar(&o.enableResponse, "enable-response", false, "allow the kill action of rules that request it")
 	fs.BoolVar(&o.dryRunResponse, "dry-run-response", false, "log what would be killed, kill nothing")
 	fs.BoolVar(&o.noColor, "no-color", false, "disable coloured severities")
@@ -69,12 +103,21 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	o.rulesGiven, o.configGiven = flagSet(fs, "rules"), flagSet(fs, "config")
+	if err := o.checkOutputFlags(); err != nil {
+		say(stderr, "zaafvesper run: %v", err)
+		return 2
+	}
 	if os.Geteuid() != 0 {
 		say(stderr, "zaafvesper run: needs root, because eslogger does (sudo zaafvesper run). Use 'zaafvesper replay' to test rules without root.")
 		return 1
 	}
 	o.asRoot = true
 	config.RequireOwner(0)
+	ignoreJobControlSignals()
+	if stdinIsTerminal() {
+		say(stderr, "warning: zaafvesper is running in a terminal: development only, the normal account can stop or pause it there. "+
+			"For live use install the package and load the LaunchDaemon: sudo /bin/launchctl bootstrap system /Library/LaunchDaemons/%s.plist", daemonLabel)
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	if err := runSensor(ctx, o, stdout, stderr); err != nil {
@@ -82,6 +125,38 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+// checkOutputFlags rejects contradictory or out-of-range output flags.
+func (o *runOptions) checkOutputFlags() error {
+	switch {
+	case o.outputDir != "" && o.jsonPath != "":
+		return errors.New("--json and --output-dir are exclusive (--output-dir names its alert files itself)")
+	case o.captureInDir && o.outputDir == "":
+		return errors.New("--capture-in-dir needs --output-dir")
+	case o.captureInDir && o.capturePath != "":
+		return errors.New("--capture and --capture-in-dir are exclusive")
+	case o.jsonMaxBytes <= 0:
+		return errors.New("--json-max-bytes must be positive")
+	case o.jsonKeep < 1 || o.captureKeep < 1 || o.jsonHighKeep < 1:
+		return errors.New("--json-keep, --json-high-keep and --capture-keep must be at least 1")
+	}
+	return nil
+}
+
+// ignoreJobControlSignals keeps a terminal from stopping or pausing the
+// sensor: SIGHUP (terminal closed), SIGTSTP (^Z), SIGTTIN and SIGTTOU
+// (background terminal I/O). SIGINT and SIGTERM still shut it down cleanly.
+// The ignored dispositions are inherited by the eslogger child.
+func ignoreJobControlSignals() {
+	signal.Ignore(syscall.SIGHUP, syscall.SIGTSTP, syscall.SIGTTIN, syscall.SIGTTOU)
+}
+
+// stdinIsTerminal reports whether standard input is a terminal (run started
+// from a shell rather than by launchd).
+func stdinIsTerminal() bool {
+	_, err := unix.IoctlGetTermios(int(os.Stdin.Fd()), unix.TIOCGETA)
+	return err == nil
 }
 
 // subscription computes the canonical events to subscribe at the source.
@@ -102,6 +177,7 @@ func subscription(required []string, withYara bool) []string {
 	if withYara {
 		set[event.CreateFile] = true
 		set[event.WriteFile] = true
+		set[event.Mount] = true // invalidates the scanner's mount cache
 	}
 	out := make([]string, 0, len(set))
 	for n := range set {
@@ -210,21 +286,37 @@ func buildSensor(o runOptions, stdout, stderr io.Writer) (*sensor, error) {
 		errw:     stderr,
 	}
 	s.p = p
-	// The console is fed from its own goroutine through a bounded queue, so a
-	// stuck terminal drops alerts (counted) instead of stalling the sensor.
-	console := alert.NewAsync(alert.NewConsole(stdout, colorFor(stdout, o.noColor)), alert.DefaultQueue)
-	p.sinks = append(p.sinks, console)
-	s.closers = append(s.closers, func() error { return console.Close(2 * time.Second) })
+	if o.clock != nil {
+		p.deg.clock = o.clock
+		if c, ok := any(snap).(interface{ SetClock(func() time.Time) }); ok {
+			c.SetClock(o.clock)
+		}
+	}
+	// Process-table pressure (and, below, YARA conditions) become
+	// SensorDegraded events.
+	if d, ok := any(snap).(degradedReporter); ok {
+		d.OnDegraded(p.degradedFrom)
+	}
 	fail := func(err error) (*sensor, error) {
 		_ = s.close()
 		return nil, err
 	}
+	if !o.noConsole {
+		// The console is fed from its own goroutine through a bounded queue,
+		// so a stuck terminal drops alerts (counted) instead of stalling the
+		// sensor.
+		console := alert.NewAsync(alert.NewConsole(stdout, colorFor(stdout, o.noColor)), alert.DefaultQueue)
+		p.sinks = append(p.sinks, console)
+		s.closers = append(s.closers, func() error { return console.Close(2 * time.Second) })
+	}
+	jsonOpts := alert.JSONLOptions{KeepEnv: o.keepEnv, MaxBytes: o.jsonMaxBytes, Now: o.clock,
+		OnCapped: func(detail string) { p.degraded(condAlertsCapped, detail) }}
 	if o.jsonPath != "" {
 		f, err := config.CreatePrivate(o.jsonPath)
 		if err != nil {
 			return fail(err)
 		}
-		j := alert.NewJSONLWith(f, o.keepEnv)
+		j := alert.NewJSONLOptions(f, jsonOpts) // stops at the cap
 		p.sinks = append(p.sinks, j)
 		s.closers = append(s.closers, j.Close)
 	}
@@ -233,10 +325,12 @@ func buildSensor(o runOptions, stdout, stderr io.Writer) (*sensor, error) {
 		if err != nil {
 			return fail(err)
 		}
-		w.SetMaxBytes(o.captureMaxBytes)
-		w.SetKeepEnv(o.keepEnv)
-		p.capture = w
-		s.closers = append(s.closers, w.Close)
+		s.setCapture(w, o)
+	}
+	if o.outputDir != "" {
+		if err := s.openOutputDir(o, jsonOpts, stderr); err != nil {
+			return fail(err)
+		}
 	}
 	if o.enableResponse || o.dryRunResponse {
 		p.responder = response.New(response.Config{
@@ -251,12 +345,16 @@ func buildSensor(o runOptions, stdout, stderr io.Writer) (*sensor, error) {
 			DynamicPIDs: func() []int32 { return s.sourcePIDs() },
 			KillFunc:    o.killFunc,
 			Identify:    o.identify,
+			// A refused kill because a budget is spent is a degraded
+			// response, raised as SensorDegraded response_rate_limited.
+			OnDegraded: p.degraded,
 		})
 		mode := "ENABLED"
 		if o.dryRunResponse {
 			mode = "DRY-RUN"
 		}
-		say(stderr, "response: %s (kill only for rules with action kill; max %d per minute)", mode, response.DefaultMaxPerMinute)
+		say(stderr, "response: %s (kill only for rules with action kill; at most %d per rule and %d in all per minute)",
+			mode, response.DefaultMaxPerRulePerMinute, response.DefaultMaxPerMinute)
 	}
 
 	required := engine.RequiredEvents()
@@ -278,6 +376,9 @@ func buildSensor(o runOptions, stdout, stderr io.Writer) (*sensor, error) {
 			p.scanner = sc
 			withYara = true
 			s.closers = append(s.closers, sc.Close)
+			if d, ok := any(sc).(degradedReporter); ok {
+				d.OnDegraded(p.degradedFrom)
+			}
 		}
 	}
 	if !withYara {
@@ -307,6 +408,10 @@ func buildSensor(o runOptions, stdout, stderr io.Writer) (*sensor, error) {
 			say(stderr, "eslogger: %s", fmt.Sprintf(format, args...))
 		},
 	})
+	// Dropped events at the source (es_events_dropped, workstream B).
+	if d, ok := any(s.src).(degradedReporter); ok {
+		d.OnDegraded(p.degradedFrom)
+	}
 	say(stderr, "zaafvesper %s: %d rules enabled of %d, %d exclusions, events: %v", version, len(rs.Enabled()), len(rs.Rules), excl.Len(), s.events)
 	return s, nil
 }
@@ -332,6 +437,8 @@ func runSensor(ctx context.Context, o runOptions, stdout, stderr io.Writer) erro
 
 	flush := time.NewTicker(2 * time.Second)
 	defer flush.Stop()
+	statsTick := time.NewTicker(statsEvery)
+	defer statsTick.Stop()
 	var srcErr error
 loop:
 	for {
@@ -348,7 +455,10 @@ loop:
 			p.handle(e, false)
 		case e := <-yaraCh:
 			p.handle(e, true)
+		case <-statsTick.C:
+			p.periodicStats(stderr)
 		case <-flush.C:
+			p.drainDegraded() // reports from YARA workers while idle
 			if p.capture != nil {
 				_ = p.capture.Flush()
 			}
@@ -379,13 +489,128 @@ drain:
 		}
 		break
 	}
+	p.drainDegraded()
 	closeErr := s.close()
+	p.printStats(stderr, s.extraStats())
+	return errors.Join(srcErr, closeErr)
+}
+
+// extraStats gathers the component counters printed at shutdown: the
+// source (including eslogger seq_gaps and events_missed), the process table
+// and YARA (including exec_unbound and file_changed).
+func (s *sensor) extraStats() map[string]map[string]uint64 {
 	extra := map[string]map[string]uint64{"source": s.src.Stats(), "process table": s.snap.Stats()}
-	if st, ok := p.scanner.(interface{ Stats() map[string]uint64 }); ok {
+	if st, ok := s.p.scanner.(interface{ Stats() map[string]uint64 }); ok {
 		extra["yara"] = st.Stats()
 	}
-	p.printStats(stderr, extra)
-	return errors.Join(srcErr, closeErr)
+	return extra
+}
+
+func (s *sensor) setCapture(w *capture.Writer, o runOptions) {
+	w.SetMaxBytes(o.captureMaxBytes)
+	w.SetKeepEnv(o.keepEnv)
+	s.p.capture = w
+	s.closers = append(s.closers, w.Close)
+}
+
+// errBudgetFull: the keep budget holds only files that may not be deleted
+// (younger than minPruneAge, or open).
+var errBudgetFull = errors.New("keep budget full")
+
+// openOutputDir wires --output-dir: a new alerts-<UTC>.jsonl on every start
+// (KeepAlive restarts never reuse a file), rotation at the size cap, and
+// optionally a capture file. Old files are deleted only to stay within
+// --json-keep / --capture-keep and only when older than 7 days (or empty);
+// when the budget is full of younger files the sensor keeps running without
+// writing that file (alerts_capped / capture_capped), preserving what is on
+// disk.
+func (s *sensor) openOutputDir(o runOptions, jsonOpts alert.JSONLOptions, stderr io.Writer) error {
+	od, err := openOutputDir(o.outputDir, o.asRoot)
+	if err != nil {
+		return err
+	}
+	if o.clock != nil {
+		od.now = o.clock
+	}
+	if o.jsonHighKeep < 1 {
+		o.jsonHighKeep = defaultJSONHighKeep
+	}
+	s.closers = append(s.closers, od.close)
+	open := map[string]bool{} // files being written: never pruned
+	newFile := func(prefix, ext string, keep int) (*os.File, error) {
+		room, removed, perr := od.makeRoom(prefix, ext, keep, open)
+		if len(removed) > 0 {
+			say(stderr, "output: removed %d %s file(s) older than 7 days or empty (keeping %d)", len(removed), prefix, keep)
+		}
+		if perr != nil {
+			say(stderr, "output: pruning old %s files: %v", prefix, perr)
+		}
+		if !room {
+			return nil, fmt.Errorf("%w: %d %s files younger than 7 days in %s; delete or move some to resume", errBudgetFull, keep, prefix, od.path)
+		}
+		f, err := od.create(prefix, ext)
+		if err != nil {
+			return nil, err
+		}
+		open[filepath.Base(f.Name())] = true
+		return f, nil
+	}
+	// rotating builds one alert file series: alerts-<UTC>.jsonl for every
+	// alert, and alerts-high-<UTC>.jsonl, a reserved budget for high and
+	// critical alerts that a flood of lower alerts cannot use up.
+	rotating := func(prefix string, keep int, opts alert.JSONLOptions) (*alert.JSONL, error) {
+		current := ""
+		opts.Rotate = func() (io.Writer, error) {
+			nf, err := newFile(prefix, alertsExt, keep)
+			if err != nil {
+				return nil, err
+			}
+			delete(open, current) // the sink closes it once Rotate returns
+			current = filepath.Base(nf.Name())
+			say(stderr, "output: %s to %s", prefix, nf.Name())
+			return nf, nil
+		}
+		f, err := newFile(prefix, alertsExt, keep)
+		var w io.Writer
+		switch {
+		case errors.Is(err, errBudgetFull):
+			opts.StartStopped, opts.StopReason = true, err.Error()
+			say(stderr, "output: %s are NOT written: %v", prefix, err)
+			s.p.degraded(condAlertsCapped, err.Error())
+		case err != nil:
+			return nil, err
+		default:
+			w, current = f, filepath.Base(f.Name())
+			say(stderr, "output: %s to %s (rotate at %d bytes, keep %d)", prefix, f.Name(), o.jsonMaxBytes, keep)
+		}
+		j := alert.NewJSONLOptions(w, opts)
+		s.closers = append(s.closers, j.Close)
+		return j, nil
+	}
+	j, err := rotating(alertsPrefix, o.jsonKeep, jsonOpts)
+	if err != nil {
+		return err
+	}
+	s.p.sinks = append(s.p.sinks, j)
+	jh, err := rotating(alertsHighPrefix, o.jsonHighKeep, jsonOpts)
+	if err != nil {
+		return err
+	}
+	s.p.sinks = append(s.p.sinks, &alert.Filtered{Sink: jh, Allow: alert.HighOrCritical})
+	if o.captureInDir {
+		cf, err := newFile(capturePrefix, captureExt, o.captureKeep)
+		switch {
+		case errors.Is(err, errBudgetFull):
+			say(stderr, "output: capture is NOT written: %v", err)
+			s.p.degraded(condCaptureCapped, err.Error())
+		case err != nil:
+			return err
+		default:
+			say(stderr, "output: capture to %s (stops at %d uncompressed bytes, keep %d)", cf.Name(), o.captureMaxBytes, o.captureKeep)
+			s.setCapture(capture.NewFileWriter(cf), o)
+		}
+	}
+	return nil
 }
 
 // pinnedEslogger refuses any eslogger binary but the system one as root.

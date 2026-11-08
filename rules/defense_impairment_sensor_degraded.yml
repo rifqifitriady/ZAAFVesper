@@ -1,0 +1,40 @@
+name: ZAAFVesper sensor degraded
+id: 85209f13-79f8-4818-aa97-d009e5610957
+version: 1.1.0
+description: |
+  ZAAFVesper reported that its own telemetry is degraded (synthetic SensorDegraded
+  event). Conditions: proctable_pressure (the process table is over its byte budget and
+  is shedding arguments/environment or evicting entries, so parent and ancestor
+  context may be missing), alerts_capped (alert output hit its cap and alerts are being
+  dropped), capture_capped (the capture file hit its size cap), yara_queue_full (YARA
+  exec/file scans are being skipped because the queue is full), yara_skipped_nonlocal
+  (an executable on a network or otherwise non-local filesystem was not scanned),
+  es_events_dropped (eslogger's global sequence number skipped: events were lost),
+  response_rate_limited (a kill budget was exhausted), degraded_suppressed (summary of
+  degraded reports held back by the per-condition limit).
+  While degraded, rules that depend on the missing context see less; the detection
+  rules treat an unknown parent as untrusted, but some events may still go unseen.
+  An attacker can cause most of these on purpose (fork/argv floods, alert floods,
+  running payloads from a network share) to blind the sensor before acting.
+  Known benign: large builds or test suites that start thousands of processes, a burst
+  of real alerts, executables run from mounted network volumes. The sensor limits each
+  condition to 20 events a minute (es_events_dropped is never limited), so a sustained
+  condition repeats.
+  yara_exec_replaced is handled by the high-severity rule "Executable replaced right
+  after exec (YARA scan evasion)" and excluded here.
+labels:
+  tactic.id: TA0112
+  tactic.name: Defense Impairment
+  technique.id: T1685
+  technique.name: Disable or Modify Tools
+references:
+  - https://attack.mitre.org/techniques/T1685/
+condition: >
+  sensor_degraded
+  and not (evt.arg[condition] = 'yara_exec_replaced')
+output: "Sensor degraded: %evt.arg[condition] (%evt.arg[detail])"
+severity: medium
+action: []
+tests:
+  atomic: []
+min-engine-version: 0.1.0

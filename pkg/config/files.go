@@ -34,7 +34,7 @@ func RequiredOwner() int64 { return requiredOwner.Load() }
 
 // SecureRead opens path once with O_NOFOLLOW, checks the open descriptor
 // (regular file, at most max bytes, and - when an owner is required - owned
-// by that uid and not group/world writable) and returns the bytes read from
+// by that uid, not group/world writable and without a write-permitting ACL) and returns the bytes read from
 // that same descriptor. There is no window between the check and the read.
 func SecureRead(path string, max int64) ([]byte, error) {
 	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
@@ -56,6 +56,9 @@ func SecureRead(path string, max int64) ([]byte, error) {
 		if err := checkInfo(path, fi, uint32(owner), false); err != nil {
 			return nil, err
 		}
+		if err := checkACLFd(int(f.Fd())); err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
 	}
 	if fi.Size() > max {
 		return nil, fmt.Errorf("%s: larger than %d bytes", path, max)
@@ -72,7 +75,9 @@ func SecureRead(path string, max int64) ([]byte, error) {
 
 // CheckOwnership verifies, like sshd's StrictModes, that each path,
 // everything beneath the paths that are directories, and every ancestor
-// directory up to / is owned by root and not writable by group or others.
+// directory up to / is owned by root, not writable by group or others, and
+// carries no extended ACL entry that permits anyone a write-like right
+// (deny entries are fine).
 // The paths themselves and everything beneath them must not be symbolic
 // links; ancestors are checked on their resolved location, so /etc ->
 // /private/etc works.
@@ -96,6 +101,10 @@ func checkOwnership(wantUID uint32, paths ...string) error {
 		seen[p] = true
 		if err := checkInfo(p, fi, wantUID, ancestor); err != nil {
 			errs = append(errs, err)
+			return
+		}
+		if err := checkACLPath(p); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", p, err))
 		}
 	}
 	for _, p := range paths {
@@ -166,7 +175,7 @@ func checkInfo(p string, fi fs.FileInfo, wantUID uint32, ancestor bool) error {
 		if ancestor {
 			what = "parent directory"
 		}
-		return fmt.Errorf("%s: %s owned by uid %d, must be owned by root (install with 'sudo make install')", p, what, st.Uid)
+		return fmt.Errorf("%s: %s owned by uid %d, must be owned by root (install the package built by 'make package')", p, what, st.Uid)
 	}
 	if fi.Mode().Perm()&0o022 != 0 {
 		return fmt.Errorf("%s: mode %v is group- or world-writable", p, fi.Mode().Perm())

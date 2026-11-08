@@ -7,6 +7,10 @@ match:
     events:
       - name: CreateProcess
         proc: {pid: 4902, ppid: 4900, exe: /usr/sbin/screencapture, name: screencapture, cmdline: "screencapture /tmp/T1113_desktop.png", args: [screencapture, /tmp/T1113_desktop.png], uid: 501, euid: 501, signing_id: com.apple.screencapture, is_platform: true, is_signed: true, parent: {pid: 4900, ppid: 4899, exe: /bin/bash, name: bash, signing_id: com.apple.bash, is_platform: true, is_signed: true}}
+  - desc: silent capture whose parent is unknown (not in the process table)
+    events:
+      - name: CreateProcess
+        proc: {pid: 4920, ppid: 4919, exe: /usr/sbin/screencapture, name: screencapture, cmdline: "screencapture -x /private/tmp/s.png", args: [screencapture, -x, /private/tmp/s.png], uid: 501, euid: 501, signing_id: com.apple.screencapture, is_platform: true, is_signed: true}
 nomatch:
   - desc: benign lookalike - interactive `screencapture -i` from Terminal
     events:

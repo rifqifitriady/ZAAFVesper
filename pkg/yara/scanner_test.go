@@ -51,8 +51,14 @@ func setup(t *testing.T, mut func(*Config)) (*Scanner, string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { sc.Close() })
+	// Rate limits never depend on the wall clock in tests (PF-09); a test
+	// that needs time to pass replaces this clock.
+	sc.(*Scanner).degraded.now = func() time.Time { return testClock }
 	return sc.(*Scanner), watch
 }
+
+// testClock is the fixed time of every scanner's rate limiter in tests.
+var testClock = time.Date(2026, 11, 8, 0, 0, 0, 0, time.UTC)
 
 func write(t *testing.T, p, content string) {
 	t.Helper()

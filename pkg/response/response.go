@@ -27,7 +27,10 @@ const (
 	OutcomeRateLimited = "refused-rate-limit"
 	OutcomeUnknown     = "refused-unknown-process"
 	OutcomeMismatch    = "refused-identity-mismatch"
-	OutcomeError       = "error"
+	// OutcomeSigningUnknown: the process has a Team ID but its signing
+	// validation category was not reported, so it is alert-only.
+	OutcomeSigningUnknown = "refused-signing-category-unknown"
+	OutcomeError          = "error"
 )
 
 // Errors returned by Kill.
@@ -48,23 +51,70 @@ var ProtectedExePrefixes = []string{"/System/", "/usr/libexec/", "/sbin/", "/usr
 // ProtectedExes are exact executable paths that are never killed.
 var ProtectedExes = []string{"/usr/bin/eslogger"}
 
-// DefaultMaxPerMinute is the kill rate limit.
-const DefaultMaxPerMinute = 10
+// Kill budgets: per rule, and a global safety cap over all rules.
+const (
+	DefaultMaxPerRulePerMinute = 10
+	DefaultMaxPerMinute        = 30
+)
+
+// CondRateLimited is the SensorDegraded condition reported (through
+// Config.OnDegraded) when a kill budget refuses a kill.
+const CondRateLimited = "response_rate_limited"
+
+// LogRepeatEvery is the minimum interval between two logged refusals with
+// the same rule, target, pid and outcome; repeats inside it are counted only.
+const LogRepeatEvery = time.Minute
+
+const maxLogKeys = 4096
 
 // StartTolerance is the allowed difference between the start time in the
-// event and the start time the kernel reports for the pid now.
-const StartTolerance = time.Second
+// event and the start time the kernel reports for the pid now. pids are
+// handed out sequentially, so a pid is not reused within a millisecond: the
+// pid plus its start time to the millisecond binds one process incarnation.
+const StartTolerance = time.Millisecond
+
+// csPlatformBinary is CS_PLATFORM_BINARY from <kern/cs_blobs.h>.
+const csPlatformBinary = 0x04000000
+
+// ErrExeUnlinked marks an Identity whose running image has no path any more
+// (proc_pidpath ENOENT: the file was deleted after exec). SIP-protected
+// system files cannot be unlinked, so such an image is not on a protected
+// path; the code-signing status still decides whether it is a platform
+// binary.
+var ErrExeUnlinked = errors.New("executable file was unlinked after exec")
 
 // Identity is what the kernel says about a pid right before the kill.
 type Identity struct {
 	StartTime time.Time
-	Exe       string // as recorded by the kernel (kern.procargs2); may be relative
+	// Exe is the kernel's path of the process's executable vnode
+	// (proc_pidpath): absolute, symbolic links resolved, like the path
+	// Endpoint Security reports. Empty when ExeErr is set.
+	Exe    string
+	ExeErr error
+	// Dev and Ino identify the file found at Exe now (valid when HasFileID).
+	Dev, Ino  uint64
+	HasFileID bool
+	// CSFlags are the code-signing status flags of the running image
+	// (csops CS_OPS_STATUS), valid when CSKnown.
+	CSFlags uint32
+	CSKnown bool
+	// UniqueID is the kernel's per-boot unique process id (p_uniqueid),
+	// valid when UniqueKnown.
+	UniqueID    uint64
+	UniqueKnown bool
 }
+
+// Kill targets recorded in a Decision.
+const (
+	TargetProcess = "process"
+	TargetParent  = "parent"
+)
 
 // Decision records one kill decision.
 type Decision struct {
 	Time    time.Time `json:"time"`
 	PID     int32     `json:"pid"`
+	Target  string    `json:"target"` // TargetProcess or TargetParent
 	Name    string    `json:"name,omitempty"`
 	Exe     string    `json:"exe,omitempty"`
 	Reason  string    `json:"reason"`
@@ -74,8 +124,12 @@ type Decision struct {
 
 // String renders the decision for a log line (sanitized).
 func (d Decision) String() string {
-	s := fmt.Sprintf("%s response %s pid=%d name=%s exe=%s reason=%q",
-		d.Time.UTC().Format(time.RFC3339), d.Outcome, d.PID, alert.Sanitize(d.Name), alert.Sanitize(d.Exe), alert.Sanitize(d.Reason))
+	target := d.Target
+	if target == "" {
+		target = TargetProcess
+	}
+	s := fmt.Sprintf("%s response %s target=%s pid=%d name=%s exe=%s reason=%q",
+		d.Time.UTC().Format(time.RFC3339), d.Outcome, alert.Sanitize(target), d.PID, alert.Sanitize(d.Name), alert.Sanitize(d.Exe), alert.Sanitize(d.Reason))
 	if d.Detail != "" {
 		s += " detail=" + fmt.Sprintf("%q", alert.Sanitize(d.Detail))
 	}
@@ -84,15 +138,19 @@ func (d Decision) String() string {
 
 // Config configures a Responder.
 type Config struct {
-	DryRun       bool                                    // log what would be killed, kill nothing
-	MaxPerMinute int                                     // default 10
-	ProtectPIDs  []int32                                 // extra protected pids (own pid and ppid are always protected)
-	DynamicPIDs  func() []int32                          // pids protected at decision time (e.g. the current eslogger child)
-	Log          func(Decision)                          // default: one line on stderr
-	Now          func() time.Time                        // default time.Now
-	KillFunc     func(pid int, sig syscall.Signal) error // default syscall.Kill
-	Identify     func(pid int32) (Identity, error)       // default: kernel lookup (sysctl), see identify_darwin.go
-	Lookup       func(pid int32) (*event.Proc, bool)     // process table, for Kill(pid); optional
+	DryRun              bool                                    // log what would be killed, kill nothing
+	MaxPerRulePerMinute int                                     // kills per rule per minute, default 10
+	MaxPerMinute        int                                     // kills over all rules per minute, default 30
+	ProtectPIDs         []int32                                 // extra protected pids (own pid and ppid are always protected)
+	DynamicPIDs         func() []int32                          // pids protected at decision time (e.g. the current eslogger child)
+	Log                 func(Decision)                          // default: one line on stderr
+	Now                 func() time.Time                        // default time.Now
+	KillFunc            func(pid int, sig syscall.Signal) error // default syscall.Kill
+	Identify            func(pid int32) (Identity, error)       // default: kernel lookup (sysctl, proc_pidpath, csops), see identify_darwin.go
+	Lookup              func(pid int32) (*event.Proc, bool)     // process table, for Kill(pid); optional
+	// OnDegraded is called, outside the responder's lock, when a kill budget
+	// refuses a kill (condition CondRateLimited).
+	OnDegraded func(condition, detail string)
 }
 
 // Responder kills processes within the guard rails. Safe for concurrent use.
@@ -100,7 +158,9 @@ type Responder struct {
 	mu        sync.Mutex
 	cfg       Config
 	protected map[int32]bool
-	recent    []time.Time // kills (or dry-run kills) inside the last minute
+	recent    []time.Time            // kills (or dry-run kills) inside the last minute, all rules
+	perRule   map[string][]time.Time // the same, by rule
+	logged    map[string]time.Time   // last logged refusal by rule|target|pid|outcome
 	stats     map[string]uint64
 }
 
@@ -108,6 +168,9 @@ type Responder struct {
 func New(cfg Config) *Responder {
 	if cfg.MaxPerMinute <= 0 {
 		cfg.MaxPerMinute = DefaultMaxPerMinute
+	}
+	if cfg.MaxPerRulePerMinute <= 0 {
+		cfg.MaxPerRulePerMinute = DefaultMaxPerRulePerMinute
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
@@ -121,7 +184,8 @@ func New(cfg Config) *Responder {
 	if cfg.Log == nil {
 		cfg.Log = func(d Decision) { _, _ = io.WriteString(os.Stderr, d.String()+"\n") }
 	}
-	r := &Responder{cfg: cfg, protected: map[int32]bool{}, stats: map[string]uint64{}}
+	r := &Responder{cfg: cfg, protected: map[int32]bool{}, perRule: map[string][]time.Time{},
+		logged: map[string]time.Time{}, stats: map[string]uint64{}}
 	r.protected[int32(os.Getpid())] = true
 	r.protected[int32(os.Getppid())] = true
 	for _, p := range cfg.ProtectPIDs {
@@ -158,28 +222,56 @@ func (r *Responder) Kill(pid int32, reason string) error {
 			return r.KillProc(&cp, reason)
 		}
 	}
-	return r.decide(&event.Proc{PID: pid}, reason, "identity unknown")
+	return r.decide(&event.Proc{PID: pid}, TargetProcess, "", reason, "identity unknown")
 }
 
 // KillEvent kills the process of e (normally the event that completed an
-// alert). A process whose identity the snapshotter marked unverified
-// (evt.arg[identity]=unverified, seeded from kern.procargs2) is never killed.
-func (r *Responder) KillEvent(e *event.Event, reason string) error {
+// alert). A process whose identity is unverified (seeded at start-up from
+// kern.procargs2: Proc.Seeded or evt.arg[identity]=unverified) is never
+// killed. rule (the rule id) selects the per-rule kill budget.
+func (r *Responder) KillEvent(e *event.Event, rule, reason string) error {
 	if e == nil || e.Proc == nil {
-		return r.decide(&event.Proc{}, reason, "event has no process")
+		return r.decide(&event.Proc{}, TargetProcess, rule, reason, "event has no process")
 	}
-	if e.Args[ps.ArgIdentity] == ps.Unverified {
-		return r.decide(e.Proc, reason, "process identity is unverified (seeded at start from kern.procargs2)")
+	if e.Proc.Seeded || e.Args[ps.ArgIdentity] == ps.Unverified {
+		return r.decide(e.Proc, TargetProcess, rule, reason, "process identity is unverified (seeded at start from kern.procargs2)")
 	}
-	return r.KillProc(e.Proc, reason)
+	return r.decide(e.Proc, TargetProcess, rule, reason, "")
+}
+
+// KillParent kills the parent of e's process (rules with action
+// {name: kill, target: parent}). It refuses when the parent is unknown (not
+// in the process table), was seeded at start-up, or is marked unverified
+// (evt.arg[parent_identity]=unverified). Every other guard rail of KillProc
+// applies to the parent. rule selects the per-rule kill budget.
+func (r *Responder) KillParent(e *event.Event, rule, reason string) error {
+	if e == nil || e.Proc == nil {
+		return r.decide(&event.Proc{}, TargetParent, rule, reason, "event has no process")
+	}
+	par := e.Proc.Parent
+	if par == nil {
+		return r.decide(&event.Proc{PID: e.Proc.PPID}, TargetParent, rule, reason, "parent process is unknown (not in the process table)")
+	}
+	cp := *par
+	if cp.PID == 0 {
+		cp.PID = e.Proc.PPID
+	}
+	if cp.PID != e.Proc.PPID {
+		return r.decide(&cp, TargetParent, rule, reason, fmt.Sprintf("parent pid %d does not match ppid %d", cp.PID, e.Proc.PPID))
+	}
+	if cp.Seeded || e.Args[ps.ArgParentIdentity] == ps.Unverified {
+		return r.decide(&cp, TargetParent, rule, reason, "parent identity is unverified (seeded at start from kern.procargs2)")
+	}
+	return r.decide(&cp, TargetParent, rule, reason, "")
 }
 
 // KillProc kills the process described by p unless a guard rail refuses.
+// It is not tied to a rule: only the global kill budget applies.
 func (r *Responder) KillProc(p *event.Proc, reason string) error {
 	if p == nil {
-		return r.decide(&event.Proc{}, reason, "no process")
+		return r.decide(&event.Proc{}, TargetProcess, "", reason, "no process")
 	}
-	return r.decide(p, reason, "")
+	return r.decide(p, TargetProcess, "", reason, "")
 }
 
 func nameOf(p *event.Proc) string {
@@ -236,16 +328,36 @@ func (r *Responder) protectedReason(p *event.Proc) string {
 	return ""
 }
 
-// verify compares the event's process with what the kernel reports for the
-// pid now: same start time (within StartTolerance) and same executable name.
-// The start time catches pid reuse; the name catches an exec in between.
-func (r *Responder) verify(p *event.Proc) (outcome, detail string, err error) {
+// verify reads the process from the kernel and decides whether pid still
+// is the process of the event and whether its CURRENT image may be killed.
+//
+//   - Identity: the kernel unique id (p_uniqueid, never reused before a
+//     reboot) must equal the one recorded when the process table learned
+//     the process; no recorded id, or one that cannot be read now, refuses
+//     the kill. The start time must also match within StartTolerance (1 ms).
+//   - Protection of the current image: refused when csops says it is an
+//     Apple platform binary, when proc_pidpath names a protected path, or
+//     when either cannot be read (unknown protection: fail closed). An
+//     unlinked image (proc_pidpath ENOENT) is not on a protected path.
+//   - A different path, a renamed, deleted or replaced file is NOT a
+//     refusal (malware must not escape by renaming itself); it is returned
+//     as a note for the decision's detail.
+func (r *Responder) verify(p *event.Proc) (outcome, detail, note string, err error) {
+	if p.UniqueID == 0 {
+		return OutcomeUnknown, "kernel unique id not recorded for this process", "", ErrUnknownProc
+	}
 	if p.StartTime.IsZero() {
-		return OutcomeUnknown, "event has no process start time", ErrUnknownProc
+		return OutcomeUnknown, "event has no process start time", "", ErrUnknownProc
 	}
 	id, ierr := r.cfg.Identify(p.PID)
 	if ierr != nil {
-		return OutcomeUnknown, "cannot read the process from the kernel: " + ierr.Error(), ErrUnknownProc
+		return OutcomeUnknown, "cannot read the process from the kernel: " + ierr.Error(), "", ErrUnknownProc
+	}
+	if !id.UniqueKnown {
+		return OutcomeUnknown, "cannot read the kernel unique id of the process", "", ErrUnknownProc
+	}
+	if id.UniqueID != p.UniqueID {
+		return OutcomeMismatch, fmt.Sprintf("kernel unique id now %d, event %d (another process)", id.UniqueID, p.UniqueID), "", ErrMismatch
 	}
 	d := id.StartTime.Sub(p.StartTime)
 	if d < 0 {
@@ -253,27 +365,73 @@ func (r *Responder) verify(p *event.Proc) (outcome, detail string, err error) {
 	}
 	if id.StartTime.IsZero() || d > StartTolerance {
 		return OutcomeMismatch, fmt.Sprintf("start time now %s, event %s (pid reused)",
-			id.StartTime.UTC().Format(time.RFC3339Nano), p.StartTime.UTC().Format(time.RFC3339Nano)), ErrMismatch
+			id.StartTime.UTC().Format(time.RFC3339Nano), p.StartTime.UTC().Format(time.RFC3339Nano)), "", ErrMismatch
 	}
-	if id.Exe == "" || filepath.Base(id.Exe) != filepath.Base(p.Exe) {
-		return OutcomeMismatch, fmt.Sprintf("executable now %q, event %q", id.Exe, p.Exe), ErrMismatch
+	if !id.CSKnown {
+		return OutcomeUnknown, "cannot read the code-signing status of the current image (csops); protection unknown", "", ErrUnknownProc
 	}
-	if why := protectedExe(id.Exe); why != "" {
-		return OutcomeProtected, why + " (current image)", ErrProtected
+	if id.CSFlags&csPlatformBinary != 0 {
+		return OutcomeProtected, "Apple platform binary (current image)", "", ErrProtected
 	}
-	return "", "", nil
+	var notes []string
+	switch {
+	case errors.Is(id.ExeErr, ErrExeUnlinked):
+		notes = append(notes, "running image was unlinked after exec")
+	case id.ExeErr != nil || id.Exe == "":
+		return OutcomeUnknown, fmt.Sprintf("cannot read the executable path of the current image (%v); protection unknown", id.ExeErr), "", ErrUnknownProc
+	default:
+		if why := protectedExe(id.Exe); why != "" {
+			return OutcomeProtected, why + " (current image)", "", ErrProtected
+		}
+		if id.Exe != p.Exe {
+			notes = append(notes, fmt.Sprintf("executable now %q, event %q", id.Exe, p.Exe))
+		}
+	}
+	if (p.ExeDev != 0 || p.ExeIno != 0) && id.ExeErr == nil {
+		// dev_t is 32 bits on macOS; compare the low 32 bits.
+		if !id.HasFileID || uint32(id.Dev) != uint32(p.ExeDev) || id.Ino != p.ExeIno {
+			notes = append(notes, fmt.Sprintf("file at the path now dev=%d ino=%d (readable=%v), event dev=%d ino=%d",
+				uint32(id.Dev), id.Ino, id.HasFileID, uint32(p.ExeDev), p.ExeIno))
+		}
+	}
+	return "", "", strings.Join(notes, "; "), nil
+}
+
+// pruneWindow drops times older than one minute before now.
+func pruneWindow(ts []time.Time, now time.Time) []time.Time {
+	cut := now.Add(-time.Minute)
+	keep := ts[:0]
+	for _, t := range ts {
+		if t.After(cut) {
+			keep = append(keep, t)
+		}
+	}
+	return keep
 }
 
 // decide applies every guard rail in order and logs the decision. A
 // non-empty unknown means the identity is already known to be unusable.
-func (r *Responder) decide(p *event.Proc, reason, unknown string) error {
+func (r *Responder) decide(p *event.Proc, target, rule, reason, unknown string) error {
+	var notice string
+	defer func() { // after the unlock below
+		if notice != "" && r.cfg.OnDegraded != nil {
+			r.cfg.OnDegraded(CondRateLimited, notice)
+		}
+	}()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := r.cfg.Now()
-	d := Decision{Time: now, PID: p.PID, Name: p.Name, Exe: p.Exe, Reason: reason}
+	d := Decision{Time: now, PID: p.PID, Target: target, Name: p.Name, Exe: p.Exe, Reason: reason}
 	finish := func(outcome, detail string, err error) error {
 		d.Outcome, d.Detail = outcome, detail
 		r.stats[outcome]++
+		if target == TargetParent {
+			r.stats[outcome+" (parent)"]++
+		}
+		if r.repeatRefusal(rule, target, p.PID, outcome, now) {
+			r.stats["log_suppressed"]++
+			return err
+		}
 		r.cfg.Log(d)
 		return err
 	}
@@ -283,30 +441,60 @@ func (r *Responder) decide(p *event.Proc, reason, unknown string) error {
 	if unknown != "" {
 		return finish(OutcomeUnknown, unknown, ErrUnknownProc)
 	}
+	if p.Seeded {
+		return finish(OutcomeUnknown, "process identity is unverified (seeded at start from kern.procargs2)", ErrUnknownProc)
+	}
 	if p.Exe == "" {
 		return finish(OutcomeUnknown, "no executable path to check against the protected list", ErrUnknownProc)
 	}
-	if outcome, detail, err := r.verify(p); err != nil {
+	if p.TeamID != "" && p.CSCategory == "" {
+		return finish(OutcomeSigningUnknown, "signing category unreported; kill disabled (a Team ID without a validation category cannot be told from a forged one)", ErrUnknownProc)
+	}
+	outcome, detail, note, err := r.verify(p)
+	if err != nil {
 		return finish(outcome, detail, err)
 	}
-	// Sliding one-minute window.
-	cut := now.Add(-time.Minute)
-	keep := r.recent[:0]
-	for _, t := range r.recent {
-		if t.After(cut) {
-			keep = append(keep, t)
-		}
+	r.recent = pruneWindow(r.recent, now)
+	ruleTimes := pruneWindow(r.perRule[rule], now)
+	if len(ruleTimes) == 0 {
+		delete(r.perRule, rule)
 	}
-	r.recent = keep
+	if len(ruleTimes) >= r.cfg.MaxPerRulePerMinute {
+		r.perRule[rule] = ruleTimes
+		notice = fmt.Sprintf("kill budget of %d per minute reached for %s", r.cfg.MaxPerRulePerMinute, reason)
+		return finish(OutcomeRateLimited, fmt.Sprintf("%d kills by this rule in the last minute", len(ruleTimes)), ErrRateLimited)
+	}
 	if len(r.recent) >= r.cfg.MaxPerMinute {
-		return finish(OutcomeRateLimited, fmt.Sprintf("%d kills in the last minute", len(r.recent)), ErrRateLimited)
+		r.perRule[rule] = ruleTimes
+		notice = fmt.Sprintf("global kill budget of %d per minute reached (last: %s)", r.cfg.MaxPerMinute, reason)
+		return finish(OutcomeRateLimited, fmt.Sprintf("%d kills in the last minute (all rules)", len(r.recent)), ErrRateLimited)
 	}
 	r.recent = append(r.recent, now)
+	r.perRule[rule] = append(ruleTimes, now)
 	if r.cfg.DryRun {
-		return finish(OutcomeDryRun, "", nil)
+		return finish(OutcomeDryRun, note, nil)
 	}
 	if err := r.cfg.KillFunc(int(p.PID), syscall.SIGKILL); err != nil {
 		return finish(OutcomeError, err.Error(), fmt.Errorf("response: kill %d: %w", p.PID, err))
 	}
-	return finish(OutcomeKilled, "", nil)
+	return finish(OutcomeKilled, note, nil)
+}
+
+// repeatRefusal reports whether a refusal with the same rule, target, pid
+// and outcome was logged less than LogRepeatEvery ago (and records this
+// one otherwise). Kills, dry-runs and errors are always logged. Caller
+// holds mu.
+func (r *Responder) repeatRefusal(rule, target string, pid int32, outcome string, now time.Time) bool {
+	if !strings.HasPrefix(outcome, "refused-") {
+		return false
+	}
+	key := rule + "|" + target + "|" + fmt.Sprint(pid) + "|" + outcome
+	if t, ok := r.logged[key]; ok && now.Sub(t) < LogRepeatEvery && !now.Before(t) {
+		return true
+	}
+	if len(r.logged) >= maxLogKeys {
+		r.logged = map[string]time.Time{}
+	}
+	r.logged[key] = now
+	return false
 }

@@ -13,14 +13,28 @@ match:
         file: {path: /Users/Shared/.cache/update}
       - name: CreateProcess
         proc: {pid: 5404, ppid: 5400, exe: /Users/Shared/.cache/update, name: update, uid: 501, euid: 501, signing_id: update-555549446b2f, is_platform: false, is_signed: false}
+  - desc: forged - Docker's Team ID on a self-signed payload (cs_category local_signing)
+    events:
+      - name: CreateFile
+        proc: {pid: 5420, ppid: 1, exe: /usr/bin/curl, name: curl, uid: 501, euid: 501, signing_id: com.apple.curl, is_platform: true, is_signed: true}
+        file: {path: /private/tmp/com.docker.install-helper}
+      - name: CreateProcess
+        proc: {pid: 5421, ppid: 5420, exe: /private/tmp/com.docker.install-helper, name: com.docker.install-helper, uid: 501, euid: 501, signing_id: com.docker.install-helper, team_id: 9BNSXJN65R, cs_category: local_signing, is_platform: false, is_signed: true}
+  - desc: Docker's Team ID with no reported signing category fails closed
+    events:
+      - name: CreateFile
+        proc: {pid: 5422, ppid: 1, exe: /usr/bin/curl, name: curl, uid: 501, euid: 501, signing_id: com.apple.curl, is_platform: true, is_signed: true}
+        file: {path: /private/tmp/com.docker.install-helper}
+      - name: CreateProcess
+        proc: {pid: 5423, ppid: 5422, exe: /private/tmp/com.docker.install-helper, name: com.docker.install-helper, uid: 501, euid: 501, signing_id: com.docker.install-helper, team_id: 9BNSXJN65R, is_platform: false, is_signed: true}
 nomatch:
   - desc: benign lookalike - Developer ID signed installer helper extracted to /tmp and run
     events:
       - name: CreateFile
-        proc: {pid: 5411, ppid: 1, exe: /Applications/Docker.app/Contents/MacOS/Docker, name: Docker, uid: 501, euid: 501, signing_id: com.docker.docker, team_id: 9BNSXJN65R, is_platform: false, is_signed: true}
+        proc: {pid: 5411, ppid: 1, exe: /Applications/Docker.app/Contents/MacOS/Docker, name: Docker, uid: 501, euid: 501, signing_id: com.docker.docker, team_id: 9BNSXJN65R, cs_category: developer_id, is_platform: false, is_signed: true}
         file: {path: /private/tmp/com.docker.install-helper}
       - name: CreateProcess
-        proc: {pid: 5412, ppid: 5411, exe: /private/tmp/com.docker.install-helper, name: com.docker.install-helper, uid: 0, euid: 0, signing_id: com.docker.install-helper, team_id: 9BNSXJN65R, is_platform: false, is_signed: true}
+        proc: {pid: 5412, ppid: 5411, exe: /private/tmp/com.docker.install-helper, name: com.docker.install-helper, uid: 0, euid: 0, signing_id: com.docker.install-helper, team_id: 9BNSXJN65R, cs_category: developer_id, is_platform: false, is_signed: true}
   - desc: benign lookalike - unsigned dev build run from ~/src (not a temp folder)
     events:
       - name: CreateFile

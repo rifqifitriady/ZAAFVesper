@@ -1,6 +1,6 @@
 # ZAAFVesper built-in rules (macOS)
 
-39 behaviour rules, 5 YARA signatures and one shared macro file. Every rule maps to one
+41 behaviour rules, 5 YARA signatures and one shared macro file. Every rule maps to one
 MITRE ATT&CK technique, has a fixture file with at least one `match` and two `nomatch`
 scenarios (one of them a realistic benign lookalike), and, where Atomic Red Team ships a
 macOS test for the behaviour, lists that test's GUID in `tests.atomic`.
@@ -45,7 +45,7 @@ Seq = sequence rule. Action = response taken only when ZAAFVesper runs with `--e
 | 25 | Keychain secrets dumped with security CLI<br>`rules/credential_access_keychain_dump_via_security.yml` | TA0006 Credential Access | T1555.001 Keychain | high |  |  | `88e1fa00-bf63-4e5b-a3e1-e2ea51c8cca6` |
 | 26 | Keychain database read by file tool or untrusted binary<br>`rules/credential_access_keychain_file_read.yml` | TA0006 Credential Access | T1555.001 Keychain | high |  |  | `5c32102a-c508-49d3-978f-288f8a9f6617` |
 | 27 | Fake password prompt via osascript<br>`rules/credential_access_osascript_password_prompt.yml` | TA0006 Credential Access | T1056.002 GUI Input Capture | high |  |  | `76628574-0bc1-4646-8fe2-8f4427b47d15`<br>`b7037b89-947a-427a-ba29-e7e9f09bc045` |
-| 28 | Fake password prompt via osascript from untrusted origin<br>`rules/credential_access_osascript_password_prompt_untrusted_origin.yml` | TA0006 Credential Access | T1056.002 GUI Input Capture | critical |  | kill | (none indexed for this technique) |
+| 28 | Fake password prompt via osascript from untrusted origin<br>`rules/credential_access_osascript_password_prompt_untrusted_origin.yml` | TA0006 Credential Access | T1056.002 GUI Input Capture | critical |  | kill (parent) | (none indexed for this technique) |
 | 29 | SSH or GnuPG private key read by unusual process<br>`rules/credential_access_ssh_private_key_read.yml` | TA0006 Credential Access | T1552.004 Private Keys | high |  |  | `46959285-906d-40fa-9437-5a439accd878`<br>`864bb0b2-6bb5-489a-b43b-a77b3a16d68a`<br>`2a5a0601-f5fb-4e2e-aa09-73282ae6afca` |
 | 30 | Non-interactive screen capture from script or untrusted parent<br>`rules/collection_noninteractive_screencapture.yml` | TA0009 Collection | T1113 Screen Capture | medium |  |  | `0f47ceb1-720f-4275-96b8-21f0562217ac`<br>`deb7d358-5fbd-4dc4-aecc-ee0054d2d9a4` |
 | 31 | Security software enumeration<br>`rules/discovery_security_software_enumeration.yml` | TA0007 Discovery | T1518.001 Security Software Discovery | low |  |  | `ba62ce11-e820-485f-9c17-6f3c857cd840` |
@@ -57,8 +57,10 @@ Seq = sequence rule. Action = response taken only when ZAAFVesper runs with `--e
 | 37 | XProtect malware detection<br>`rules/threat_xprotect_malware_detection.yml` | TA0002 Execution | T1204.002 Malicious File | critical |  |  | (none indexed for this technique) |
 | 38 | YARA signature match<br>`rules/threat_yara_signature_match.yml` | TA0002 Execution | T1204.002 Malicious File | high |  |  | (none indexed for this technique) |
 | 39 | Download followed by stdin-fed shell<br>`rules/command_and_control_download_then_stdin_shell.yml` | TA0011 Command and Control | T1105 Ingress Tool Transfer | high | yes |  | (none indexed for this technique) |
+| 40 | ZAAFVesper sensor degraded<br>`rules/defense_impairment_sensor_degraded.yml` | TA0112 Defense Impairment | T1685 Disable or Modify Tools | medium |  |  | (none; synthetic event) |
+| 41 | Executable replaced right after exec (YARA scan evasion)<br>`rules/defense_impairment_sensor_exec_replaced.yml` | TA0112 Defense Impairment | T1685 Disable or Modify Tools | high |  |  | (none; synthetic event) |
 
-Totals: 39 rules, 4 sequence rules, 28 rules with at least one macOS atomic indexed under the rule's own technique (59 GUIDs), 1 rule with a kill action.
+Totals: 41 rules, 4 sequence rules, 28 rules with at least one macOS atomic indexed under the rule's own technique (59 GUIDs), 1 rule with a kill action (target: the untrusted parent).
 
 `tests.atomic` lists only GUIDs that `atomics/Indexes/Indexes-CSV/macos-index.csv` files
 under the rule's own technique (or its parent). Atomics filed under another technique that
@@ -103,19 +105,20 @@ sample; none has been run against real malware samples yet.
 Event macros, one per canonical `evt.name`: `spawn_process fork_process exit_process
 open_file create_file write_file rename_file delete_file set_xattr delete_xattr set_mode
 set_owner open_process send_signal ptrace remote_thread add_launch_item load_kext mount
-authenticate sudo modify_tcc xprotect_detect yara_match`.
+authenticate sudo modify_tcc xprotect_detect yara_match sensor_degraded`.
 
 Composite macros: `file_written` (CreateFile or WriteFile), `apple_trusted_process`,
-`apple_package_installer`, `no_developer_identity`, `parent_no_developer_identity`, `apple_developer_tool`, `parent_apple_developer_tool`,
-`parent_from_user_writable`, `ancestor_from_user_writable`, `generic_reader_process`,
+`apple_package_installer`, `verified_team_id`, `parent_verified_team_id`,
+`no_developer_identity`, `parent_no_developer_identity`, `apple_developer_tool`, `parent_apple_developer_tool`,
+`parent_from_user_writable`, `ancestor_from_user_writable`, `ancestor_chain_incomplete`, `reparented`, `generic_reader_process`,
 `spawn_osascript`, `developer_id_signed`,
 `osascript_credential_prompt`, `untrusted_prompt_origin`, `trusted_editor`.
 
 Lists: `shells`, `shell_names`, `script_interpreters`, `script_interpreter_name_globs`,
 `apple_signed_trusted`, `temp_drop_globs`, `user_writable_exe_globs`,
-`file_access_tool_names`, `browser_team_ids`, `apple_browser_signing_prefixes`,
+`file_access_tool_names`, `browser_team_ids`, `vendor_cs_categories`, `apple_browser_signing_prefixes`,
 `security_tool_identifiers`, `security_tool_process_names`, `sensor_self_names`,
-`editor_names`, `logging_service_identifiers`, `logging_config_globs`, `shell_profile_globs`, `shell_history_names`,
+`logging_service_identifiers`, `logging_config_globs`, `shell_profile_globs`, `shell_history_names`,
 `system_log_globs`, `cron_globs`, `sudoers_globs`, `tcc_db_globs`, `browser_secret_globs`.
 
 Path lists carry both `/private/...` (what Endpoint Security reports) and the `/etc`,
@@ -127,37 +130,96 @@ An exclusion may only rest on identity the attacker cannot choose:
 
 - **Apple platform binary**: `ps.is_platform = true`, together with a `signing_id` or a path
   under a SIP-protected directory (`/bin`, `/sbin`, `/usr/bin`, `/usr/sbin`,
-  `/usr/libexec`, `/System`). Macro `apple_trusted_process`.
-- **A specific vendor**: that vendor's Team ID paired with its signing IDs, e.g. VS Code
-  = `UBF8T346G9` + `com.microsoft.VSCode`, Sublime Text = `Z6D26JE4Y4` +
-  `com.sublimetext.4` (`trusted_editor`), browsers by verified Team ID
-  (`browser_team_ids`: Google, Mozilla, Microsoft, Brave).
+  `/usr/libexec`, `/System`). Macro `apple_trusted_process`. Platform trust does not use
+  the signing category.
+- **A specific vendor**: that vendor's Team ID **with a verified signing category**
+  (`ps.cs_category in ('developer_id', 'app_store')`, list `vendor_cs_categories`, macro
+  `verified_team_id`), paired with its signing IDs, e.g. VS Code = `UBF8T346G9` +
+  `com.microsoft.VSCode`, Sublime Text = `Z6D26JE4Y4` + `com.sublimetext.4`
+  (`trusted_editor`), browsers by verified Team ID (`browser_team_ids`: Google, Mozilla,
+  Microsoft, Brave).
 - **Apple's non-platform tools** (Xcode, Command Line Tools, `debugserver`, `clang`):
   these are *not* platform binaries; codesign on this Mac shows them signed with Apple's
-  Team ID `59GAB85EFG`. Macro `apple_developer_tool` binds to that Team ID.
+  Team ID `59GAB85EFG`. Macro `apple_developer_tool` binds to that Team ID and, like every
+  Team ID trust, also requires the verified signing category.
+
+### Signing category (open finding M4)
+
+A self-signed certificate can embed any Team ID, so a Team ID on its own is forgeable.
+Since round 2 every place where a Team ID grants trust or lowers severity also requires
+`cs_category` (Endpoint Security's `cs_validation_category`, macOS 15+) to be
+`developer_id` or `app_store`. Affected: `no_developer_identity`,
+`parent_no_developer_identity`, `apple_developer_tool`, `parent_apple_developer_tool`,
+`developer_id_signed`, `trusted_editor` and the browser rule's Team ID exclusion. A forged
+Team ID reports `local_signing` (or another category) and is treated like unsigned code.
+
+**Fails closed.** On macOS releases where Endpoint Security does not report the category,
+`ps.cs_category` is nil and every Team ID trust above is false: Developer ID apps then
+alert like unsigned code (keychain/task-port/dropped-binary rules, osascript parents),
+launch-item writers stay on the high-severity rules instead of the low companion, and a
+Developer ID parent of an osascript password prompt makes the prompt critical, so with
+`--enable-response` that parent is killed. Expect more alerts there, never fewer. Each
+affected rule has a match fixture for both a `local_signing` forgery and an absent
+category.
+
+### Unknown parent = untrusted (open finding M2)
+
+When a process's parent is not in the process table (evicted under pressure, or never
+seen), every `ps.parent.*` field is nil. Any comparison on a nil field is false, infix
+negations included; only a prefix `not` turns it true. Parent trust is therefore always
+tested positively and negated with a prefix `not`:
+
+- `parent_no_developer_identity` = `not (ps.parent.is_platform = true) and not
+  (parent_verified_team_id)`: TRUE for an absent parent. (The old form
+  `ps.parent.is_platform = false and ...` was false for an absent parent, i.e. it treated
+  the unknown parent as trusted.)
+- `ancestor_chain_incomplete` = `not (ps.ancestors = '/sbin/launchd')`: the chain stops at
+  the first unknown ancestor and pkg/ps never evicts launchd, so an unknown ancestor
+  anywhere removes `/sbin/launchd`. Used by `untrusted_prompt_origin`, so flooding the
+  table to evict the payload behind `sh -c osascript ...` cannot downgrade the critical
+  rule either.
+- Parent-based exclusions written as `not (ps.parent.<trusted test>)` (screen capture,
+  DYLD) already alert on an absent parent; fixtures now prove it.
+
+Effect: an absent parent makes the osascript password prompt critical, makes JXA from
+osascript "suspicious", and satisfies the first step of the profiling burst.
 
 What is **not** trust:
 
 - `signing_id` or `ps.name` on their own: an ad-hoc or self-signed signer picks any
   identifier.
 - `ps.is_signed = true`: the decoder sets it for any valid non-ad-hoc signature, a
-  self-signed certificate included. With an empty Team ID it says nothing about who
-  signed.
-- `ps.team_id != ''` (any Developer ID): Developer IDs are cheap and notarized malware
-  exists. `developer_id_signed` is only used to route such writers to the low-severity
-  rule "Launch item plist written by a Developer ID signed process", never to drop an
-  event.
+  self-signed certificate included.
+- `ps.team_id` without a verified category: see M4 above.
+- `ps.team_id != ''` with a verified category (any Developer ID): Developer IDs are cheap
+  and notarized malware exists. `developer_id_signed` is only used to route such writers to
+  the low-severity rule "Launch item plist written by a Developer ID signed process", never
+  to drop an event.
 - PackageKit / `installd`: it installs any `.pkg`, malicious ones included. It is not an
   exclusion anywhere except for SIP-protected `/System` paths (StartupItems rule).
   `system_installd` (Apple-signed packages only) stays on the trusted list.
 
-"No developer identity" (`no_developer_identity`) = not a platform binary and no Team ID:
-unsigned, ad-hoc, linker-signed and self-signed code alike.
+"No developer identity" (`no_developer_identity`) = not a platform binary and no verified
+Team ID: unsigned, ad-hoc, linker-signed, self-signed, forged Team ID, and (fail closed)
+any Team ID when the category is not reported.
 
-Residual risk: the Team ID comes from the code signature's CodeDirectory. The decoder does
-not report whether the certificate chains to Apple, so a self-signed binary that embeds
-another vendor's Team ID would pass a Team ID pair. Closing this needs an
-"Apple-anchored" signal from the sensor (see requests in the WS C report).
+### Trusted editors (open finding M7, security review F4)
+
+Since round 3 `trusted_editor` (shell start-up file rule) trusts only vendor GUI editors:
+VS Code and Sublime Text by Team ID + signing ID + verified signing category. The Apple
+platform terminal-editor branch is gone, and with it the lists `editor_names` and
+`vim_script_arg_regexes`. Round 2 required a TTY and clean arguments, but the round 3
+review showed that a background payload can run `vim` under a pseudo-terminal
+(`script(1)`) with `VIMINIT` or piped keystrokes: there is a TTY and argv is clean, yet
+nobody is typing. Interactivity cannot be proven from the event, so vi, vim, nano, pico,
+ed and TextEdit are never trusted.
+
+**Known false positive:** editing `~/.zshrc`, `~/.zprofile` etc. by hand in vim or nano
+raises "Shell start-up file modified by non-editor process" (medium). That is by design;
+triage the edit (the alert names the editor, the parent and the file).
+
+Residual: VS Code's Electron binary can run as Node (`ELECTRON_RUN_AS_NODE=1`) under its
+genuine signature; that is not covered.
 
 ## `evt.arg` keys used
 
@@ -173,6 +235,13 @@ except `kext_id`, whose absence makes the kext rule alert:
 | `kext_id` | Third-party kernel extension loaded | bundle identifier, e.g. `com.softraid.driver.SoftRAID` |
 | `open_flag_names` | System or audit logs cleared (truncate branch) | symbolic flags joined by `\|`, containing `O_TRUNC` when set, e.g. `FWRITE\|O_CREAT\|O_TRUNC` |
 | `xp_malware_identifier` | XProtect malware detection (output only) | XProtect signature name |
+| `condition` | ZAAFVesper sensor degraded; Executable replaced right after exec | one of `proctable_pressure`, `alerts_capped`, `capture_capped`, `yara_queue_full`, `yara_exec_replaced`, `yara_skipped_nonlocal` (synthetic `SensorDegraded` event). A missing `condition` still alerts on the medium rule. |
+| `detail` | same (output only) | free text from the sensor; may contain an attacker-chosen path |
+
+Signing category: `ps.cs_category`, `ps.parent.cs_category` (values are the `event.CS*`
+constants: `developer_id`, `app_store`, `local_signing`, `platform`, ...; nil when not
+reported). Ancestry trust: `ps.ancestors_untrusted` (bool, computed by pkg/ps). Fork-time parent: `ps.original_ppid` (password-prompt double-fork check; nil
+when not reported).
 
 Other indexed fields used: `ps.env[DYLD_INSERT_LIBRARIES]` and
 `ps.parent.env[DYLD_INSERT_LIBRARIES]` (needs exec env in the decoder and env kept in the
@@ -223,13 +292,59 @@ process snapshot), `yara.meta[attack]` and `yara.meta[description]` (output only
   Brave are listed. Opera, Vivaldi and Arc reading their own stores alert until their IDs
   are read from a real install; a wrong ID would allow-list another developer.
 - **Kill action**: only "Fake password prompt via osascript from untrusted origin" kills,
-  and only with `--enable-response`. Kill is reactive (ES NOTIFY): the dialog may already
-  be on screen.
+  and only with `--enable-response`. Since round 2 it declares
+  `action: [{name: kill, target: parent}]`: it kills the untrusted parent that launched the
+  prompt, because osascript is an Apple platform binary and the response layer always
+  refuses to kill those (so the old `kill` of osascript never fired). Kill is reactive (ES
+  NOTIFY): the dialog may already be on screen. Limits: when the payload ran the prompt
+  through `system()`/`popen()`, the parent is a platform `/bin/sh` and is refused, so
+  nothing is killed; when the parent is unknown there is nothing to kill. Killing the
+  first untrusted *ancestor* would need a new target kind in the response layer. On
+  macOS without a reported signing category a Developer ID parent counts as untrusted
+  and can be killed (see "Fails closed" above).
+- **Password prompt, incomplete ancestor chain**: the chain is bounded at 16 entries, so a
+  prompt from a chain deeper than 16 processes, or from a process whose ancestor exited
+  and was dropped from the table, is treated as untrusted (critical). Replaying a capture
+  without launchd in the table would make every password prompt critical.
+- **Password prompt, double fork (security review F3)**: a payload can fork a child, exit,
+  and let the child (now reparented to launchd: ppid 1, parent `/sbin/launchd`, ancestors
+  `[/sbin/launchd]`) exec the prompt, so the chain looks complete and trusted. Macro
+  `reparented` (`ps.ppid = 1 and ps.original_ppid != 1`, from `es_process_t.original_ppid`)
+  makes that an untrusted origin, so the critical rule fires and the high rule does not.
+  The kill target is then the parent, launchd, which is protected: **a double-forked
+  prompt is alert-only.** A prompt that launchd starts directly (a LaunchAgent,
+  `original_ppid` 1) is unchanged. When the source does not report `original_ppid` the
+  field is nil and a reparented prompt is NOT detected as reparented (it stays on the high
+  rule); the decoder must fill it for this to work.
+- **Password prompt, untrusted ancestor (security review New-2)**: path globs miss payloads
+  in user- or admin-writable places outside `user_writable_exe_globs` (`~/Documents`,
+  `/Applications/X.app`, `/opt/homebrew/bin`) that run the prompt through a platform shell
+  (`sh -c "osascript ..."`). `untrusted_prompt_origin` now also fires on
+  `ps.ancestors_untrusted = true`. That field is computed by pkg/ps, not by the rules: true
+  when any ancestor up to launchd is neither a platform binary nor a verified vendor
+  identity (Team ID + Developer ID / App Store category), or the chain is incomplete. The
+  rule is only as good as that computation. Replayed raw eslogger captures get it from the
+  process table built during replay (so a replay must see the ancestors' exec events or
+  bootstrap data); fixtures set it by hand as pkg/ps would. The path and parent conditions
+  stay as additional signals. A Developer ID ancestor without a reported category makes
+  this true (fails closed). The launchd-parented prompt residual (F3) is left to the owner.
+- **Sensor degraded** (medium) and **Executable replaced right after exec** (high) alert
+  on ZAAFVesper's own synthetic `SensorDegraded` events. Components limit their reports
+  per (condition, pid or path); the pipeline allows each condition 20 events a minute
+  (120 in total), never limits `es_events_dropped`, and summarises anything it held back
+  in one `degraded_suppressed` event a minute. Large builds (process-table pressure), a burst of genuine
+  alerts (alerts capped) and executables on network shares (`yara_skipped_nonlocal`) are
+  common benign causes; an updater replacing a running binary is the benign cause of
+  `yara_exec_replaced`. ATT&CK T1685 (Disable or Modify Tools, which includes degrading
+  sensors and blocking telemetry) is the adversarial hypothesis, not a verdict.
 
 ## How the fixtures were checked
 
-- `zaafvesper rules validate --rules rules`: 39 rules, 4 sequences, 62 macros/lists, 0 warnings.
-- `zaafvesper rules test --rules rules`: 194 scenarios, 194 passed, 0 failed.
+- `zaafvesper rules validate --rules rules`: 41 rules, 4 sequences, 67 macros/lists, 0 warnings
+  (round 3, 8 Nov 2026).
+- `zaafvesper rules test --rules rules`: 261 scenarios, 261 passed, 0 failed (194 before
+  round 2, 250 after round 2, 253 after round 3). Includes the security reviewer's SEC-R3
+  (double fork, script(1)+vim) and three SEC-R4 (untrusted ancestor) fixtures.
 - Every `technique.id`/`tactic.id` re-checked against `enterprise-attack.json`; every
   `tests.atomic` GUID is indexed under the rule's technique (or its parent).
 - Each identity-based exclusion has a "forged" match scenario: a signing ID claimed under a
@@ -237,7 +352,50 @@ process snapshot), `yara.meta[attack]` and `yara.meta[description]` (output only
   (debugserver, Sublime, the password-prompt parent) still fires.
 - Before the engine built, a throwaway reference evaluator (scratch only) was used;
   mutation tests confirmed the nomatch scenarios exercise the exclusions.
+- Round 2 mutation tests (scratch copy): dropping the signing-category requirement (on the
+  process, on the parent, in the browser rule, on Xcode's parent), restoring the old
+  `ps.parent.is_platform = false` form, dropping the ancestor-chain check, the TTY check,
+  the arguments-known check or the vim script-argument check each made the matching new
+  fixtures fail. Round 3: dropping `reparented` from `untrusted_prompt_origin` makes the
+  SEC-R3 double-fork match and its high-rule nomatch fail. Round 4: dropping
+  `ps.ancestors_untrusted = true` makes the three SEC-R4 matches and their high-rule
+  nomatches fail.
 
 Fixtures are synthetic events written to mirror what each cited atomic does (as eslogger
 would report it). They prove the rule logic, not the decoder: a real capture is still needed
 to confirm field population (`ps.env`, `evt.arg[...]`, `/private` path forms).
+
+## Round 2 changes (8 Nov 2026)
+
+Rules whose behaviour changed were bumped to 1.1.0:
+`credential_access_osascript_password_prompt_untrusted_origin` (kill target parent,
+unknown parent and incomplete ancestor chain = untrusted, verified category),
+`credential_access_osascript_password_prompt` (complement of the above),
+`credential_access_browser_credential_store_read`, `credential_access_keychain_file_read`,
+`stealth_task_port_access_by_untrusted_binary`,
+`execution_untrusted_binary_dropped_and_run_from_temp`, `stealth_dyld_insert_libraries`,
+`persistence_launch_agent_plist`, `persistence_launch_daemon_plist`,
+`persistence_launch_item_plist_by_developer_id` (verified signing category),
+`execution_suspicious_osascript`, `discovery_system_profiling_burst` (unknown parent and
+verified category on the parent), `persistence_shell_profile_modification` (verified
+category, interactive non-scripted editors only). New: rules 40 and 41 (sensor health).
+`collection_noninteractive_screencapture` is unchanged; it gained an unknown-parent match
+fixture.
+
+## Round 3 changes (8 Nov 2026)
+
+Bumped to 1.2.0: `credential_access_osascript_password_prompt_untrusted_origin` and
+`credential_access_osascript_password_prompt` (macro `reparented`: a prompt reparented to
+launchd by a double fork is an untrusted origin; alert-only, because the kill target is
+launchd), `persistence_shell_profile_modification` (no platform terminal-editor
+exemption; vim/nano/ed/TextEdit writes alert). Removed lists `editor_names` and
+`vim_script_arg_regexes`; the four round-2 vim argument/TTY fixtures were dropped and the
+former vim/nano benign lookalikes are now match scenarios.
+
+## Round 4 changes (8 Nov 2026)
+
+Bumped to 1.3.0: `credential_access_osascript_password_prompt_untrusted_origin` and its
+exact complement `credential_access_osascript_password_prompt`: `untrusted_prompt_origin`
+also includes `ps.ancestors_untrusted = true`. Fixtures: the reviewer's three SEC-R4
+scenarios (critical match / high nomatch) and a Terminal -> login -> zsh -> osascript
+prompt with every ancestor trusted (high match / critical nomatch).

@@ -11,11 +11,23 @@ match:
     events:
       - name: CreateProcess
         proc: {pid: 3803, ppid: 3804, exe: /Applications/Safari.app/Contents/MacOS/Safari, name: Safari, uid: 501, euid: 501, signing_id: com.apple.Safari, is_platform: true, is_signed: true, env: {DYLD_INSERT_LIBRARIES: /Users/Shared/libhook.dylib}, parent: {pid: 3804, ppid: 1, exe: /Users/Shared/debugserver, name: debugserver, signing_id: com.apple.debugserver, is_platform: false, is_signed: true}}
+  - desc: forged - Apple's Team ID 59GAB85EFG on a self-signed debugserver (cs_category local_signing)
+    events:
+      - name: CreateProcess
+        proc: {pid: 3821, ppid: 3820, exe: /Users/rifqi/Library/Developer/Xcode/DerivedData/App/Build/Products/Debug/App.app/Contents/MacOS/App, name: App, uid: 501, euid: 501, signing_id: com.rifqi.App, is_platform: false, is_signed: false, env: {DYLD_INSERT_LIBRARIES: /Users/Shared/libhook.dylib}, parent: {pid: 3820, ppid: 3819, exe: /Applications/Xcode.app/Contents/SharedFrameworks/LLDB.framework/Versions/A/Resources/debugserver, name: debugserver, signing_id: com.apple.debugserver, team_id: 59GAB85EFG, is_platform: false, is_signed: true, cs_category: local_signing}}
+  - desc: Apple's Team ID with no reported signing category fails closed
+    events:
+      - name: CreateProcess
+        proc: {pid: 3822, ppid: 3820, exe: /Users/rifqi/Library/Developer/Xcode/DerivedData/App/Build/Products/Debug/App.app/Contents/MacOS/App, name: App, uid: 501, euid: 501, signing_id: com.rifqi.App, is_platform: false, is_signed: false, env: {DYLD_INSERT_LIBRARIES: /Users/Shared/libhook.dylib}, parent: {pid: 3820, ppid: 3819, exe: /Applications/Xcode.app/Contents/SharedFrameworks/LLDB.framework/Versions/A/Resources/debugserver, name: debugserver, signing_id: com.apple.debugserver, team_id: 59GAB85EFG, is_platform: false, is_signed: true}}
+  - desc: unknown parent (not in the process table) is never excluded
+    events:
+      - name: CreateProcess
+        proc: {pid: 3823, ppid: 3819, exe: /Users/rifqi/Library/Developer/Xcode/DerivedData/App/Build/Products/Debug/App.app/Contents/MacOS/App, name: App, uid: 501, euid: 501, signing_id: com.rifqi.App, is_platform: false, is_signed: false, env: {DYLD_INSERT_LIBRARIES: /Users/Shared/libhook.dylib}}
 nomatch:
   - desc: benign lookalike - Xcode's debugserver (Apple Team ID 59GAB85EFG) launches a build with the Main Thread Checker
     events:
       - name: CreateProcess
-        proc: {pid: 3811, ppid: 3810, exe: /Users/rifqi/Library/Developer/Xcode/DerivedData/App/Build/Products/Debug/App.app/Contents/MacOS/App, name: App, uid: 501, euid: 501, signing_id: com.rifqi.App, is_platform: false, is_signed: false, env: {DYLD_INSERT_LIBRARIES: /Applications/Xcode.app/Contents/Developer/usr/lib/libMainThreadChecker.dylib}, parent: {pid: 3810, ppid: 3809, exe: /Applications/Xcode.app/Contents/SharedFrameworks/LLDB.framework/Versions/A/Resources/debugserver, name: debugserver, signing_id: com.apple.debugserver, team_id: 59GAB85EFG, is_platform: false, is_signed: true}}
+        proc: {pid: 3811, ppid: 3810, exe: /Users/rifqi/Library/Developer/Xcode/DerivedData/App/Build/Products/Debug/App.app/Contents/MacOS/App, name: App, uid: 501, euid: 501, signing_id: com.rifqi.App, is_platform: false, is_signed: false, env: {DYLD_INSERT_LIBRARIES: /Applications/Xcode.app/Contents/Developer/usr/lib/libMainThreadChecker.dylib}, parent: {pid: 3810, ppid: 3809, exe: /Applications/Xcode.app/Contents/SharedFrameworks/LLDB.framework/Versions/A/Resources/debugserver, name: debugserver, signing_id: com.apple.debugserver, team_id: 59GAB85EFG, cs_category: app_store, is_platform: false, is_signed: true}}
   - desc: benign lookalike - helper inherits the variable from its already-injected parent
     events:
       - name: CreateProcess

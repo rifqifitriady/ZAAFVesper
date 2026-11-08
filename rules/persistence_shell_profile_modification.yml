@@ -1,11 +1,16 @@
 name: Shell start-up file modified by non-editor process
 id: 43c54c4b-3ed8-4c6c-a0d6-eb507bf0170f
-version: 1.0.0
+version: 1.2.0
 description: |
   A shell start-up file (~/.zshrc, ~/.bash_profile, /etc/zprofile, ...) was written or
   replaced by something other than a trusted text editor. Code appended there runs in
   every new shell. Droppers typically append with a shell redirect, a script interpreter
-  or their own binary.
+  or their own binary. The only trusted editors are VS Code and Sublime Text, identified by
+  Team ID, signing ID and a verified Developer ID / App Store signing category. Apple
+  terminal editors (vi, vim, nano, ed) and TextEdit are not trusted: a payload can drive
+  vim through a pseudo-terminal (script(1)) with VIMINIT or piped keystrokes, so a TTY
+  proves nothing.
+  Known benign: editing ~/.zshrc by hand in vim or nano alerts (medium) by design.
   Known benign: following an installer's instruction such as
   `echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile`, conda/nvm/rustup
   init. These are indistinguishable from the atomic by telemetry; triage the content.

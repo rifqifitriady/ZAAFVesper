@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  ZAAFVesper LaunchDaemon. Installed by the package from `make package` to
+  /Library/LaunchDaemons/com.rifqifitriady.zaafvesper.plist (root:wheel 0644).
+  Runs as root with a root real uid, outside any terminal session, restarted
+  by launchd if it exits. Grant Full Disk Access to /usr/local/sbin/zaafvesper.
+  The kill response stays off: add the string enable-response with two
+  leading dashes to ProgramArguments only after a dry-run review.
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.rifqifitriady.zaafvesper</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/sbin/zaafvesper</string>
+		<string>run</string>
+		<string>--config</string>
+		<string>/usr/local/etc/zaafvesper/zaafvesper.yml</string>
+		<string>--rules</string>
+		<string>/usr/local/etc/zaafvesper/rules</string>
+		<string>--output-dir</string>
+		<string>/var/log/zaafvesper</string>
+		<string>--no-console</string>
+		<string>--no-color</string>
+	</array>
+	<key>UserName</key>
+	<string>root</string>
+	<key>GroupName</key>
+	<string>wheel</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+	<key>ProcessType</key>
+	<string>Standard</string>
+	<key>WorkingDirectory</key>
+	<string>/</string>
+	<key>Umask</key>
+	<integer>63</integer>
+	<key>StandardOutPath</key>
+	<string>/var/log/zaafvesper/stdout.log</string>
+	<key>StandardErrorPath</key>
+	<string>/var/log/zaafvesper/zaafvesper.log</string>
+</dict>
+</plist>

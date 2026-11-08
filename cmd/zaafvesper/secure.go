@@ -10,7 +10,8 @@ import (
 	"github.com/rifqifitriady/ZAAFVesper/pkg/yara"
 )
 
-const installHint = "install with 'sudo make install' (binary in /usr/local/sbin, rules and config in /usr/local/etc/zaafvesper)"
+const installHint = "build the package as your normal user with 'make package' and install it with " +
+	"'sudo /usr/sbin/installer -pkg dist/ZAAFVesper-<version>.pkg -target /' (binary in /usr/local/sbin, rules and config in /usr/local/etc/zaafvesper)"
 
 // checkExecutable refuses to run as root from a binary that a non-root user
 // could replace: the resolved executable and every directory up to / must

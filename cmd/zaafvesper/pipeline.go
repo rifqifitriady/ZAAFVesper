@@ -6,6 +6,8 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/alert"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/capture"
@@ -17,7 +19,8 @@ import (
 )
 
 // pipeline is the single-goroutine event path shared by run and replay:
-// enrich -> capture -> exclusions -> YARA submit -> rules -> sinks/response.
+// enrich -> capture -> exclusions -> YARA submit -> rules -> sinks/response,
+// then any SensorDegraded events raised meanwhile.
 type pipeline struct {
 	enricher  source.Enricher    // nil: events are already enriched
 	excl      *config.Exclusions // nil: no exclusions
@@ -28,8 +31,10 @@ type pipeline struct {
 	responder *response.Responder // nil: response off (always nil in replay)
 	dedup     *alert.Deduper      // nil: every alert is delivered
 	errw      io.Writer
+	deg       degradedState // SensorDegraded reports (see degraded.go)
 
 	events, excluded, alerts, suppressed, sinkErrs, captureErrs, submitted uint64
+	fallbackLines                                                          uint64
 	captureStopped                                                         bool
 }
 
@@ -49,6 +54,7 @@ func (p *pipeline) handle(e *event.Event, fromScanner bool) {
 			if errors.Is(err, capture.ErrLimit) {
 				p.captureStopped = true
 				say(p.errw, "capture: size limit reached after %d bytes (uncompressed); capture stopped, sensor keeps running", p.capture.Bytes())
+				p.degraded(condCaptureCapped, fmt.Sprintf("capture reached its cap of %d uncompressed bytes; later events are not captured", p.capture.Bytes()))
 			} else {
 				p.captureErrs++
 				if p.captureErrs == 1 {
@@ -56,6 +62,14 @@ func (p *pipeline) handle(e *event.Event, fromScanner bool) {
 				}
 			}
 		}
+	}
+	defer p.drainDegraded()
+	// Mount events invalidate the YARA scanner's non-local mount cache. They
+	// go to the scanner before the exclusions, so a configured exclusion
+	// cannot keep a stale "local" verdict for a newly mounted path.
+	if p.scanner != nil && !fromScanner && e.Name == event.Mount {
+		p.scanner.Submit(e)
+		p.submitted++
 	}
 	if _, drop := p.excl.Match(e); drop {
 		p.excluded++
@@ -66,39 +80,91 @@ func (p *pipeline) handle(e *event.Event, fromScanner bool) {
 		p.submitted++
 	}
 	for _, a := range p.engine.Process(e) {
-		if p.dedup != nil && !p.dedup.Allow(a) {
-			p.suppressed++ // same rule, same pid, inside the window: no alert, no response
-			continue
-		}
-		p.alerts++
-		for _, s := range p.sinks {
-			if err := s.Send(a); err != nil {
-				p.sinkErrs++
-				if p.sinkErrs == 1 {
-					say(p.errw, "alert sink: %v", err)
+		// Deduplication only quiets the output: the response decision is
+		// taken for every alert, repeat or not. SensorDegraded events are
+		// already rate-limited per condition and all carry ZAAFVesper's own
+		// pid, so they are never deduplicated.
+		if p.dedup != nil && e.Name != event.SensorDegraded && !p.dedup.Allow(a) {
+			p.suppressed++ // same rule, same process, inside the window
+		} else {
+			p.alerts++
+			for _, s := range p.sinks {
+				if err := s.Send(a); err != nil {
+					p.sinkErrs++
+					if p.sinkErrs == 1 {
+						say(p.errw, "alert sink: %v", err)
+					}
 				}
 			}
+			p.fallbackAlert(a)
 		}
 		p.respond(a)
 	}
 }
 
-// respond kills the process of the completing event when response is on and
-// the rule asks for it. Guard rails live in pkg/response.
+// maxFallbackLine bounds the stderr line written for a high or critical
+// alert while an alert file is not being written.
+const maxFallbackLine = 1024
+
+// fallbackAlert writes a high or critical alert as one sanitized, bounded
+// stderr line while any JSONL sink is stopped (cap or budget reached), so
+// those alerts still reach the daemon's log.
+func (p *pipeline) fallbackAlert(a *rules.Alert) {
+	if !alert.HighOrCritical(a) {
+		return
+	}
+	stopped := false
+	for _, s := range p.sinks {
+		j, ok := s.(*alert.JSONL)
+		if f, isF := s.(*alert.Filtered); isF {
+			j, ok = f.Sink.(*alert.JSONL)
+		}
+		if ok && j.Stopped() {
+			stopped = true
+			break
+		}
+	}
+	if !stopped {
+		return
+	}
+	// Identity first, attacker-influenced output last: only the output can
+	// be cut by the length bound.
+	line := fmt.Sprintf("alert not in alert file: %s %s rule=%s", a.Time.UTC().Format(time.RFC3339),
+		strings.ToUpper(a.Severity), a.RuleID)
+	if e := a.Last(); e != nil && e.Proc != nil {
+		line += fmt.Sprintf(" pid=%d exe=%q", e.Proc.PID, e.Proc.Exe)
+	}
+	line += fmt.Sprintf(" %s: %s", a.RuleName, a.Output)
+	line = alert.Sanitize(line)
+	if len(line) > maxFallbackLine {
+		cut := maxFallbackLine
+		for cut > 0 && !utf8.RuneStart(line[cut]) {
+			cut--
+		}
+		line = line[:cut] + "...[truncated]"
+	}
+	p.fallbackLines++
+	_, _ = io.WriteString(p.errw, line+"\n")
+}
+
+// respond applies the rule's kill actions when response is on: the process
+// of the completing event (target process) or its parent (target parent).
+// Guard rails live in pkg/response.
 func (p *pipeline) respond(a *rules.Alert) {
 	if p.responder == nil {
 		return
 	}
-	wantKill := false
-	for _, act := range a.Actions {
-		if act == rules.ActionKill {
-			wantKill = true
+	for _, act := range a.Response {
+		if act.Name != rules.ActionKill {
+			continue
+		}
+		reason := "rule " + a.RuleName + " (" + a.RuleID + ")"
+		if act.KillTarget() == rules.TargetParent {
+			_ = p.responder.KillParent(a.Last(), a.RuleID, reason)
+		} else {
+			_ = p.responder.KillEvent(a.Last(), a.RuleID, reason)
 		}
 	}
-	if !wantKill {
-		return
-	}
-	_ = p.responder.KillEvent(a.Last(), "rule "+a.RuleName+" ("+a.RuleID+")")
 }
 
 // printStats writes the end-of-run counters (sanitized, one group per line).
@@ -111,6 +177,12 @@ func (p *pipeline) printStats(w io.Writer, extra map[string]map[string]uint64) {
 	}
 	if p.dedup != nil {
 		printCounter(w, "suppressed duplicates by rule", p.dedup.Suppressed())
+	}
+	printCounter(w, "sensor degraded", p.deg.stats())
+	for _, s := range p.sinks {
+		if j, ok := s.(*alert.JSONL); ok {
+			printCounter(w, "alert file", j.Stats())
+		}
 	}
 	for _, s := range p.sinks {
 		if as, ok := s.(*alert.Async); ok && as.Dropped() > 0 {
@@ -129,6 +201,21 @@ func (p *pipeline) printStats(w io.Writer, extra map[string]map[string]uint64) {
 	sort.Strings(keys)
 	for _, k := range keys {
 		printCounter(w, k, extra[k])
+	}
+}
+
+// periodicStats prints the counters a long-running daemon needs before
+// shutdown: degraded reports (including what the limits suppressed),
+// alert-file and response counters. run calls it every statsEvery.
+func (p *pipeline) periodicStats(w io.Writer) {
+	printCounter(w, "sensor degraded", p.deg.stats())
+	for _, s := range p.sinks {
+		if j, ok := s.(*alert.JSONL); ok {
+			printCounter(w, "alert file", j.Stats())
+		}
+	}
+	if p.responder != nil {
+		printCounter(w, "response", p.responder.Stats())
 	}
 }
 

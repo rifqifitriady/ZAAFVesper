@@ -1,6 +1,10 @@
 package eslogger
 
-import "strconv"
+import (
+	"strconv"
+
+	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
+)
 
 // Enum renderings. Values follow the declaration order in ESTypes.h of the
 // macOS 26 SDK. Unknown values render as their decimal number so a rule can
@@ -31,6 +35,18 @@ var tccReasons = []string{ // es_tcc_authorization_reason_t
 	"service_override_policy", "missing_usage_string", "prompt_timeout", "preflight_unknown",
 	"entitled", "app_type_policy", "prompt_cancel",
 }
+
+// csCategories is es_cs_validation_category_t (ESTypes.h, macOS 26 SDK:
+// INVALID=0 … NONE=10), rendered as the event.CS* constants.
+var csCategories = []string{
+	event.CSInvalid, event.CSPlatform, event.CSTestFlight, event.CSDevelopment,
+	event.CSAppStore, event.CSEnterprise, event.CSDeveloperID, event.CSLocalSigning,
+	event.CSRosetta, event.CSOOPJIT, event.CSNone,
+}
+
+// csCategoryMinVersion is the first es_message_t version that carries
+// es_process_t.cs_validation_category.
+const csCategoryMinVersion = 10
 
 func enumName(names []string, v int64) string {
 	if v >= 0 && v < int64(len(names)) && names[v] != "" {

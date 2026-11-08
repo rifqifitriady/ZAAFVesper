@@ -1,9 +1,9 @@
 name: System profiling burst from a script
 id: 17f0b0d5-b863-4678-971f-3192df4bbe2f
-version: 1.0.0
+version: 1.1.0
 description: |
-  Sequence: system_profiler is started by a shell, script interpreter, osascript or an
-  untrusted binary, and within one minute the same parent runs another host-profiling
+  Sequence: system_profiler is started by a shell, script interpreter, osascript, an
+  untrusted binary or an unknown parent (not in the process table), and within one minute the same parent runs another host-profiling
   tool (sw_vers, sysctl, ioreg, csrutil, uname) or lists /Applications. Stealers
   (AMOS, Cuckoo) and sandbox-evasion checks fingerprint the host this way before deciding
   what to steal. Apps that call system_profiler from their own signed binary do not

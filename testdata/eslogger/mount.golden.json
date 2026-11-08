@@ -7,6 +7,7 @@
     "proc": {
       "pid": 5700,
       "ppid": 1,
+      "original_ppid": 1,
       "pidversion": 5701,
       "uuid": 24481313592901,
       "exe": "/usr/libexec/diskimagesiod",
@@ -17,6 +18,10 @@
       "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
       "is_platform": true,
       "is_signed": true,
+      "cs_category": "platform",
+      "exe_dev": 16777234,
+      "exe_ino": 1152921500312345678,
+      "exe_ctime_ns": 1794034800000000000,
       "start_time": "2026-11-07T07:59:59.5Z",
       "parent": {
         "pid": 1,

@@ -1,14 +1,15 @@
 name: Task port, ptrace or remote thread from untrusted binary
 id: f51f0c9f-b480-4a21-991f-2d1a2eec7576
-version: 1.0.0
+version: 1.1.0
 description: |
-  A process without a developer identity (unsigned, ad-hoc or self-signed: no Team ID,
-  not an Apple platform binary) obtained another process's task port (task_for_pid / get_task) or
+  A process without a verified developer identity (not an Apple platform binary and no
+  Team ID with a Developer ID or App Store signing category: unsigned, ad-hoc,
+  self-signed, a forged Team ID, or any Team ID when the category is not reported) obtained another process's task port (task_for_pid / get_task) or
   attached with ptrace, or any non-platform process created a thread in another process.
   These are the primitives for code injection and memory reading on macOS. Debuggers are
   Apple platform binaries (lldb) or carry Apple's Team ID 59GAB85EFG (Xcode/CLT
-  debugserver), and commercial tools that need task ports carry a Team ID, so neither
-  matches the task-port branch.
+  debugserver, App Store category), and commercial tools that need task ports carry a
+  Developer ID, so neither matches the task-port branch.
   Known benign: a developer's own ad-hoc built tool that inspects other processes.
 labels:
   tactic.id: TA0005

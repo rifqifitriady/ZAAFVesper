@@ -100,6 +100,7 @@ func TestLoadDirValidation(t *testing.T) {
 		{"technique", goodRule + "labels: {technique.id: T15.1}\n", "T1234"},
 		{"tactic", goodRule + "labels: {tactic.id: T0003}\n", "TA1234"},
 		{"action", goodRule + "action: [{name: suspend}]\n", "not supported"},
+		{"action target", goodRule + "action: [{name: kill, target: grandparent}]\n", `target "grandparent" must be`},
 		{"atomic", goodRule + "tests: {atomic: [xyz]}\n", "not a GUID"},
 		{"unknown key", goodRule + "severty: low\n", "severty"},
 		{"unknown field", strings.Replace(goodRule, "evt.name = 'CreateProcess'", "ps.nope = 1", 1), `rule "R": condition: line 1 col 1: unknown field`},
@@ -117,6 +118,34 @@ func TestLoadDirValidation(t *testing.T) {
 				t.Fatalf("error %v does not contain %q", err, c.want)
 			}
 		})
+	}
+}
+
+func TestActionTargets(t *testing.T) {
+	for _, c := range []struct{ target, display, kill string }{
+		{"", "kill", TargetProcess},
+		{"process", "kill", TargetProcess},
+		{"parent", "kill:parent", TargetParent},
+	} {
+		rule := goodRule + "action: [{name: kill, target: " + c.target + "}]\n"
+		if c.target == "" {
+			rule = goodRule + "action: [{name: kill}]\n"
+		}
+		rs, err := LoadDir(writeRules(t, map[string]string{"r.yml": rule}))
+		if err != nil {
+			t.Fatalf("target %q: %v", c.target, err)
+		}
+		r := rs.Rules[0]
+		if got := r.Actions(); !reflect.DeepEqual(got, []string{c.display}) {
+			t.Fatalf("target %q: Actions = %v", c.target, got)
+		}
+		if got := r.Action[0].KillTarget(); got != c.kill {
+			t.Fatalf("target %q: KillTarget = %q", c.target, got)
+		}
+		al := NewEngine(rs, Options{}).Process(&event.Event{Name: event.CreateProcess, Proc: &event.Proc{PID: 3, Exe: "/x"}})
+		if len(al) != 1 || len(al[0].Response) != 1 || al[0].Response[0].KillTarget() != c.kill {
+			t.Fatalf("target %q: alert response = %+v", c.target, al)
+		}
 	}
 }
 

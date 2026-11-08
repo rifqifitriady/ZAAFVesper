@@ -1,12 +1,12 @@
 name: Launch Daemon persistence via plist write
 id: 3bbbda85-d32e-4ae9-b6b9-86f0a980a562
-version: 1.0.0
+version: 1.1.0
 description: |
   A property list was created, modified or renamed into /Library/LaunchDaemons. Daemons
   run as root at boot, so a new one means root-level persistence. Apple's launchd/BTM
-  daemons are excluded by platform identity; Developer ID signed writers go to the
-  low-severity companion rule "Launch item plist written by a Developer ID signed
-  process". PackageKit is not excluded: it installs any .pkg, malicious ones included.
+  daemons are excluded by platform identity; writers with a verified Developer ID / App
+  Store Team ID go to the low-severity companion rule "Launch item plist written by a Developer ID signed
+  process" (a forged or unverified Team ID stays here). PackageKit is not excluded: it installs any .pkg, malicious ones included.
   Known benign: legitimate .pkg installers that ship a daemon (payload written by
   PackageKit, or a postinstall script that `cp`s the plist); review the package.
 labels:

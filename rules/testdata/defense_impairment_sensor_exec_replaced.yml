@@ -1,0 +1,18 @@
+match:
+  - desc: payload renames a benign file over its own executable right after exec
+    events:
+      - name: SensorDegraded
+        args: {condition: yara_exec_replaced, detail: "/private/tmp/update: dev/ino 16777230/88231 at exec, 16777230/88240 at scan"}
+nomatch:
+  - desc: benign lookalike - process-table pressure is the medium-severity rule
+    events:
+      - name: SensorDegraded
+        args: {condition: proctable_pressure, detail: "process table over budget"}
+  - desc: YARA scan skipped on a network share is not a replacement
+    events:
+      - name: SensorDegraded
+        args: {condition: yara_skipped_nonlocal, detail: "/Volumes/share/tool is on smbfs, not scanned"}
+  - desc: degraded event without a condition is not a replacement
+    events:
+      - name: SensorDegraded
+        args: {detail: "unknown"}

@@ -7,6 +7,7 @@
     "proc": {
       "pid": 4800,
       "ppid": 4100,
+      "original_ppid": 4100,
       "pidversion": 4801,
       "uuid": 20615843025601,
       "exe": "/bin/mv",
@@ -17,6 +18,10 @@
       "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
       "is_platform": true,
       "is_signed": true,
+      "cs_category": "platform",
+      "exe_dev": 16777234,
+      "exe_ino": 1152921500312345678,
+      "exe_ctime_ns": 1794034800000000000,
       "start_time": "2026-11-07T07:59:59.5Z",
       "parent": {
         "pid": 4100,
@@ -36,7 +41,10 @@
       "path": "/private/tmp/x.plist",
       "dest": "/Users/alice/Library/LaunchAgents/com.evil.plist",
       "mode": 33188,
-      "size": 600
+      "size": 600,
+      "dev": 16777234,
+      "ino": 1152921500312345678,
+      "ctime_ns": 1794034800000000000
     }
   },
   {
@@ -47,6 +55,7 @@
     "proc": {
       "pid": 4800,
       "ppid": 4100,
+      "original_ppid": 4100,
       "pidversion": 4801,
       "uuid": 20615843025601,
       "exe": "/bin/mv",
@@ -57,6 +66,10 @@
       "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
       "is_platform": true,
       "is_signed": true,
+      "cs_category": "platform",
+      "exe_dev": 16777234,
+      "exe_ino": 1152921500312345678,
+      "exe_ctime_ns": 1794034800000000000,
       "start_time": "2026-11-07T07:59:59.5Z",
       "parent": {
         "pid": 4100,
@@ -76,7 +89,10 @@
       "path": "/Users/alice/a.txt",
       "dest": "/Users/alice/b.txt",
       "mode": 33188,
-      "size": 6
+      "size": 6,
+      "dev": 16777234,
+      "ino": 1152921500312345678,
+      "ctime_ns": 1794034800000000000
     }
   }
 ]

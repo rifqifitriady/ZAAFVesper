@@ -16,7 +16,13 @@ type Alert struct {
 	Labels   map[string]string `json:"labels,omitempty"`
 	Time     time.Time         `json:"time"`
 	Events   []*event.Event    `json:"events"`
-	Actions  []string          `json:"actions,omitempty"`
+	Actions  []string          `json:"actions,omitempty"` // display form: "kill", "kill:parent"
+	// Response holds the rule's actions with their targets (for the
+	// responder; Actions carries the same information for output).
+	Response []Action `json:"-"`
+	// Truncated is set by the JSONL sink when it shortened string fields to
+	// keep the serialized alert under its per-alert cap.
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 // Last returns the event that completed the match.
@@ -157,6 +163,7 @@ func (en *Engine) alert(st *ruleState, evs []*event.Event, now time.Time) *Alert
 	return &Alert{
 		RuleID: r.ID, RuleName: r.Name, Severity: r.Severity, Output: out,
 		Labels: labels, Time: now, Events: evs, Actions: r.Actions(),
+		Response: append([]Action(nil), r.Action...),
 	}
 }
 

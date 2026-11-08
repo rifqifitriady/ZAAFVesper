@@ -7,11 +7,23 @@ match:
     events:
       - name: CreateProcess
         proc: {pid: 5502, ppid: 5503, exe: /usr/bin/osascript, name: osascript, cmdline: "osascript -l JavaScript -e ObjC.import('Foundation');$.NSFileManager.defaultManager", args: [osascript, -l, JavaScript, -e, "ObjC.import('Foundation');$.NSFileManager.defaultManager"], uid: 501, euid: 501, signing_id: com.apple.osascript, is_platform: true, is_signed: true, parent: {pid: 5503, ppid: 1, exe: /usr/bin/python3, name: python3, signing_id: com.apple.python3, is_platform: true, is_signed: true}}
+  - desc: JXA script whose parent is unknown (not in the process table) counts as untrusted
+    events:
+      - name: CreateProcess
+        proc: {pid: 5520, ppid: 5519, exe: /usr/bin/osascript, name: osascript, cmdline: "osascript -l JavaScript -e Application('Safari').windows[0].currentTab.url()", args: [osascript, -l, JavaScript, -e, "Application('Safari').windows[0].currentTab.url()"], uid: 501, euid: 501, signing_id: com.apple.osascript, is_platform: true, is_signed: true}
+  - desc: forged - Alfred's Team ID on a self-signed parent (cs_category local_signing)
+    events:
+      - name: CreateProcess
+        proc: {pid: 5521, ppid: 5530, exe: /usr/bin/osascript, name: osascript, cmdline: "osascript -l JavaScript -e Application('Safari').windows[0].currentTab.url()", args: [osascript, -l, JavaScript, -e, "Application('Safari').windows[0].currentTab.url()"], uid: 501, euid: 501, signing_id: com.apple.osascript, is_platform: true, is_signed: true, parent: {pid: 5530, ppid: 1, exe: /Applications/Alfred 5.app/Contents/MacOS/Alfred, name: Alfred, signing_id: com.runningwithcrayons.Alfred, team_id: XZZXE9SED4, is_platform: false, is_signed: true, cs_category: local_signing}}
+  - desc: Alfred's Team ID with no reported signing category fails closed
+    events:
+      - name: CreateProcess
+        proc: {pid: 5522, ppid: 5530, exe: /usr/bin/osascript, name: osascript, cmdline: "osascript -l JavaScript -e Application('Safari').windows[0].currentTab.url()", args: [osascript, -l, JavaScript, -e, "Application('Safari').windows[0].currentTab.url()"], uid: 501, euid: 501, signing_id: com.apple.osascript, is_platform: true, is_signed: true, parent: {pid: 5530, ppid: 1, exe: /Applications/Alfred 5.app/Contents/MacOS/Alfred, name: Alfred, signing_id: com.runningwithcrayons.Alfred, team_id: XZZXE9SED4, is_platform: false, is_signed: true}}
 nomatch:
   - desc: benign lookalike - Alfred (Developer ID) runs a JXA workflow
     events:
       - name: CreateProcess
-        proc: {pid: 5511, ppid: 5510, exe: /usr/bin/osascript, name: osascript, cmdline: "osascript -l JavaScript -e Application('Safari').windows[0].currentTab.url()", args: [osascript, -l, JavaScript, -e, "Application('Safari').windows[0].currentTab.url()"], uid: 501, euid: 501, signing_id: com.apple.osascript, is_platform: true, is_signed: true, parent: {pid: 5510, ppid: 1, exe: /Applications/Alfred 5.app/Contents/MacOS/Alfred, name: Alfred, signing_id: com.runningwithcrayons.Alfred, team_id: XZZXE9SED4, is_platform: false, is_signed: true}}
+        proc: {pid: 5511, ppid: 5510, exe: /usr/bin/osascript, name: osascript, cmdline: "osascript -l JavaScript -e Application('Safari').windows[0].currentTab.url()", args: [osascript, -l, JavaScript, -e, "Application('Safari').windows[0].currentTab.url()"], uid: 501, euid: 501, signing_id: com.apple.osascript, is_platform: true, is_signed: true, parent: {pid: 5510, ppid: 1, exe: /Applications/Alfred 5.app/Contents/MacOS/Alfred, name: Alfred, signing_id: com.runningwithcrayons.Alfred, team_id: XZZXE9SED4, cs_category: developer_id, is_platform: false, is_signed: true}}
   - desc: benign lookalike - do shell script running a plain command
     events:
       - name: CreateProcess

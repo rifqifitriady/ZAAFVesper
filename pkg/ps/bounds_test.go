@@ -1,6 +1,7 @@
 package ps
 
 import (
+	"container/list"
 	"encoding/binary"
 	"fmt"
 	"runtime"
@@ -85,6 +86,7 @@ func TestBytesAccountingConsistent(t *testing.T) {
 	if sum != s.bytes || n != s.live.Len()+s.dead.Len() {
 		t.Fatalf("bytes %d vs %d, lists %d+%d vs %d", s.bytes, sum, s.live.Len(), s.dead.Len(), n)
 	}
+	checkFatLists(t, s)
 	if len(s.procs) > 64 || s.bytes > s.maxBytes {
 		t.Fatalf("bounds: %d entries, %d bytes", len(s.procs), s.bytes)
 	}
@@ -183,23 +185,30 @@ func TestProcArgsBudgets(t *testing.T) {
 
 // TestHeapBoundedUnderHugeExecArgs: 2 000 execs with a 1 MiB argument each,
 // decoded by the eslogger decoder and kept by the snapshotter, must not
-// retain more than the table's byte budget.
+// retain more than the table's byte budget. Under -race the same property is
+// checked at a smaller scale (250 execs of 128 KiB against a 16 MiB budget,
+// still well over the budget and over the 64 KiB argv cap), so the race run
+// takes seconds instead of minutes.
 func TestHeapBoundedUnderHugeExecArgs(t *testing.T) {
 	if testing.Short() {
 		t.Skip("allocates ~2 GB in total")
 	}
-	arg := strings.Repeat("A", 1<<20)
+	n, argSize, budget := 2000, 1<<20, int64(MaxBytes)
+	if raceEnabled {
+		n, argSize, budget = 250, 128<<10, 16<<20
+	}
+	arg := strings.Repeat("A", argSize)
 	mkLine := func(pid int) []byte {
 		return []byte(fmt.Sprintf(`{"time":"2026-11-07T08:00:00Z","event_type":9,"process":{"audit_token":{"pid":1,"pidversion":1},"executable":{"path":"/sbin/launchd"}},`+
 			`"event":{"exec":{"target":{"audit_token":{"pid":%d,"pidversion":%d},"ppid":1,"executable":{"path":"/tmp/x"}},"args":["x","%s"],"env":["BIG=%s"]}}}`, pid, pid, arg, arg))
 	}
-	s := newSnapshotter(MaxEntries, MaxBytes)
+	s := newSnapshotter(MaxEntries, budget)
 	s.lookupUser = func(int64) string { return "" }
 	runtime.GC()
 	var before runtime.MemStats
 	runtime.ReadMemStats(&before)
 	truncated := 0
-	for i := 0; i < 2000; i++ {
+	for i := 0; i < n; i++ {
 		e, ok, err := eslogger.Decode(mkLine(1000 + i))
 		if err != nil || !ok {
 			t.Fatal(ok, err)
@@ -215,16 +224,52 @@ func TestHeapBoundedUnderHugeExecArgs(t *testing.T) {
 	runtime.ReadMemStats(&after)
 	retained := int64(after.HeapAlloc) - int64(before.HeapAlloc)
 	st := s.Stats()
-	t.Logf("2000 execs x 1 MiB args: heap retained %.1f MiB, table %d entries, %.1f MiB accounted, %d evictions, budget %d MiB",
-		float64(retained)/(1<<20), st["entries"], float64(st["bytes"])/(1<<20), st["evictions"], MaxBytes>>20)
-	if truncated != 2000 {
-		t.Errorf("truncation marker on %d of 2000", truncated)
+	t.Logf("%d execs x %d KiB args: heap retained %.1f MiB, table %d entries, %.1f MiB accounted, %d shed, %d evictions, budget %d MiB",
+		n, argSize>>10, float64(retained)/(1<<20), st["entries"], float64(st["bytes"])/(1<<20), st["shed"], st["evictions"], budget>>20)
+	if truncated != n {
+		t.Errorf("truncation marker on %d of %d", truncated, n)
 	}
-	if int64(st["bytes"]) > MaxBytes {
+	if st["shed"] == 0 {
+		t.Errorf("budget never reached: the test does not exercise the bound")
+	}
+	if int64(st["bytes"]) > budget {
 		t.Errorf("accounted bytes over budget")
 	}
-	if retained > MaxBytes {
-		t.Errorf("retained %d bytes, budget %d", retained, MaxBytes)
+	if retained > budget {
+		t.Errorf("retained %d bytes, budget %d", retained, budget)
 	}
 	runtime.KeepAlive(s)
+}
+
+// checkFatLists verifies the shedding lists: every entry with details is on
+// exactly one of them (fatLive while alive, fatDead once exited) and nothing
+// else is.
+func checkFatLists(t *testing.T, s *Snapshotter) {
+	t.Helper()
+	onList := map[int32]string{}
+	for name, l := range map[string]*list.List{"live": s.fatLive, "dead": s.fatDead} {
+		for el := l.Front(); el != nil; el = el.Next() {
+			pid := el.Value.(int32)
+			if prev, dup := onList[pid]; dup {
+				t.Fatalf("pid %d on fat lists %s and %s", pid, prev, name)
+			}
+			onList[pid] = name
+			en, ok := s.procs[pid]
+			if !ok || en.fatElem != el {
+				t.Fatalf("pid %d: dangling fat element on %s", pid, name)
+			}
+		}
+	}
+	for pid, en := range s.procs {
+		want := ""
+		if hasDetails(&en.proc) {
+			want = "live"
+			if !en.exited.IsZero() {
+				want = "dead"
+			}
+		}
+		if onList[pid] != want {
+			t.Fatalf("pid %d on fat list %q, want %q", pid, onList[pid], want)
+		}
+	}
 }

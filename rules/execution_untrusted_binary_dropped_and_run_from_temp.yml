@@ -1,12 +1,13 @@
 name: Binary dropped in a temp or shared folder and executed without developer identity
 id: 4c8d26ca-f48c-4da1-b3b4-e1648b057ecb
-version: 1.0.0
+version: 1.1.0
 description: |
   Sequence: a file is created in /tmp, /var/tmp or /Users/Shared and, within ten
-  minutes, that same path is executed as a process without developer identity (unsigned,
-  ad-hoc or self-signed: no Team ID, not an Apple platform binary). Second-stage payloads are commonly staged exactly like
+  minutes, that same path is executed as a process without verified developer identity
+  (not an Apple platform binary and no Team ID with a Developer ID or App Store signing
+  category: unsigned, ad-hoc, self-signed or a forged Team ID). Second-stage payloads are commonly staged exactly like
   this (curl -o /tmp/x; chmod +x; /tmp/x). Developer ID signed installers and helpers
-  that run from /tmp carry a Team ID and do not match.
+  that run from /tmp carry a verified Team ID and do not match.
   Note: shebang scripts execute as their interpreter (ps.exe is /bin/sh), so this rule
   covers Mach-O payloads only.
 labels:

@@ -7,6 +7,7 @@
     "proc": {
       "pid": 5300,
       "ppid": 4100,
+      "original_ppid": 4100,
       "pidversion": 5301,
       "uuid": 22763326674101,
       "exe": "/Users/Shared/injector",
@@ -15,6 +16,10 @@
       "euid": 501,
       "is_platform": false,
       "is_signed": false,
+      "cs_category": "none",
+      "exe_dev": 16777234,
+      "exe_ino": 1152921500312345678,
+      "exe_ctime_ns": 1794034800000000000,
       "start_time": "2026-11-07T07:59:59.5Z",
       "parent": {
         "pid": 4100,
@@ -33,6 +38,7 @@
     "target": {
       "pid": 777,
       "ppid": 1,
+      "original_ppid": 1,
       "pidversion": 777,
       "uuid": 3337189589769,
       "exe": "/Applications/Safari.app/Contents/MacOS/Safari",
@@ -43,6 +49,10 @@
       "cdhash": "5a1f4e3d2c1b0a99887766554433221100ffeedd",
       "is_platform": true,
       "is_signed": true,
+      "cs_category": "platform",
+      "exe_dev": 16777234,
+      "exe_ino": 1152921500312345678,
+      "exe_ctime_ns": 1794034800000000000,
       "start_time": "2026-11-07T07:59:59.5Z",
       "parent": {
         "pid": 1,

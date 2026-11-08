@@ -4,6 +4,7 @@
 package alert
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -167,14 +168,55 @@ func (c *Console) Send(a *rules.Alert) error {
 
 // ---- JSONL ----
 
+// DefaultMaxAlertBytes caps one serialized alert (one JSONL line). Larger
+// alerts have their longest string fields shortened and carry
+// "truncated": true.
+const DefaultMaxAlertBytes = 64 << 10
+
+// DefaultMaxFileBytes is the default size cap of one JSONL alert file.
+const DefaultMaxFileBytes = 256 << 20
+
+// JSONLOptions configures a JSONL sink.
+type JSONLOptions struct {
+	// KeepEnv stores full environment values (default: names only, plus
+	// DYLD_* values).
+	KeepEnv bool
+	// MaxBytes caps the bytes written to one file (<= 0: no cap). An alert
+	// that would cross the cap is not written to the current file: the sink
+	// rotates (Rotate set) or stops writing (Rotate nil).
+	MaxBytes int64
+	// MaxAlertBytes caps one line (<= 0: DefaultMaxAlertBytes).
+	MaxAlertBytes int
+	// Rotate returns the next file when MaxBytes is reached; the sink closes
+	// the previous one (if it is an io.Closer). nil: stop at the cap.
+	Rotate func() (io.Writer, error)
+	// OnCapped is called, outside the sink's lock, each time the file cap
+	// is reached (rotation or stop) and for every alert dropped while
+	// stopped, with a short description.
+	OnCapped func(detail string)
+	// StartStopped starts the sink without a file (w may be nil): every
+	// alert is dropped until Rotate succeeds (tried every RotateRetryEvery).
+	StartStopped bool
+	// StopReason describes why the sink starts stopped.
+	StopReason string
+	// Now is the clock for retries (default time.Now).
+	Now func() time.Time
+}
+
 // JSONL writes one JSON object per alert per line. JSON encoding escapes
 // control characters, so no sanitizing is needed (or wanted: the file keeps
 // the exact evidence). Environment values are redacted unless keepEnv.
 type JSONL struct {
-	mu      sync.Mutex
-	w       io.Writer
-	enc     *json.Encoder
-	keepEnv bool
+	mu         sync.Mutex
+	w          io.Writer
+	opts       JSONLOptions
+	written    int64
+	stopped    bool
+	stopReason string
+	lastTry    time.Time
+	dropped    uint64
+	rotations  uint64
+	truncated  uint64
 }
 
 // NewJSONL returns a JSONL sink writing to w with environment values
@@ -184,27 +226,157 @@ func NewJSONL(w io.Writer) *JSONL { return NewJSONLWith(w, false) }
 
 // NewJSONLWith is NewJSONL with an explicit keepEnv choice (--keep-env).
 func NewJSONLWith(w io.Writer, keepEnv bool) *JSONL {
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	return &JSONL{w: w, enc: enc, keepEnv: keepEnv}
+	return NewJSONLOptions(w, JSONLOptions{KeepEnv: keepEnv})
 }
 
-// Send writes the alert as one line.
+// NewJSONLOptions returns a JSONL sink with size caps (and rotation).
+func NewJSONLOptions(w io.Writer, o JSONLOptions) *JSONL {
+	if o.MaxAlertBytes <= 0 {
+		o.MaxAlertBytes = DefaultMaxAlertBytes
+	}
+	if o.Now == nil {
+		o.Now = time.Now
+	}
+	j := &JSONL{w: w, opts: o}
+	if o.StartStopped {
+		j.stopped, j.stopReason, j.lastTry = true, o.StopReason, o.Now()
+	}
+	return j
+}
+
+// RotateRetryEvery is how often a stopped sink with a Rotate function tries
+// to open a new file again (for example once old files have aged enough to
+// be pruned).
+const RotateRetryEvery = time.Minute
+
+// Send writes the alert as one line. When the file cap is reached and no
+// new file can be opened (no Rotate, or Rotate fails), the sink stops:
+// alerts are dropped and counted, every drop is reported through OnCapped
+// (the pipeline rate-limits the resulting SensorDegraded), Send returns nil,
+// and with Rotate set a new file is tried again every RotateRetryEvery.
 func (j *JSONL) Send(a *rules.Alert) error {
-	if !j.keepEnv {
+	if !j.opts.KeepEnv {
 		a = RedactAlert(a)
 	}
+	line, cut, err := EncodeAlert(a, j.opts.MaxAlertBytes)
+	if err != nil {
+		return err
+	}
+	var notice string
+	defer func() {
+		if notice != "" && j.opts.OnCapped != nil {
+			j.opts.OnCapped(notice)
+		}
+	}()
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	return j.enc.Encode(a)
+	if cut {
+		j.truncated++
+	}
+	now := j.opts.Now()
+	if j.stopped && j.opts.Rotate != nil && !now.Before(j.lastTry.Add(RotateRetryEvery)) {
+		j.lastTry = now
+		if nw, err := j.opts.Rotate(); err == nil {
+			j.closeCurrent()
+			j.w, j.written, j.stopped = nw, 0, false
+			j.rotations++
+		} else {
+			j.stopReason = err.Error()
+		}
+	}
+	if j.stopped {
+		j.dropped++
+		notice = fmt.Sprintf("alert file not writable (%s); alert dropped, %d dropped so far", j.stopReason, j.dropped)
+		return nil
+	}
+	if max := j.opts.MaxBytes; max > 0 && j.written > 0 && j.written+int64(len(line)) > max {
+		if j.opts.Rotate == nil {
+			j.stop(now, fmt.Sprintf("the file reached its cap of %d bytes", max))
+			notice = fmt.Sprintf("alert file reached its cap of %d bytes; further alerts are not written to it", max)
+			return nil
+		}
+		nw, err := j.opts.Rotate()
+		if err != nil {
+			j.stop(now, fmt.Sprintf("the file reached its cap of %d bytes and no new file can be opened: %v", max, err))
+			notice = fmt.Sprintf("alert file reached its cap of %d bytes and no new file can be opened (%v); alerts are not written until one can", max, err)
+			return nil
+		}
+		cerr := j.closeCurrent()
+		j.w, j.written = nw, 0
+		j.rotations++
+		notice = fmt.Sprintf("alert file reached its cap of %d bytes; rotated to a new file", max)
+		if cerr != nil {
+			notice += fmt.Sprintf(" (closing the previous file failed: %v)", cerr)
+		}
+	}
+	n, err := j.w.Write(line)
+	j.written += int64(n)
+	return err
+}
+
+// stop marks the sink stopped (one drop counted). Caller holds mu.
+func (j *JSONL) stop(now time.Time, why string) {
+	j.stopped, j.stopReason, j.lastTry = true, why, now
+	j.dropped++
+}
+
+// closeCurrent closes the current writer when it is an io.Closer (once).
+// Caller holds mu.
+func (j *JSONL) closeCurrent() error {
+	c, ok := j.w.(io.Closer)
+	j.w = nil
+	if !ok {
+		return nil
+	}
+	return c.Close()
+}
+
+// Stopped reports whether the sink is currently not writing alerts (file
+// cap reached without a new file, or started without one).
+func (j *JSONL) Stopped() bool {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return j.stopped
+}
+
+// Filtered passes to Sink only the alerts Allow accepts.
+type Filtered struct {
+	Sink  Sink
+	Allow func(*rules.Alert) bool
+}
+
+// Send forwards a when Allow accepts it.
+func (f *Filtered) Send(a *rules.Alert) error {
+	if f.Allow(a) {
+		return f.Sink.Send(a)
+	}
+	return nil
+}
+
+// HighOrCritical accepts alerts of severity high or critical.
+func HighOrCritical(a *rules.Alert) bool { return a.Severity == "high" || a.Severity == "critical" }
+
+// Stats returns the sink's counters.
+func (j *JSONL) Stats() map[string]uint64 {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return map[string]uint64{"bytes_current_file": uint64(j.written), "dropped_after_cap": j.dropped,
+		"rotations": j.rotations, "truncated_alerts": j.truncated}
 }
 
 // Close closes the underlying writer when it supports it.
 func (j *JSONL) Close() error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	if c, ok := j.w.(io.Closer); ok {
-		return c.Close()
+	return j.closeCurrent()
+}
+
+func marshalLine(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
 	}
-	return nil
+	return buf.Bytes(), nil // Encode appends the newline
 }

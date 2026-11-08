@@ -91,7 +91,8 @@ func replay(file, rulesFlag string, rulesGiven bool, configPath string, configGi
 		if err != nil {
 			return err
 		}
-		j := alert.NewJSONLWith(f, keepEnv)
+		j := alert.NewJSONLOptions(f, alert.JSONLOptions{KeepEnv: keepEnv, MaxBytes: alert.DefaultMaxFileBytes,
+			OnCapped: func(detail string) { p.degraded(condAlertsCapped, detail) }})
 		p.sinks = append(p.sinks, j)
 		closeJSON = j.Close
 	}

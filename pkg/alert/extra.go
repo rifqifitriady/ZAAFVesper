@@ -86,14 +86,17 @@ func RedactAlert(a *rules.Alert) *rules.Alert {
 
 // ---- deduplication ----
 
-// DefaultDedupWindow is how long repeats of (rule, pid) are suppressed.
+// DefaultDedupWindow is how long repeats of (rule, process) are suppressed.
 const DefaultDedupWindow = 10 * time.Second
 
 const maxDedupKeys = 65536
 
 // Deduper suppresses repeated alerts of the same rule for the same process
-// within a window (measured on alert time, i.e. event time). Not safe for
-// concurrent use; the pipeline calls it from one goroutine.
+// within a window (measured on alert time, i.e. event time). A process is
+// its pid plus pidversion and start time, so a new process that reuses a pid
+// is never suppressed. The pipeline uses it for alert output only: response
+// is evaluated for every alert, repeat or not. Not safe for concurrent use;
+// the pipeline calls it from one goroutine.
 type Deduper struct {
 	window     time.Duration
 	last       map[string]time.Time
@@ -110,11 +113,7 @@ func NewDeduper(window time.Duration) *Deduper {
 
 // Allow reports whether a should be delivered.
 func (d *Deduper) Allow(a *rules.Alert) bool {
-	var pid int32
-	if e := a.Last(); e != nil && e.Proc != nil {
-		pid = e.Proc.PID
-	}
-	key := a.RuleID + "|" + strconv.FormatInt(int64(pid), 10)
+	key := a.RuleID + "|" + procKey(a.Last())
 	if t, ok := d.last[key]; ok && a.Time.Sub(t) < d.window && a.Time.Sub(t) >= 0 {
 		d.suppressed[a.RuleName]++
 		return false
@@ -131,6 +130,19 @@ func (d *Deduper) Allow(a *rules.Alert) bool {
 	}
 	d.last[key] = a.Time
 	return true
+}
+
+// procKey identifies the process of e: pid, pidversion and start time.
+func procKey(e *event.Event) string {
+	if e == nil || e.Proc == nil {
+		return "-"
+	}
+	p := e.Proc
+	var start int64
+	if !p.StartTime.IsZero() {
+		start = p.StartTime.UnixNano()
+	}
+	return strconv.FormatInt(int64(p.PID), 10) + "|" + strconv.FormatUint(uint64(p.PIDVersion), 10) + "|" + strconv.FormatInt(start, 10)
 }
 
 // Suppressed returns suppressed counts by rule name.
