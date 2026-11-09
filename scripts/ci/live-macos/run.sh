@@ -89,12 +89,14 @@ kill "$nclisten" 2>/dev/null || true
 alive_for "$holder" 10 || kill "$holder" 2>/dev/null || true
 
 echo "== 6. triggers (receivers up)"
-"$here/triggers.sh" a "$ART/triggers.tsv" "$work/a" "$BIN/dropped"
+# Run as a launchd job: Endpoint Security reports nothing for the job's own
+# process tree on GitHub runners (esdiag above shows it).
+"$here/outside.sh" triggers-a 300 "$here/triggers.sh" a "$ART/triggers.tsv" "$work/a" "$BIN/dropped" || status triggers_a "exit $?"
 sleep 6
 
 echo "== 7. receivers down: alerts must be spooled"
 kill "$(cat "$work/receiver.pid")"; sleep 1
-"$here/triggers.sh" b "$ART/triggers.tsv" "$work/b" "$BIN/dropped"
+"$here/outside.sh" triggers-b 60 "$here/triggers.sh" b "$ART/triggers.tsv" "$work/b" "$BIN/dropped" || status triggers_b "exit $?"
 sleep 4
 sudo /usr/bin/find "$SPOOL" -type f -name 'spool-*.ndjson' -exec /bin/ls -l {} + >"$ART/spool-while-down.txt" 2>&1 || true
 status spool_while_down "$(wc -l <"$ART/spool-while-down.txt" | tr -d ' ') spool file(s)"
