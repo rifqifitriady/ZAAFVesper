@@ -88,6 +88,10 @@ func realMain(args []string, stdout, stderr io.Writer) int {
 		return cmdIsolation(args[1:], stdout, stderr)
 	case "sigma":
 		return cmdSigma(args[1:], stdout, stderr)
+	case "validate-response":
+		// Live validation harness of the response actions (not in the
+		// usage text; refuses to run outside a throw-away CI runner).
+		return cmdValidateResponse(args[1:], stdout, stderr)
 	case "version", "--version", "-version":
 		return cmdVersion(stdout)
 	case "help", "-h", "--help":
