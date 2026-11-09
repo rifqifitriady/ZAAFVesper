@@ -43,27 +43,64 @@ func exeSuffix() string { return ".exe" }
 
 func validateTempRoot() string { return os.TempDir() }
 
-// waitState waits until the test process stops beating (suspended) or
-// beats again (resumed): Windows has no process state to read, so the
-// sleeper rewrites a heartbeat file every 100 ms (--beat).
+// waitState waits until every thread of pid is suspended (stopped) or
+// none is (running). Windows has no process state to read: each thread's
+// suspend count is read by SuspendThread, which returns the previous count,
+// and undone at once by ResumeThread. The heartbeat file of the sleeper
+// (--beat) is reported alongside.
 func waitState(pid int32, stopped bool, within time.Duration) bool {
-	v, ok := beatFiles.Load(pid)
-	if !ok {
-		return false
-	}
-	path := v.(string)
 	deadline := time.Now().Add(within)
 	for {
-		a, _ := os.ReadFile(path)
-		time.Sleep(400 * time.Millisecond)
-		b, _ := os.ReadFile(path)
-		if (string(a) == string(b)) == stopped && len(b) > 0 {
+		n, susp, err := threadStates(uint32(pid))
+		if err == nil && n > 0 && (stopped && susp == n || !stopped && susp == 0) {
 			return true
 		}
 		if time.Now().After(deadline) {
+			beat := ""
+			if v, ok := beatFiles.Load(pid); ok {
+				a, _ := os.ReadFile(v.(string))
+				time.Sleep(300 * time.Millisecond)
+				b, _ := os.ReadFile(v.(string))
+				beat = fmt.Sprintf(" heartbeat %q then %q", a, b)
+			}
+			say(os.Stderr, "waitState(%d, stopped=%v): %d threads, %d suspended, %v%s", pid, stopped, n, susp, err, beat)
 			return false
 		}
+		time.Sleep(100 * time.Millisecond)
 	}
+}
+
+var procSuspendThread = windows.NewLazySystemDLL("kernel32.dll").NewProc("SuspendThread")
+
+// threadStates counts the threads of pid and those with a suspend count
+// above zero.
+func threadStates(pid uint32) (n, suspended int, err error) {
+	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPTHREAD, 0)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer windows.CloseHandle(snap)
+	var te windows.ThreadEntry32
+	te.Size = uint32(unsafe.Sizeof(te))
+	for err = windows.Thread32First(snap, &te); err == nil; err = windows.Thread32Next(snap, &te) {
+		if te.OwnerProcessID != pid {
+			continue
+		}
+		h, oerr := windows.OpenThread(windows.THREAD_SUSPEND_RESUME, false, te.ThreadID)
+		if oerr != nil {
+			continue
+		}
+		prev, _, _ := procSuspendThread.Call(uintptr(h))
+		if int32(prev) != -1 {
+			_, _ = windows.ResumeThread(h)
+			n++
+			if prev > 0 {
+				suspended++
+			}
+		}
+		windows.CloseHandle(h)
+	}
+	return n, suspended, nil
 }
 
 func (h *vHarness) platformConfig(rc *response.Config) { rc.IsolationTTL = vIsolationTTL }
