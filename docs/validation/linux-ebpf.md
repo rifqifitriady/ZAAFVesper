@@ -55,6 +55,8 @@ Licences: `github.com/cilium/ebpf` is MIT; the libbpf headers are
 | `TestLiveDeepPath` (F6) | pass | pass |
 | `TestLiveMountNamespace` (F5) | pass | pass |
 | `TestLiveConcurrentRecordsStayWhole` (F4: 600 of 600 creations seen, none missed) | pass | pass |
+| `TestLiveSetUIDExec` (CK-23: set-uid exec, euid 65534 to 0; run 42670814832) | pass | pass |
+| `TestLiveExecSurvivesFileFlood` (D8: 40 of 40 execs next to 10000 of 10000 file creations, default ring, none missed; run 42670814832) | pass | pass |
 
 ## Ubuntu 24.04
 
