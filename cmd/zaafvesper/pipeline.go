@@ -33,6 +33,10 @@ type pipeline struct {
 	agg       *alert.Aggregator   // nil: no per-rule aggregation
 	errw      io.Writer
 	deg       degradedState // SensorDegraded reports (see degraded.go)
+	// taps see every event that passed the exclusions (ZAAFElegia and SIEM
+	// event exports, netpoll exec nudges; see outputs.go). They must not
+	// block or modify the event.
+	taps []func(*event.Event)
 
 	events, excluded, alerts, suppressed, sinkErrs, captureErrs, submitted uint64
 	fallbackLines, aggregated, summaries                                   uint64
@@ -75,6 +79,9 @@ func (p *pipeline) handle(e *event.Event, fromScanner bool) {
 	if _, drop := p.excl.Match(e); drop {
 		p.excluded++
 		return
+	}
+	for _, tap := range p.taps {
+		tap(e)
 	}
 	if p.scanner != nil && !fromScanner && yaraTriggers[e.Name] {
 		p.scanner.Submit(e)

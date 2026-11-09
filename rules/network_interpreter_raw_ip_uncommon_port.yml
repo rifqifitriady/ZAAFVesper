@@ -1,0 +1,36 @@
+name: Script interpreter connects to a public IP on an uncommon port
+id: d9090f1c-b6a9-4071-8de5-3029d816c5bb
+version: 1.0.0
+platforms: [macos]
+description: |
+  A script interpreter (python, perl, ruby, node, php, tcl, lua, pwsh, osascript)
+  opens an outbound connection to a public IP address on a port outside the common
+  client ports (web, mail, DNS, NTP, SSH, Apple push, STUN). Script one-liners that
+  connect to a hard-coded address and port (`python3 -c 'import socket,os,pty;
+  s=socket.socket(); s.connect(("203.0.113.9",4444)) ...'`, `perl -e 'use Socket;...'`)
+  are a staple of reverse shells and simple C2.
+  Known benign: scripts and dev servers that talk to cloud databases, brokers or game
+  and VoIP services on their native ports.
+  Limitations: macOS gives no DNS visibility without a NetworkExtension, so the rule
+  cannot tell a raw IP literal from a resolved name; every public destination is
+  treated as raw. Developer tools that talk to cloud databases or brokers on their
+  native ports (5432, 6379, 9092, 27017) match; exclude them in the configuration.
+labels:
+  tactic.id: TA0011
+  tactic.name: Command and Control
+  technique.id: T1571
+  technique.name: Non-Standard Port
+references:
+  - https://attack.mitre.org/techniques/T1571/
+  - https://attack.mitre.org/techniques/T1059/006/
+condition: >
+  evt.name = 'NetworkConnect' and net.direction = 'outbound'
+  and net_dst_public
+  and not (net.dport in net_common_ports)
+  and (ps.exe in script_interpreters or ps.name imatches script_interpreter_name_globs)
+output: "%ps.exe (pid %ps.pid) connected to %net.dip:%net.dport (%net.proto): %ps.cmdline"
+severity: medium
+action: []
+tests:
+  atomic: []
+min-engine-version: 0.1.0
