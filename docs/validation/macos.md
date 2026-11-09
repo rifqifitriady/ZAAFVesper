@@ -8,11 +8,14 @@ Workflow: [`.github/workflows/live-macos.yml`](../../.github/workflows/live-maco
 
 | Date (UTC) | Run | Commit | Result |
 |---|---|---|---|
-| 9 Nov 2026 11:31 | [42604807438](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42604807438) | `867ce48` (final harness) | **47 checks, 0 failed**; 2 rules not testable; sensor ran 215 s as root |
-| 9 Nov 2026 10:45 | [42601933739](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42601933739) | `c682ca4` | 43 checks, 0 failed (sensor ran only about 55 s, so a soak phase was added) |
+| 9 Nov 2026 11:14 | [42607447169](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42607447169) | `fe29f95` (final harness) | **50 checks, 0 failed**; 2 rules not testable; sensor ran 213 s as root and stopped cleanly |
+| 9 Nov 2026 10:55 | [42604807438](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42604807438) | `867ce48` | 47 checks, 0 failed; sensor ran 215 s |
+| 9 Nov 2026 10:35 | [42601933739](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42601933739) | `c682ca4` | 43 checks, 0 failed (sensor ran only about 55 s, so a soak phase was added) |
 | 9 Nov 2026 10:22 | [42600448973](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42600448973) | `7aa7844` (before the security-review changes) | 41 checks, 0 failed |
 
-The results below are from run [42604807438](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42604807438) unless stated. Every row is one row of that run's job summary (the "Check" name is quoted), and the evidence is in its `live-macos-results` artifact: alerts in `outdir/alerts-*.jsonl` (match the rule's `id`), the events in `events.ndjson`, the receivers' logs in `receiver/`, the zaaf findings in `zaaf-findings.ndjson`, run statuses in `status.tsv`, and the full table in `results.md`.
+Times are the runs' start times in UTC.
+
+The results below are from run [42607447169](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42607447169) unless stated. Every row corresponds to a row of that run's job summary (rule rows by their trigger id, the others by the check they describe), and the evidence is in its `live-macos-results` artifact: alerts in `outdir/alerts-*.jsonl` (match the rule's `id`), the events in `events.ndjson`, the receivers' logs in `receiver/`, the zaaf findings in `zaaf-findings.ndjson`, run statuses in `status.tsv`, and the full table in `results.md`.
 
 Runs while the harness was being built: [42576991593](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42576991593) (every Endpoint Security rule silent; see "eslogger"), [42599223857](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42599223857) (the diagnosis), [42599771481](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42599771481) (54 of 56; it found the shutdown-flush gap fixed below), [42601040109](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42601040109) (40 of 41: the old eslogger probe counted background noise and saw none in 4 s; replaced by the diagnosis counts).
 
@@ -23,20 +26,20 @@ Runner: `macos-latest`, macOS 26.7.2 (25G332), arm64 virtual machine, SIP disabl
 1. **eslogger probe and diagnosis** (`esdiag.sh`): runs `/usr/bin/eslogger` alone under `sudo`, once subscribed to `exec` only and once to the sensor's full set, while it starts marked commands from the job's own shell and the same commands from a launchd job.
 2. **Installs as root** like the package: binary in `/usr/local/sbin`, rules and configuration in `/usr/local/etc/zaafvesper`, all `root:wheel` and not group- or world-writable, so every root ownership check of `run` applies.
 3. **Starts two receivers on 127.0.0.1** (`receiver/`): syslog over TLS (RFC 5425 framing) and an HTTPS webhook with a bearer token. Both use a throw-away CA, which ZAAFVesper pins with `--syslog-ca` and `--webhook-ca`. The token is random per run, masked in the log, and stored root-owned `0600`.
-4. **Runs `zaafvesper run` as root** (215 s in the final run) with the capture, the output directory, socket polling (`--net-interval 500ms --net-loopback`), both SIEM outputs with the spool, `--alerts-ocsf` and `--elegia-out -`, piped through `tee` into `zaaf hunt` (ZAAFElegia built from commit `c2e0212`, pinned).
+4. **Runs `zaafvesper run` as root** (213 s in the final run) with the capture, the output directory, socket polling (`--net-interval 500ms --net-loopback`), both SIEM outputs with the spool, `--alerts-ocsf` and `--elegia-out -`, piped through `tee` into `zaaf hunt` (ZAAFElegia built from commit `c2e0212`, pinned).
 5. **Socket polling**: an `nc` listener and a process holding a connection to it, as the `runner` user (another uid than the root sensor).
 6. **Fires safe local actions** (`triggers.sh`) from a launchd job, as the `runner` user.
 7. **Soak**: lets the sensor run until it has been up for over 3 minutes, then fires one late action (a quarantine strip) that must still be detected.
 8. **Stops the receivers**, fires two more actions, checks that the spool holds them, restarts the receivers and waits for the spool to drain.
-9. **Stops the sensor with SIGINT** and checks everything (`check.py`). The job fails on any failed check.
+9. **Stops the sensor with SIGINT** (checked: "sensor stopped cleanly on SIGINT" and "sensor | tee | zaaf pipe exited 0") and checks everything (`check.py`). The job fails on any failed check.
 
 ## eslogger: works, but not for the job's own processes
 
 - Job summary: "eslogger under sudo" PASS ("reports launchd-started commands (3 events); job-tree commands: 0 events"), and two INFO rows with the diagnosis counts.
-- `sudo /usr/bin/eslogger` **runs** on the runner: Full Disk Access is granted to `/bin/bash`, so the job's shell can start it.
+- `sudo /usr/bin/eslogger` **runs** on the runner: the runner's TCC database grants Full Disk Access to `/bin/bash` (recorded in each run: `esdiag/tcc-full-disk-access.txt`, job-summary row "runner TCC: Full Disk Access for /bin/bash"), so the job's shell can start it.
 - **Endpoint Security reports nothing for the job's own process tree.** In every run, eslogger alone, with either subscription, reported the marked commands started through launchd (3 matching events) and **none** of the two marked commands started from the job's shell (0 matching events; `esdiag/esdiag.tsv` in the artifact). Other processes are reported normally (launchd, xpcproxy, Spotlight, the runner's Anka scripts). The first full run therefore raised no Endpoint Security alert at all (run 42576991593).
 - **Workaround:** the triggers run as a launchd job (`outside.sh`: `launchctl submit` as root, then `sudo -u runner`), outside the job's tree. With that, every trigger is seen. The muting happens with eslogger alone, so it comes from the runner environment, not from ZAAFVesper; whether a real Mac ever mutes processes in a similar way is not tested here. Tests driven straight from a job's shell are blind on these runners.
-- **Dropped events:** the source reported `global_seq_num` gaps in every run (run 42604807438: `seq_gaps=8440`, `events_missed=116681` against 231,348 decoded events over 215 s), and `es_events_dropped` was raised. No trigger was lost. It is not established whether these are real drops under the `open` event volume or numbers used by the muted job tree; treat the count as an upper bound on loss.
+- **Dropped events:** the source reported `global_seq_num` gaps in every run (run 42607447169: `seq_gaps=9837`, `events_missed=118006` against 225,095 decoded events over 213 s), and `es_events_dropped` was raised. No trigger was lost. It is not established whether these are real drops under the `open` event volume or numbers used by the muted job tree; treat the count as an upper bound on loss.
 
 ## Rules
 
@@ -80,7 +83,7 @@ Not exercised here: the remaining macOS rules. These are the ones that need a re
 | the accepted socket in `nc` → one `NetworkAccept` `inbound` | pass |
 | every network event has `source: netpoll` | pass |
 
-Evidence: the `network_connection` records in `events.ndjson` (`Image` `/usr/bin/nc` or `…/dropped`, `DestinationPort` 5555, `Initiated` absent / `"true"` / `"false"`). Polling ran at 500 ms over 432 polls, reading about 236,000 processes in all, with no `budget_exhausted`, `fd_caps` or `untracked_sockets` (sensor log `stats: network`).
+Evidence: the `network_connection` records in `events.ndjson` (`Image` `/usr/bin/nc` or `…/dropped`, `DestinationPort` 5555, `Initiated` absent / `"true"` / `"false"`). Polling ran at 500 ms over 429 polls, reading about 237,000 processes in all, with no `budget_exhausted`, `fd_caps` or `untracked_sockets` (sensor log `stats: network`).
 
 ## SIEM outputs and spool
 
@@ -88,7 +91,7 @@ Evidence: the `network_connection` records in `events.ndjson` (`Image` `/usr/bin
 |---|---|
 | syslog over TLS, pinned CA, received every alert | pass |
 | HTTPS webhook (bearer token) received every alert | pass |
-| alerts raised while both receivers were stopped went to the spool | pass (4 spool files; `spool-while-down.txt`) |
+| alerts raised while both receivers were stopped went to the spool | pass (2 spool files; `spool-while-down.txt`) |
 | the spool drained after the receivers came back, and those alerts arrived | pass |
 | nothing left in the spool at shutdown | pass, after the fix below |
 | the token is absent from everything uploaded (every file of the artifact, plus the decompressed capture) | pass |
