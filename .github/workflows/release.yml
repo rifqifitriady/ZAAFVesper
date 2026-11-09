@@ -1,0 +1,149 @@
+# Release: runs only for tags v*. Builds the binaries and the unsigned macOS
+# package on GitHub's runners, writes SHA256SUMS and a CycloneDX SBOM, signs
+# build provenance for every file (Sigstore, through
+# actions/attest-build-provenance) and opens a DRAFT release; a person
+# publishes it. No secrets; only the release job can write.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # cyclonedx-gomod is fetched through the Go module proxy; the Go checksum
+  # database verifies it against this exact version.
+  CYCLONEDX_GOMOD: github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.12.0
+
+jobs:
+  version:
+    name: Check the tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        # The tag name is only read from the environment, never pasted into
+        # the script, and must look like a version.
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "tag '$TAG' is not vMAJOR.MINOR.PATCH[-suffix]"
+            exit 1
+          fi
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+  binaries:
+    name: Binaries and SBOM
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false # no cache restored into a release build
+      - name: Build
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          CGO_ENABLED: "0"
+        run: |
+          mkdir -p dist
+          for target in darwin/arm64 darwin/amd64 windows/amd64 windows/arm64 linux/amd64 linux/arm64; do
+            os="${target%/*}" arch="${target#*/}" ext=""
+            [ "$os" = windows ] && ext=".exe"
+            GOOS="$os" GOARCH="$arch" go build -trimpath \
+              -ldflags "-s -w -X main.version=$VERSION" \
+              -o "dist/zaafvesper-$VERSION-$os-$arch$ext" ./cmd/zaafvesper
+          done
+          ls -l dist
+      - name: SBOM (CycloneDX, Go modules of the binary)
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          go run "$CYCLONEDX_GOMOD" app -json -licenses -main cmd/zaafvesper \
+            -output "dist/zaafvesper-$VERSION.cdx.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: binaries
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    name: macOS package (unsigned)
+    needs: version
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: make package
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          make package VERSION="$VERSION"
+          pkgutil --expand "dist/ZAAFVesper-$VERSION.pkg" "$RUNNER_TEMP/x"
+          contents="$(ls "$RUNNER_TEMP/x" | sort | tr '\n' ' ')"
+          echo "package contents: $contents"
+          if [ "$contents" != "Bom PackageInfo Payload " ]; then
+            echo "the package must hold only Bom, PackageInfo and Payload (no Scripts)"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package
+          path: dist/*.pkg
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Checksums, provenance and draft release
+    needs: [version, binaries, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # create the draft release
+      id-token: write # Sigstore signing of the provenance
+      attestations: write # store the attestations
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+          digest-mismatch: error
+      - name: SHA256SUMS
+        working-directory: dist
+        run: |
+          sha256sum -- * > "$RUNNER_TEMP/SHA256SUMS"
+          mv "$RUNNER_TEMP/SHA256SUMS" SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" --draft --verify-tag --title "$TAG" \
+            --notes "Built by GitHub Actions from $TAG. Unsigned by Apple: no Developer ID signature and no notarization. Verify every file before use: see docs/operations.md, 'Verify a download'." \
+            dist/*
