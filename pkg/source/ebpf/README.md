@@ -24,7 +24,7 @@ everywhere).
 | a uid changes (setuid, sudo, …) | `SetUID` | `evt.arg[old_uid]` … `[new_euid]` |
 | ptrace attach or seize | `Ptrace` | `target.ps.*`, `evt.arg[syscall]` |
 | `process_vm_readv` / `writev` | `OpenProcess` | `target.ps.*`, `evt.arg[syscall]` |
-| a kernel module is loaded | `DriverLoad` | `image.path`, `evt.arg[module_name]`, `evt.arg[module_source]` |
+| a kernel module is loaded | `DriverLoad` | `image.path`, `evt.arg[module_name]`, `evt.arg[module_source]` (`file` for `finit_module`, including compressed `.ko.zst` files the kernel decompresses; `memory` for `init_module`) |
 | a TCP connection is made / accepted | `NetworkConnect` / `NetworkAccept` | `net.*` (for accepted ones the source is the remote peer, as with Sysmon) |
 | a DNS query is sent over UDP port 53 | `DNSQuery` | `dns.query`, `dns.type`, `net.dip` |
 

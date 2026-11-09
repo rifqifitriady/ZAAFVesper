@@ -740,19 +740,40 @@ int on_enter_finit_module(struct sys_enter_ctx *ctx)
 
 static struct module_stash empty_modstash;
 
+/* A module read from a file, plain or compressed (READING_MODULE_COMPRESSED
+ * on kernels that decompress modules themselves; seen on 7.0 with kmod 31
+ * loading .ko.zst). */
+static __always_inline bool is_module_read(enum kernel_read_file_id id)
+{
+	if (id == bpf_core_enum_value(enum kernel_read_file_id, READING_MODULE))
+		return true;
+	return bpf_core_enum_value_exists(enum kernel_read_file_id, READING_MODULE_COMPRESSED) &&
+	       id == bpf_core_enum_value(enum kernel_read_file_id, READING_MODULE_COMPRESSED);
+}
+
+static __always_inline bool is_module_load(enum kernel_load_data_id id)
+{
+	if (id == bpf_core_enum_value(enum kernel_load_data_id, LOADING_MODULE))
+		return true;
+	return bpf_core_enum_value_exists(enum kernel_load_data_id, LOADING_MODULE_COMPRESSED) &&
+	       id == bpf_core_enum_value(enum kernel_load_data_id, LOADING_MODULE_COMPRESSED);
+}
+
 SEC("fentry/security_kernel_read_file")
 int BPF_PROG(on_kernel_read_file, struct file *f, enum kernel_read_file_id id)
 {
-	if (id != bpf_core_enum_value(enum kernel_read_file_id, READING_MODULE))
+	if (!is_module_read(id))
 		return 0;
 	u32 tid = (u32)bpf_get_current_pid_tgid();
 	if (bpf_map_update_elem(&modstash, &tid, &empty_modstash, BPF_ANY) != 0)
 		return 0;
 	struct module_stash *m = bpf_map_lookup_elem(&modstash, &tid);
-	struct pathbuf *pb = pathbuf(0);
-	if (!m || !pb)
+	if (!m)
 		return 0;
-	m->source = 1;
+	m->source = 1; /* before the path: a missing path never hides the source */
+	struct pathbuf *pb = pathbuf(0);
+	if (!pb)
+		return 0;
 	bool complete;
 	u32 off = resolve(pb, BPF_CORE_READ(f, f_path.dentry), BPF_CORE_READ(f, f_path.mnt), &complete);
 	u32 len = (PATH_MAX_LEN - 1 - off) & PATH_MASK;
@@ -773,7 +794,7 @@ int BPF_PROG(on_kernel_read_file, struct file *f, enum kernel_read_file_id id)
 SEC("fentry/security_kernel_load_data")
 int BPF_PROG(on_kernel_load_data, enum kernel_load_data_id id)
 {
-	if (id != bpf_core_enum_value(enum kernel_load_data_id, LOADING_MODULE))
+	if (!is_module_load(id))
 		return 0;
 	u32 tid = (u32)bpf_get_current_pid_tgid();
 	if (bpf_map_update_elem(&modstash, &tid, &empty_modstash, BPF_ANY) != 0)

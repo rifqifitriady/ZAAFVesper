@@ -241,12 +241,18 @@ struct msghdr {
 	struct iov_iter msg_iter;
 } __attribute__((preserve_access_index));
 
+/* *_MODULE_COMPRESSED: kernels that decompress modules themselves report a
+ * compressed module file (finit_module with MODULE_INIT_COMPRESSED_FILE,
+ * e.g. kmod 31 with .ko.zst) under its own id. Older kernels lack it;
+ * the programs check that it exists. Values are relocated (CO-RE). */
 enum kernel_read_file_id {
 	READING_MODULE = 2,
+	READING_MODULE_COMPRESSED = 7,
 };
 
 enum kernel_load_data_id {
 	LOADING_MODULE = 2,
+	LOADING_MODULE_COMPRESSED = 7,
 };
 
 /* Format of the syscalls:sys_enter_* and sys_exit_* tracepoints (stable). */
