@@ -1,0 +1,29 @@
+name: Systemd unit file created outside the package manager
+id: cf200d1d-c397-4dfe-a824-97a347029e3d
+version: 1.0.0
+platforms: [linux]
+description: |
+  A .service or .timer unit was created under /etc/systemd/system, /usr/lib/systemd/system,
+  /lib/systemd/system or a user's ~/.config/systemd/user by a process other than a
+  package manager or systemctl. A new unit is started at boot (or on its timer).
+  Known benign: configuration management (Ansible, Puppet) writing units; add their
+  interpreters after review.
+labels:
+  tactic.id: TA0003
+  tactic.name: Persistence
+  technique.id: T1543.002
+  technique.name: Systemd Service
+references:
+  - https://attack.mitre.org/techniques/T1543/002/
+condition: >
+  evt.name = 'CreateFile'
+  and file.path imatches ('/etc/systemd/system/*.service', '/etc/systemd/system/*.timer',
+                          '/usr/lib/systemd/system/*.service', '/lib/systemd/system/*.service',
+                          '/home/*/.config/systemd/user/*.service', '/root/.config/systemd/user/*.service')
+  and not ps.name in ('dpkg', 'rpm', 'dnf', 'yum', 'apt', 'apt-get', 'systemctl', 'systemd', 'unattended-upgrade')
+output: "%ps.exe (pid %ps.pid, user %ps.username) created systemd unit %file.path"
+severity: high
+action: []
+tests:
+  atomic: [d9e4f24f-aa67-4c6e-bcbf-85622b697a7c]
+min-engine-version: 0.1.0

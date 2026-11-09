@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/config"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/rules"
@@ -138,7 +139,7 @@ func flagSet(fs *flag.FlagSet, name string) bool {
 
 func isWithin(p, dir string) bool {
 	rel, err := filepath.Rel(dir, p)
-	return err == nil && rel != ".." && !filepath.IsAbs(rel) && (len(rel) < 3 || rel[:3] != "../")
+	return err == nil && rel != ".." && !filepath.IsAbs(rel) && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // resolveRulesDir picks --rules, then the config's rules_dir, then "rules".

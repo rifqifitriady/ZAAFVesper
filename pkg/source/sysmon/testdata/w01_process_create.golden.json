@@ -1,0 +1,60 @@
+{
+  "seq": 1001,
+  "time": "2026-11-08T10:00:00.123Z",
+  "name": "CreateProcess",
+  "source": "sysmon",
+  "proc": {
+    "pid": 6228,
+    "ppid": 5480,
+    "pidversion": 1650030055,
+    "exe": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    "name": "powershell.exe",
+    "cmdline": "powershell.exe -NoProfile -EncodedCommand \"SQBFAFgA\"",
+    "args": [
+      "powershell.exe",
+      "-NoProfile",
+      "-EncodedCommand",
+      "SQBFAFgA"
+    ],
+    "cwd": "C:\\Users\\alice\\",
+    "uid": -1,
+    "euid": -1,
+    "username": "CORP\\alice",
+    "is_platform": false,
+    "is_signed": false,
+    "start_time": "2026-11-08T10:00:00.123Z",
+    "parent": {
+      "pid": 5480,
+      "ppid": 0,
+      "pidversion": 2004801693,
+      "exe": "C:\\Windows\\System32\\cmd.exe",
+      "name": "cmd.exe",
+      "cmdline": "\"C:\\Windows\\system32\\cmd.exe\" /c run.bat",
+      "uid": -1,
+      "euid": -1,
+      "username": "CORP\\alice",
+      "is_platform": false,
+      "is_signed": false,
+      "start_time": "0001-01-01T00:00:00Z",
+      "guid": "{a1b2c3d4-0001-6731-2a00-000000001400}"
+    },
+    "guid": "{a1b2c3d4-0001-6731-6b01-000000001400}",
+    "hashes": "SHA256=9F914D42706FE215501044ACD85A32D58AAEF1419D404FDDFA5D3B48F66CCD9F,IMPHASH=7C955A0ABC747F57CCC4324480737EF7",
+    "integrity": "Medium",
+    "company": "Microsoft Corporation",
+    "product": "Microsoft® Windows® Operating System",
+    "description": "Windows PowerShell",
+    "original_name": "PowerShell.EXE"
+  },
+  "args": {
+    "file_version": "10.0.22621.1 (WinBuild.160101.0800)",
+    "logon_guid": "{a1b2c3d4-0000-6731-1c5a-020000000000}",
+    "logon_id": "0x25A1C",
+    "parent_command_line": "\"C:\\Windows\\system32\\cmd.exe\" /c run.bat",
+    "parent_image": "C:\\Windows\\System32\\cmd.exe",
+    "parent_user": "CORP\\alice",
+    "sysmon_event_id": "1",
+    "terminal_session_id": "1"
+  },
+  "platform": "windows"
+}

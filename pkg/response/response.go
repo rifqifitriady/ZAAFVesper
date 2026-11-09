@@ -154,7 +154,7 @@ type Config struct {
 	DynamicPIDs         func() []int32                          // pids protected at decision time (e.g. the current eslogger child)
 	Log                 func(Decision)                          // default: one line on stderr
 	Now                 func() time.Time                        // default time.Now
-	KillFunc            func(pid int, sig syscall.Signal) error // default syscall.Kill
+	KillFunc            func(pid int, sig syscall.Signal) error // default defaultKill: syscall.Kill; Windows and Linux re-check the identity on the handle they kill (identify_windows.go, identify_linux.go)
 	Identify            func(pid int32) (Identity, error)       // default: kernel lookup (sysctl, proc_pidpath, csops), see identify_darwin.go
 	Lookup              func(pid int32) (*event.Proc, bool)     // process table, for Kill(pid); optional
 	// OnDegraded is called, outside the responder's lock, when a kill budget
@@ -185,7 +185,7 @@ func New(cfg Config) *Responder {
 		cfg.Now = time.Now
 	}
 	if cfg.KillFunc == nil {
-		cfg.KillFunc = syscall.Kill
+		cfg.KillFunc = defaultKill
 	}
 	if cfg.Identify == nil {
 		cfg.Identify = identify

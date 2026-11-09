@@ -1,0 +1,22 @@
+match:
+  - desc: powershell -EncodedCommand from cmd (ART T1059.001 ATHPowerShellCommandLineParameter)
+    events:
+      - name: CreateProcess
+        platform: windows
+        proc: {pid: 6228, ppid: 5480, exe: 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe', name: powershell.exe, original_name: PowerShell.EXE, cmdline: 'powershell.exe -NoProfile -EncodedCommand SQBFAFgA', args: [powershell.exe, -NoProfile, -EncodedCommand, SQBFAFgA], uid: -1, euid: -1}
+  - desc: renamed PowerShell with the short -e flag
+    events:
+      - name: CreateProcess
+        platform: windows
+        proc: {pid: 6230, ppid: 5480, exe: 'C:\Users\alice\AppData\Local\Temp\svc.exe', name: svc.exe, original_name: PowerShell.EXE, cmdline: 'svc.exe -w hidden -e SQBFAFgA', args: [svc.exe, -w, hidden, -e, SQBFAFgA], uid: -1, euid: -1}
+nomatch:
+  - desc: benign lookalike - PowerShell running a script file with -ExecutionPolicy
+    events:
+      - name: CreateProcess
+        platform: windows
+        proc: {pid: 6240, ppid: 5480, exe: 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe', name: powershell.exe, original_name: PowerShell.EXE, cmdline: 'powershell.exe -ExecutionPolicy Bypass -File C:\scripts\backup.ps1', args: [powershell.exe, -ExecutionPolicy, Bypass, -File, 'C:\scripts\backup.ps1'], uid: -1, euid: -1}
+  - desc: another program with an -enc argument
+    events:
+      - name: CreateProcess
+        platform: windows
+        proc: {pid: 6241, ppid: 5480, exe: 'C:\Program Files\7-Zip\7z.exe', name: 7z.exe, original_name: 7z.exe, cmdline: '7z.exe a -enc out.7z in', args: [7z.exe, a, -enc, out.7z, in], uid: -1, euid: -1}

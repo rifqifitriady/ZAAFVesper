@@ -1,0 +1,25 @@
+{
+  "seq": 1025,
+  "time": "2026-11-08T10:00:13Z",
+  "name": "ProcessTamper",
+  "source": "sysmon",
+  "proc": {
+    "pid": 1012,
+    "ppid": 0,
+    "pidversion": 3221291977,
+    "exe": "C:\\Windows\\System32\\svchost.exe",
+    "name": "svchost.exe",
+    "uid": -1,
+    "euid": -1,
+    "username": "CORP\\alice",
+    "is_platform": false,
+    "is_signed": false,
+    "start_time": "0001-01-01T00:00:00Z",
+    "guid": "{a1b2c3d4-0001-6731-0c00-000000001400}"
+  },
+  "args": {
+    "sysmon_event_id": "25",
+    "type": "Image is replaced"
+  },
+  "platform": "windows"
+}

@@ -1,0 +1,26 @@
+match:
+  - desc: CommandLineEventConsumer created (ART T1546.003 #1)
+    events:
+      - name: WMIEvent
+        platform: windows
+        proc: {pid: 0, username: 'CORP\alice', uid: -1, euid: -1}
+        args: {event_type: WmiConsumerEvent, operation: Created, name: '"AtomicRedTeam-WMIPersistence-Example"', type: Command Line, destination: '"C:\Windows\System32\notepad.exe"'}
+  - desc: filter to consumer binding created
+    events:
+      - name: WMIEvent
+        platform: windows
+        proc: {pid: 0, username: 'CORP\alice', uid: -1, euid: -1}
+        args: {event_type: WmiBindingEvent, operation: Created, consumer: 'CommandLineEventConsumer.Name="x"', filter: '__EventFilter.Name="x"'}
+nomatch:
+  - desc: benign lookalike - an event filter alone (no consumer)
+    events:
+      - name: WMIEvent
+        platform: windows
+        proc: {pid: 0, username: 'NT AUTHORITY\SYSTEM', uid: -1, euid: -1}
+        args: {event_type: WmiFilterEvent, operation: Created, name: '"SCM Event Log Filter"'}
+  - desc: a consumer deleted during clean-up
+    events:
+      - name: WMIEvent
+        platform: windows
+        proc: {pid: 0, username: 'CORP\alice', uid: -1, euid: -1}
+        args: {event_type: WmiConsumerEvent, operation: Deleted, name: '"x"'}

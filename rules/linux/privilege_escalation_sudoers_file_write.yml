@@ -1,0 +1,25 @@
+name: Sudoers file created outside visudo
+id: 87ff84de-4bdd-4139-af70-f5946497a97e
+version: 1.0.0
+platforms: [linux]
+description: |
+  /etc/sudoers or a file in /etc/sudoers.d was created by something other than visudo or a
+  package manager. A sudoers entry such as NOPASSWD: ALL gives a user permanent root.
+  Known benign: configuration management writing sudoers drop-ins.
+labels:
+  tactic.id: TA0004
+  tactic.name: Privilege Escalation
+  technique.id: T1548.003
+  technique.name: Sudo and Sudo Caching
+references:
+  - https://attack.mitre.org/techniques/T1548/003/
+condition: >
+  evt.name = 'CreateFile'
+  and file.path imatches ('/etc/sudoers', '/etc/sudoers.d/*', '/etc/sudoers.tmp')
+  and not ps.name in ('visudo', 'dpkg', 'rpm', 'dnf', 'yum', 'apt', 'apt-get')
+output: "%ps.exe (pid %ps.pid, user %ps.username) wrote %file.path"
+severity: high
+action: []
+tests:
+  atomic: []
+min-engine-version: 0.1.0

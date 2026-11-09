@@ -1,0 +1,31 @@
+name: Volume shadow copies deleted or recovery disabled
+id: dd763169-ccaf-428b-8317-c58539aad0a5
+version: 1.0.0
+platforms: [windows]
+description: |
+  vssadmin, wmic, wbadmin or bcdedit was used to delete shadow copies or backups or to
+  turn off Windows recovery: ransomware does this right before encrypting, so the victim
+  cannot roll files back. The PE original file name is checked, so a renamed copy matches.
+  Known benign: a backup product rotating its own shadow copies (normally through the VSS
+  API, not these tools).
+labels:
+  tactic.id: TA0040
+  tactic.name: Impact
+  technique.id: T1490
+  technique.name: Inhibit System Recovery
+references:
+  - https://attack.mitre.org/techniques/T1490/
+condition: >
+  evt.name = 'CreateProcess'
+  and (
+    ((ps.name iin ('vssadmin.exe') or ps.original_name iin ('VSSADMIN.EXE')) and ps.cmdline icontains 'delete' and ps.cmdline icontains 'shadows')
+    or ((ps.name iin ('wmic.exe') or ps.original_name iin ('wmic.exe')) and ps.cmdline icontains 'shadowcopy' and ps.cmdline icontains 'delete')
+    or ((ps.name iin ('wbadmin.exe') or ps.original_name iin ('WBADMIN.EXE')) and ps.cmdline icontains 'delete' and (ps.cmdline icontains 'catalog' or ps.cmdline icontains 'systemstatebackup'))
+    or ((ps.name iin ('bcdedit.exe') or ps.original_name iin ('bcdedit.exe')) and (ps.cmdline imatches ('*recoveryenabled*no*', '*bootstatuspolicy*ignoreallfailures*')))
+  )
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) inhibits recovery: %ps.cmdline"
+severity: critical
+action: []
+tests:
+  atomic: [43819286-91a9-4369-90ed-d31fb4da2c01, 6a3ff8dd-f49c-4272-a658-11c2fe58bd88, 263ba6cb-ea2b-41c9-9d4e-b652dadd002c]
+min-engine-version: 0.1.0

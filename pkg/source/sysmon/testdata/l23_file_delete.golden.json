@@ -1,0 +1,27 @@
+{
+  "seq": 5023,
+  "time": "2026-11-08T10:00:03Z",
+  "name": "DeleteFile",
+  "source": "sysmon",
+  "proc": {
+    "pid": 24101,
+    "ppid": 0,
+    "pidversion": 1955411581,
+    "exe": "/usr/bin/rm",
+    "name": "rm",
+    "uid": -1,
+    "euid": -1,
+    "username": "root",
+    "is_platform": false,
+    "is_signed": false,
+    "start_time": "0001-01-01T00:00:00Z",
+    "guid": "{6a8e8b0e-9c1a-6731-e8ad-1f2e00000000}"
+  },
+  "file": {
+    "path": "/root/.bash_history"
+  },
+  "args": {
+    "sysmon_event_id": "23"
+  },
+  "platform": "linux"
+}

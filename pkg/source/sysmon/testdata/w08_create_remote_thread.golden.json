@@ -1,0 +1,40 @@
+{
+  "seq": 1008,
+  "time": "2026-11-08T10:00:03Z",
+  "name": "CreateRemoteThread",
+  "source": "sysmon",
+  "proc": {
+    "pid": 6228,
+    "ppid": 0,
+    "pidversion": 1650030055,
+    "exe": "C:\\Users\\alice\\AppData\\Local\\Temp\\inject.exe",
+    "name": "inject.exe",
+    "uid": -1,
+    "euid": -1,
+    "username": "CORP\\alice",
+    "is_platform": false,
+    "is_signed": false,
+    "start_time": "0001-01-01T00:00:00Z",
+    "guid": "{a1b2c3d4-0001-6731-6b01-000000001400}"
+  },
+  "target": {
+    "pid": 1012,
+    "ppid": 0,
+    "pidversion": 3221291977,
+    "exe": "C:\\Windows\\explorer.exe",
+    "name": "explorer.exe",
+    "uid": -1,
+    "euid": -1,
+    "username": "CORP\\alice",
+    "is_platform": false,
+    "is_signed": false,
+    "start_time": "0001-01-01T00:00:00Z",
+    "guid": "{a1b2c3d4-0001-6731-0c00-000000001400}"
+  },
+  "args": {
+    "new_thread_id": "7764",
+    "start_address": "0x00007FF6A1B21000",
+    "sysmon_event_id": "8"
+  },
+  "platform": "windows"
+}

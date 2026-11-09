@@ -1,0 +1,28 @@
+{
+  "seq": 1011,
+  "time": "2026-11-08T10:00:05Z",
+  "name": "CreateFile",
+  "source": "sysmon",
+  "proc": {
+    "pid": 6228,
+    "ppid": 0,
+    "pidversion": 1650030055,
+    "exe": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    "name": "powershell.exe",
+    "uid": -1,
+    "euid": -1,
+    "username": "CORP\\alice",
+    "is_platform": false,
+    "is_signed": false,
+    "start_time": "0001-01-01T00:00:00Z",
+    "guid": "{a1b2c3d4-0001-6731-6b01-000000001400}"
+  },
+  "file": {
+    "path": "C:\\Users\\alice\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\update.lnk"
+  },
+  "args": {
+    "creation_utc_time": "2026-11-08 10:00:05.000",
+    "sysmon_event_id": "11"
+  },
+  "platform": "windows"
+}

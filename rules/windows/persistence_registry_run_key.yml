@@ -1,0 +1,29 @@
+name: Registry Run key value set
+id: e5309615-3ae2-4eb5-a3b4-0ac145538022
+version: 1.0.0
+platforms: [windows]
+description: |
+  A value was written under a Run or RunOnce key (machine or user hive, including the
+  WOW6432Node view). Windows starts every program named there at boot or logon, which makes
+  it the most common Windows persistence mechanism.
+  Known benign: installers of desktop applications (updaters, chat clients) set Run values;
+  Explorer and msiexec are not excluded on purpose.
+labels:
+  tactic.id: TA0003
+  tactic.name: Persistence
+  technique.id: T1547.001
+  technique.name: Registry Run Keys / Startup Folder
+references:
+  - https://attack.mitre.org/techniques/T1547/001/
+condition: >
+  evt.name = 'RegistrySetValue'
+  and registry.key imatches ('*\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\*',
+                            '*\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce\\*',
+                            '*\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run\\*',
+                            '*\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\RunOnce\\*')
+output: "%ps.exe (pid %ps.pid) set %registry.key = %registry.data"
+severity: medium
+action: []
+tests:
+  atomic: [e55be3fd-3521-4610-9d1a-e210e42dcf05, 554cbd88-cde1-4b56-8168-0be552eed9eb]
+min-engine-version: 0.1.0

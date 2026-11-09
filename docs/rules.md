@@ -386,6 +386,35 @@ Fixtures are synthetic events written to mirror what each cited atomic does (as 
 would report it). They prove the rule logic, not the decoder: a real capture is still needed
 to confirm field population (`ps.env`, `evt.arg[...]`, `/private` path forms).
 
+## Windows and Linux starter rules (v0.2, Sysmon)
+
+Hand-written starters for the Sysmon sources, each with `platforms:`, one or more
+`match` scenarios and at least one benign lookalike `nomatch`. Technique IDs and
+tactics were checked against the same `enterprise-attack.json` as the macOS rules;
+the Atomic Red Team GUIDs were checked in that checkout (test name and platform).
+The fixtures are hand-written from Sysmon's documented fields, not captured from a
+live host. Converted SigmaHQ rules are not included yet: the Sigma importer (W3)
+had not merged when these were written; a small curated set is a follow-up.
+
+| Rule (file) | Tactic | Technique | Severity | Atomic tests |
+|---|---|---|---|---|
+| PowerShell started with an encoded command<br>`rules/windows/execution_powershell_encoded_command.yml` | TA0002 Execution | T1059.001 PowerShell | high | `86a43bad-12e3-4e85-b97c-4d5cf25b95c3`<br>`0d181431-ddf3-4826-8055-2dbf63ae848b` |
+| LSASS process memory opened for reading<br>`rules/windows/credential_access_lsass_memory_access.yml` | TA0006 Credential Access | T1003.001 LSASS Memory | critical | `0be2230c-9ab3-4ac2-8826-3199b9a0ebf8`<br>`7cede33f-0acd-44ef-9774-15511300b24b`<br>`2536dee2-12fb-459a-8c37-971844fa73be` |
+| Registry Run key value set<br>`rules/windows/persistence_registry_run_key.yml` | TA0003 Persistence | T1547.001 Registry Run Keys / Startup Folder | medium | `e55be3fd-3521-4610-9d1a-e210e42dcf05`<br>`554cbd88-cde1-4b56-8168-0be552eed9eb` |
+| Volume shadow copies deleted or recovery disabled<br>`rules/windows/impact_shadow_copy_deletion.yml` | TA0040 Impact | T1490 Inhibit System Recovery | critical | `43819286-91a9-4369-90ed-d31fb4da2c01`<br>`6a3ff8dd-f49c-4272-a658-11c2fe58bd88`<br>`263ba6cb-ea2b-41c9-9d4e-b652dadd002c` |
+| WMI event subscription persistence<br>`rules/windows/persistence_wmi_event_subscription.yml` | TA0003 Persistence | T1546.003 WMI Event Subscription | high | `3c64f177-28e2-49eb-a799-d767b24dd1e0` |
+| Remote thread created in another process from a user-writable location<br>`rules/windows/stealth_remote_thread_into_other_process.yml` | TA0005 Stealth | T1055 Process Injection | high | (Atomic runs from C:\AtomicRedTeam, outside the rule's paths) |
+| Cron job file created<br>`rules/linux/persistence_cron_file_write.yml` | TA0003 Persistence | T1053.003 Cron | medium | `078e69eb-d9fb-450e-b9d0-2e118217c846`<br>`2d943c18-e74a-44bf-936f-25ade6cccab4` |
+| Systemd unit file created outside the package manager<br>`rules/linux/persistence_systemd_unit_file_write.yml` | TA0003 Persistence | T1543.002 Systemd Service | high | `d9e4f24f-aa67-4c6e-bcbf-85622b697a7c` |
+| Sudoers file created outside visudo<br>`rules/linux/privilege_escalation_sudoers_file_write.yml` | TA0004 Privilege Escalation | T1548.003 Sudo and Sudo Caching | high | (the Atomic tests edit with sed -i: a rename, which Sysmon for Linux does not report as FileCreate of sudoers) |
+| Shell history file deleted<br>`rules/linux/stealth_shell_history_deleted.yml` | TA0005 Stealth | T1070.003 Clear Command History | medium | `a934276e-2be5-4a36-93fd-98adbb5bd4fc` |
+| Interactive shell redirected to a network socket<br>`rules/linux/execution_reverse_shell_dev_tcp.yml` | TA0002 Execution | T1059.004 Unix Shell | critical | (none for this pattern) |
+
+Field notes for Sysmon events: `ps.uid` is -1 (Sysmon reports a user name, in
+`ps.username`); `ps.original_name` is the PE original file name, which survives a
+rename of the executable; `ps.ancestors_untrusted` is a macOS notion and always
+true on Windows and Linux, so do not use it in these rules.
+
 ## Round 2 changes (8 Nov 2026)
 
 Rules whose behaviour changed were bumped to 1.1.0:

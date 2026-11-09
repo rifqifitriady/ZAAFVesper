@@ -1,0 +1,27 @@
+name: WMI event subscription persistence
+id: 923b425d-06a7-4a49-a9a5-7ae4377bc3a1
+version: 1.0.0
+platforms: [windows]
+description: |
+  A WMI event consumer was created or bound to a filter (Sysmon events 20 and 21).
+  A filter-to-consumer binding runs a command or script whenever the filter's event occurs,
+  surviving reboots without any file in a startup location; it is a favourite of
+  fileless malware. Deletions are not alerted.
+  Known benign: some management suites (SCCM) register WMI subscriptions.
+labels:
+  tactic.id: TA0003
+  tactic.name: Persistence
+  technique.id: T1546.003
+  technique.name: Windows Management Instrumentation Event Subscription
+references:
+  - https://attack.mitre.org/techniques/T1546/003/
+condition: >
+  evt.name = 'WMIEvent'
+  and evt.arg[event_type] in ('WmiConsumerEvent', 'WmiBindingEvent')
+  and evt.arg[operation] icontains 'created'
+output: "WMI %evt.arg[event_type] by %ps.username: %evt.arg[name] %evt.arg[destination] %evt.arg[consumer]"
+severity: high
+action: []
+tests:
+  atomic: [3c64f177-28e2-49eb-a799-d767b24dd1e0]
+min-engine-version: 0.1.0

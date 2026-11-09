@@ -1,0 +1,41 @@
+{
+  "seq": 1010,
+  "time": "2026-11-08T10:00:04Z",
+  "name": "OpenProcess",
+  "source": "sysmon",
+  "proc": {
+    "pid": 6228,
+    "ppid": 0,
+    "pidversion": 1650030055,
+    "exe": "C:\\Users\\alice\\Downloads\\tool.exe",
+    "name": "tool.exe",
+    "uid": -1,
+    "euid": -1,
+    "username": "CORP\\alice",
+    "is_platform": false,
+    "is_signed": false,
+    "start_time": "0001-01-01T00:00:00Z",
+    "guid": "{a1b2c3d4-0001-6731-6b01-000000001400}"
+  },
+  "target": {
+    "pid": 720,
+    "ppid": 0,
+    "pidversion": 3221291977,
+    "exe": "C:\\Windows\\system32\\lsass.exe",
+    "name": "lsass.exe",
+    "uid": -1,
+    "euid": -1,
+    "username": "NT AUTHORITY\\SYSTEM",
+    "is_platform": false,
+    "is_signed": false,
+    "start_time": "0001-01-01T00:00:00Z",
+    "guid": "{a1b2c3d4-0001-6731-0c00-000000001400}"
+  },
+  "args": {
+    "call_trace": "C:\\Windows\\SYSTEM32\\ntdll.dll+9d4c4|UNKNOWN(00007FF6A1B2A000)",
+    "granted_access": "0x1010",
+    "source_thread_id": "6300",
+    "sysmon_event_id": "10"
+  },
+  "platform": "windows"
+}

@@ -1,0 +1,30 @@
+{
+  "seq": 1023,
+  "time": "2026-11-08T10:00:12Z",
+  "name": "DeleteFile",
+  "source": "sysmon",
+  "proc": {
+    "pid": 6228,
+    "ppid": 0,
+    "pidversion": 1650030055,
+    "exe": "C:\\Windows\\System32\\cmd.exe",
+    "name": "cmd.exe",
+    "uid": -1,
+    "euid": -1,
+    "username": "CORP\\alice",
+    "is_platform": false,
+    "is_signed": false,
+    "start_time": "0001-01-01T00:00:00Z",
+    "guid": "{a1b2c3d4-0001-6731-6b01-000000001400}"
+  },
+  "file": {
+    "path": "C:\\Windows\\Temp\\stage.exe"
+  },
+  "args": {
+    "archived": "true",
+    "hashes": "SHA256=0000000000000000000000000000000000000000000000000000000000000004",
+    "is_executable": "true",
+    "sysmon_event_id": "23"
+  },
+  "platform": "windows"
+}

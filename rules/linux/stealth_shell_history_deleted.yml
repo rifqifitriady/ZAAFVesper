@@ -1,0 +1,25 @@
+name: Shell history file deleted
+id: 51c1132c-6312-43eb-ae54-d91c2a6bda51
+version: 1.0.0
+platforms: [linux]
+description: |
+  A shell history file (.bash_history, .zsh_history, .history, fish history) in a home
+  directory was deleted, which removes the record of commands an intruder typed.
+  Known benign: a user clearing their own history on purpose.
+labels:
+  tactic.id: TA0005
+  tactic.name: Stealth
+  technique.id: T1070.003
+  technique.name: Clear Command History
+references:
+  - https://attack.mitre.org/techniques/T1070/003/
+condition: >
+  evt.name = 'DeleteFile'
+  and file.path imatches ('/home/*/.bash_history', '/root/.bash_history', '/home/*/.zsh_history', '/root/.zsh_history',
+                          '/home/*/.history', '/root/.history', '/home/*/.local/share/fish/fish_history', '/root/.local/share/fish/fish_history')
+output: "%ps.exe (pid %ps.pid, user %ps.username) deleted %file.path"
+severity: medium
+action: []
+tests:
+  atomic: [a934276e-2be5-4a36-93fd-98adbb5bd4fc]
+min-engine-version: 0.1.0

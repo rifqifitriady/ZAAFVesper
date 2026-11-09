@@ -10,10 +10,6 @@ import (
 	"sort"
 	"strconv"
 	"time"
-
-	"golang.org/x/sys/unix"
-
-	"github.com/rifqifitriady/ZAAFVesper/pkg/config"
 )
 
 // File name prefixes and extensions in the output directory.
@@ -31,52 +27,12 @@ const (
 // (--output-dir). Every file operation is relative to an open descriptor of
 // the directory and never follows a symbolic link: files are created with
 // O_CREAT|O_EXCL|O_NOFOLLOW 0600, and pruning only unlinks regular files
-// whose names match ZAAFVesper's own pattern.
+// whose names match ZAAFVesper's own pattern. The file operations are in
+// outdir_unix.go and outdir_windows.go.
 type outputDir struct {
 	path string
-	fd   int
+	fd   int // open directory descriptor (Unix); unused on Windows
 	now  func() time.Time
-}
-
-// openOutputDir creates dir (0700) when it is missing, checks it and opens
-// it. As root the directory and every ancestor must be root-owned and not
-// group/world writable (config.CheckOwnership); in every mode the directory
-// itself must not be group/world writable.
-func openOutputDir(dir string, asRoot bool) (*outputDir, error) {
-	abs, err := filepath.Abs(dir)
-	if err != nil {
-		return nil, err
-	}
-	if err := os.Mkdir(abs, 0o700); err != nil && !errors.Is(err, fs.ErrExist) {
-		return nil, fmt.Errorf("output directory: %w", err)
-	}
-	if asRoot {
-		if err := config.CheckOwnership(abs); err != nil {
-			return nil, fmt.Errorf("output directory %s is not safe to write as root:\n%w", abs, err)
-		}
-	}
-	fd, err := unix.Open(abs, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-	if err != nil {
-		return nil, fmt.Errorf("output directory %s: %w", abs, err)
-	}
-	var st unix.Stat_t
-	if err := unix.Fstat(fd, &st); err != nil {
-		_ = unix.Close(fd)
-		return nil, fmt.Errorf("output directory %s: %w", abs, err)
-	}
-	switch {
-	case st.Mode&unix.S_IFMT != unix.S_IFDIR:
-		err = errors.New("not a directory")
-	case st.Mode&0o022 != 0:
-		err = fmt.Errorf("mode %o is group- or world-writable", st.Mode&0o777)
-	case asRoot && st.Uid != 0:
-		err = fmt.Errorf("owned by uid %d, must be owned by root", st.Uid)
-	}
-	if err != nil {
-		_ = unix.Close(fd)
-		return nil, fmt.Errorf("output directory %s: %w", abs, err)
-	}
-	return &outputDir{path: abs, fd: fd, now: time.Now}, nil
 }
 
 // create makes a new file <prefix>-<UTC timestamp><ext> (0600, never an
@@ -88,14 +44,14 @@ func (d *outputDir) create(prefix, ext string) (*os.File, error) {
 		if i > 0 {
 			name = prefix + "-" + stamp + "-" + strconv.Itoa(i) + ext
 		}
-		fd, err := unix.Openat(d.fd, name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
-		if errors.Is(err, unix.EEXIST) {
+		f, err := d.createExcl(name)
+		if errors.Is(err, fs.ErrExist) {
 			continue
 		}
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", filepath.Join(d.path, name), err)
 		}
-		return os.NewFile(uintptr(fd), filepath.Join(d.path, name)), nil
+		return f, nil
 	}
 	return nil, fmt.Errorf("%s: no free file name for %s", d.path, prefix)
 }
@@ -122,13 +78,7 @@ func ownName(prefix, ext string) *regexp.Regexp {
 // the name, then by the numeric collision suffix (so -2 sorts before -10 and
 // the plain name before -1).
 func (d *outputDir) list(prefix, ext string) ([]ownFile, error) {
-	dfd, err := unix.Openat(d.fd, ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-	if err != nil {
-		return nil, err
-	}
-	f := os.NewFile(uintptr(dfd), d.path)
-	names, err := f.Readdirnames(-1)
-	_ = f.Close()
+	names, err := d.names()
 	if err != nil {
 		return nil, err
 	}
@@ -145,8 +95,7 @@ func (d *outputDir) list(prefix, ext string) ([]ownFile, error) {
 		}
 		// Only regular files are ours; anything else is neither counted
 		// nor touched.
-		var st unix.Stat_t
-		if err := unix.Fstatat(d.fd, n, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil || st.Mode&unix.S_IFMT != unix.S_IFREG {
+		if _, ok := d.regularSize(n); !ok {
 			continue
 		}
 		seq := 0
@@ -186,14 +135,14 @@ func (d *outputDir) makeRoom(prefix, ext string, keep int, open map[string]bool)
 		if open[f.name] {
 			continue
 		}
-		var st unix.Stat_t
-		if err := unix.Fstatat(d.fd, f.name, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil || st.Mode&unix.S_IFMT != unix.S_IFREG {
+		size, ok := d.regularSize(f.name)
+		if !ok {
 			continue
 		}
-		if st.Size > 0 && now.Sub(f.stamp) < minPruneAge {
+		if size > 0 && now.Sub(f.stamp) < minPruneAge {
 			continue
 		}
-		if err := unix.Unlinkat(d.fd, f.name, 0); err != nil {
+		if err := d.unlink(f.name); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", f.name, err))
 			continue
 		}
@@ -202,5 +151,3 @@ func (d *outputDir) makeRoom(prefix, ext string, keep int, open map[string]bool)
 	}
 	return left <= keep-1, removed, errors.Join(errs...)
 }
-
-func (d *outputDir) close() error { return unix.Close(d.fd) }

@@ -1,0 +1,28 @@
+name: Cron job file created
+id: 804a4e82-6a3e-46a8-bb28-3a47f9438002
+version: 1.0.0
+platforms: [linux]
+description: |
+  A file was created in a cron directory (/etc/cron.d, /etc/cron.{hourly,daily,weekly,monthly},
+  /etc/crontab or a user crontab in /var/spool/cron). Attackers add cron jobs to come back
+  after a reboot or a killed implant.
+  Known benign: package managers installing cron jobs (dpkg, rpm) and crontab(1) editing
+  a user's own table.
+labels:
+  tactic.id: TA0003
+  tactic.name: Persistence
+  technique.id: T1053.003
+  technique.name: Cron
+references:
+  - https://attack.mitre.org/techniques/T1053/003/
+condition: >
+  evt.name = 'CreateFile'
+  and file.path imatches ('/etc/cron.d/*', '/etc/cron.hourly/*', '/etc/cron.daily/*', '/etc/cron.weekly/*', '/etc/cron.monthly/*',
+                          '/etc/crontab', '/var/spool/cron/*')
+  and not ps.name in ('dpkg', 'rpm', 'dnf', 'yum', 'apt', 'apt-get', 'crontab', 'unattended-upgrade')
+output: "%ps.exe (pid %ps.pid, user %ps.username) created cron file %file.path"
+severity: medium
+action: []
+tests:
+  atomic: [078e69eb-d9fb-450e-b9d0-2e118217c846, 2d943c18-e74a-44bf-936f-25ade6cccab4]
+min-engine-version: 0.1.0

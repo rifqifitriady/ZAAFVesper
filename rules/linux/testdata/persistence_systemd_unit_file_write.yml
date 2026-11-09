@@ -1,0 +1,26 @@
+match:
+  - desc: unit written with echo/cat (ART T1543.002 Create Systemd Service)
+    events:
+      - name: CreateFile
+        platform: linux
+        proc: {pid: 24101, ppid: 24090, exe: /usr/bin/bash, name: bash, username: root, uid: -1, euid: -1}
+        file: {path: /etc/systemd/system/art-systemd-service.service}
+  - desc: user unit dropped by an implant in the home directory
+    events:
+      - name: CreateFile
+        platform: linux
+        proc: {pid: 24102, ppid: 24090, exe: /tmp/.x/implant, name: implant, username: alice, uid: -1, euid: -1}
+        file: {path: /home/alice/.config/systemd/user/updater.service}
+nomatch:
+  - desc: benign lookalike - apt installs a package's service
+    events:
+      - name: CreateFile
+        platform: linux
+        proc: {pid: 24110, ppid: 1, exe: /usr/bin/dpkg, name: dpkg, username: root, uid: -1, euid: -1}
+        file: {path: /usr/lib/systemd/system/nginx.service}
+  - desc: a drop-in override file (not a new unit)
+    events:
+      - name: CreateFile
+        platform: linux
+        proc: {pid: 24111, ppid: 1, exe: /usr/bin/systemctl, name: systemctl, username: root, uid: -1, euid: -1}
+        file: {path: /etc/systemd/system/nginx.service.d/override.conf}

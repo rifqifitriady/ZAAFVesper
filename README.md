@@ -23,6 +23,18 @@ ZAAFVesper watches what processes on a Mac actually **do**: what they spawn, whi
 > [!WARNING]
 > **Pre-release.** Every rule passes its fixtures and the code has been through several independent security review rounds. However, the installer package, the LaunchDaemon, Full Disk Access and real kills have **not yet been validated live as root**. Treat a first install as a test on a machine you can recover. Open items and residual risks are tracked in [docs/security/open-findings.md](docs/security/open-findings.md).
 
+## Platform support
+
+| Platform | Event source | Status |
+|---|---|---|
+| macOS 13+ | Endpoint Security via `eslogger` | Main platform. Rules and fixtures pass; live install as root still to be validated (above). |
+| Windows 10/11, Server 2016+ | Sysmon through the event log (`EvtSubscribe`), Windows service | **Preview, untested on a real host.** Cross-compiled; the Sysmon decoder passes fixtures built from Microsoft's documented schema. See [packaging/windows](packaging/windows/README.md). |
+| Linux (systemd) | Sysmon for Linux through journald, systemd unit | **Preview, untested on a real host with Sysmon.** Unit tests, the `/proc` process table, the pidfd kill and a replayed journal run pass in a Linux container. See [packaging/linux](packaging/linux/README.md). |
+
+Rules declare their platforms (`platforms: [windows]`); `run` loads only the
+rules for the host, and `rules test` checks all of them on any machine. YARA is
+macOS-only for now (the Windows and Linux builds are pure Go).
+
 ## What it does
 
 <table>
@@ -183,18 +195,21 @@ The status of every finding, with the tests that back it, is in **[docs/security
 cmd/zaafvesper/        CLI: run, replay, rules, coverage
 pkg/event/             platform-neutral event model and field registry
 pkg/source/eslogger/   eslogger decoder and supervisor
+pkg/source/sysmon/     Sysmon XML decoder (Windows and Linux) and identity binder
+pkg/source/winevt/     Windows event log source (Sysmon channel)
+pkg/source/sysmonlinux/ journald source (Sysmon for Linux)
 pkg/ps/                process tree, ancestry and identity
 pkg/filter/ql/         rule language: lexer, parser, compiler
 pkg/rules/             rule loading, engine, sequences, fixtures
 pkg/yara/              YARA scanner bound to file identity
 pkg/alert/, response/  alert sinks and caps, kill guard rails
-rules/                 41 rules, macros, fixtures, YARA signatures
-packaging/             LaunchDaemon plist, newsyslog config
+rules/                 macOS rules, rules/windows, rules/linux, macros, fixtures, YARA signatures
+packaging/             LaunchDaemon plist, newsyslog config; windows/ and linux/ install notes
 ```
 
 ## Roadmap
 
-- Windows adapter (Sysmon with sysmon-modular configs), then Linux.
+- Windows and Linux adapters (Sysmon): in preview, to be validated on real hosts.
 - Network telemetry through NetworkExtension.
 - Native Endpoint Security client with AUTH events (blocking, not just notify).
 - Signed and notarized package built in CI.
