@@ -31,7 +31,9 @@ cleanup() {
 	sudo /usr/bin/pkill -TERM -x eslogger 2>/dev/null
 	[ -f "$work/receiver.pid" ] && kill "$(cat "$work/receiver.pid")" 2>/dev/null
 	/usr/bin/pkill -x nc 2>/dev/null
-	for l in triggers-a triggers-b; do sudo /bin/launchctl remove "com.zaafvesper.ci.$l" 2>/dev/null; done
+	for l in $(sudo /bin/launchctl list 2>/dev/null | /usr/bin/awk '$3 ~ /^com\.zaafvesper\.ci\./ {print $3}'); do
+		sudo /bin/launchctl remove "$l" 2>/dev/null
+	done
 	if [ -d "$OUTDIR" ] && [ ! -d "$ART/outdir" ]; then
 		sudo /bin/cp -R "$OUTDIR" "$ART/outdir" && sudo /usr/sbin/chown -R "$(id -u)" "$ART/outdir"
 	fi
@@ -103,6 +105,7 @@ pipe=$!
 for _ in $(seq 1 60); do grep -q "rules enabled" "$ART/sensor.log" 2>/dev/null && break; sleep 0.5; done
 if ! grep -q "rules enabled" "$ART/sensor.log"; then status sensor "did not start"; cat "$ART/sensor.log"; exit 1; fi
 status sensor "started as root"
+sensor_start=$SECONDS
 sleep 5 # eslogger subscription
 
 echo "== 5. socket polling: nc listener and an outbound connection over loopback, as uid $(id -u)"
@@ -122,12 +125,25 @@ echo "== 6. triggers (receivers up)"
 "$here/outside.sh" triggers-a 300 "$here/triggers.sh" a "$ART/triggers.tsv" "$work/a" "$BIN/dropped" || status triggers_a "exit $?"
 sleep 6
 
+echo "== 6b. soak: the sensor keeps running for at least 3 minutes"
+# The task asks for minutes, not seconds: idle, then one late action that
+# must still be detected (Endpoint Security still delivering after minutes).
+while [ $((SECONDS - sensor_start)) -lt 200 ]; do sleep 5; done
+"$here/outside.sh" triggers-c 60 "$here/triggers.sh" c "$ART/triggers.tsv" "$work/c" "$BIN/dropped" || status triggers_c "exit $?"
+sleep 3
+
 echo "== 7. receivers down: alerts must be spooled"
 kill "$(cat "$work/receiver.pid")"; sleep 1
 "$here/outside.sh" triggers-b 60 "$here/triggers.sh" b "$ART/triggers.tsv" "$work/b" "$BIN/dropped" || status triggers_b "exit $?"
-sleep 4
-sudo /usr/bin/find "$SPOOL" -type f -name 'spool-*.ndjson' -exec /bin/ls -l {} + >"$ART/spool-while-down.txt" 2>&1 || true
-status spool_while_down "$(wc -l <"$ART/spool-while-down.txt" | tr -d ' ') spool file(s)"
+# Bounded poll for the spool files (find's errors are not counted as files).
+nspool=0
+for _ in $(seq 1 30); do
+	nspool=$(sudo /usr/bin/find "$SPOOL" -type f -name 'spool-*.ndjson' -print 2>/dev/null | wc -l | tr -d ' ')
+	[ "$nspool" -gt 0 ] && break
+	sleep 0.5
+done
+sudo /usr/bin/find "$SPOOL" -type f -name 'spool-*.ndjson' -exec /bin/ls -l {} + >"$ART/spool-while-down.txt" 2>/dev/null || true
+status spool_while_down "$nspool spool file(s)"
 
 echo "== 8. receivers back: the spool must drain"
 start_receiver
@@ -138,6 +154,7 @@ done
 status spool_after_up "$left spool file(s) left"
 
 echo "== 9. stop the sensor"
+status sensor_runtime "$((SECONDS - sensor_start))"
 sudo /usr/bin/pkill -INT -f "^$SBIN run" || true
 if ! alive_for "$pipe" 30; then
 	status sensor_stop "did not stop within 30 s of SIGINT"

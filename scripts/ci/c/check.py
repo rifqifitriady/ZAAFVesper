@@ -58,12 +58,25 @@ for a in alerts:
         fired[a.get("rule_id")] = fired.get(a.get("rule_id"), 0) + 1
 id_to_file = {v: k for k, v in rule_ids.items()}
 
+# 0. The sensor ran for minutes, and every trigger phase completed.
+rt = status.get("sensor_runtime", "")
+add("eslogger", "zaafvesper ran as root for at least 3 minutes", rt.isdigit() and int(rt) >= 180, f"{rt or '?'} s")
+for ph in ("triggers_a", "triggers_b", "triggers_c"):
+    if ph in status:
+        add("rules", f"trigger phase {ph[-1]} completed", False, status[ph])
+EXPECTED_TRIGGERS = 17 + 2 + 1  # phase a, phase b, phase c
+rows = read_lines(os.path.join(art, "triggers.tsv"))
+add("rules", "every trigger ran", len(rows) == EXPECTED_TRIGGERS, f"{len(rows)} of {EXPECTED_TRIGGERS} trigger rows")
+
 # 1. Rules fired by the triggers.
-for line in read_lines(os.path.join(art, "triggers.tsv")):
+for line in rows:
     tid, rule, what, code = (line.split("\t") + ["", "", "", ""])[:4]
     rid = rule_ids.get(rule)
     n = fired.get(rid, 0)
     add("rules", f"{tid}: {rule}", n > 0, f"{what}; exit {code}; alerts {n}")
+q = rule_ids["defense_impairment_quarantine_attribute_removed"]
+add("rules", "late action (after the soak) still detected", fired.get(q, 0) >= 3,
+    f"{fired.get(q, 0)} quarantine alerts (phases a, c and b)")
 others = sorted((id_to_file.get(r, r), n) for r, n in fired.items() if id_to_file.get(r) not in
                 {l.split("\t")[1] for l in read_lines(os.path.join(art, "triggers.tsv"))})
 for name, n in others:
@@ -116,8 +129,8 @@ add("siem", "syslog over TLS (pinned CA) received every alert", not miss_s and s
     f"{len(alerts)} alerts written, {len(sys_lines)} syslog alert messages; missing {miss_s or 'none'}")
 add("siem", "HTTPS webhook received every alert", not miss_w and web_c != {},
     f"{sum(web_c.values())} webhook alert records; missing {miss_w or 'none'}")
-add("siem", "spool used while the receivers were down", not status.get("spool_while_down", "0").startswith("0 "),
-    status.get("spool_while_down", "missing"))
+sw = status.get("spool_while_down", "0 ").split(" ")[0]
+add("siem", "spool used while the receivers were down", sw.isdigit() and int(sw) > 0, status.get("spool_while_down", "missing"))
 add("siem", "spool drained after the receivers came back", status.get("spool_after_up", "").startswith("0 "),
     status.get("spool_after_up", "missing"))
 for b in ("defense_impairment_quarantine_attribute_removed", "stealth_hidden_file_flag"):
@@ -145,7 +158,9 @@ for f in findings:
 for t in ("Quarantine attribute removed with xattr (macOS)", "Unix shell with an outbound network connection (macOS)",
           "File hidden with chflags (macOS)"):
     add("zaafelegia", f"zaaf hunt over the live pipe: {t}", titles.get(t, 0) > 0, f"{titles.get(t, 0)} finding(s)")
-add("zaafelegia", "events streamed through --elegia-out -", len(events) > 0, f"{len(events)} events")
+cats = {(e.get("logsource") or {}).get("category") for e in events}
+add("zaafelegia", "events streamed through --elegia-out - (process, file and network categories)",
+    {"process_creation", "file_event", "network_connection"} <= cats, f"{len(events)} events; categories {sorted(c for c in cats if c)}")
 
 # Report.
 fails = [r for r in results if r[2] == "FAIL"]

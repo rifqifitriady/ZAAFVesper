@@ -5,7 +5,8 @@
 # outlive the job. Each action records:  id <TAB> rule file <TAB> what <TAB> exit
 #
 # Usage: triggers.sh PHASE OUTFILE WORKDIR DROPPED_BIN
-#   PHASE a: the main set; PHASE b: a few more while the SIEM receivers are down.
+#   PHASE a: the main set; PHASE c: one late action after the soak;
+#   PHASE b: a few more while the SIEM receivers are down.
 set -u
 phase=$1 out=$2 work=$3 dropped=$4
 # Started by run.sh (itself guarded to GitHub-hosted runners) through
@@ -23,6 +24,11 @@ trig() { # id rulefile what -- command...
 	sleep 1
 }
 
+if [ "$phase" = c ]; then
+	f="$work/q-late.bin"; echo x >"$f"; /usr/bin/xattr -w com.apple.quarantine "0081;00000000;Safari;" "$f"
+	trig c-late-quarantine defense_impairment_quarantine_attribute_removed "xattr -d com.apple.quarantine after 3 minutes of running" -- /usr/bin/xattr -d com.apple.quarantine "$f"
+	exit 0
+fi
 if [ "$phase" = b ]; then
 	f="$work/q-down.bin"; echo x >"$f"; /usr/bin/xattr -w com.apple.quarantine "0081;00000000;Safari;" "$f"
 	trig b-quarantine defense_impairment_quarantine_attribute_removed "xattr -d com.apple.quarantine while the SIEM is down" -- /usr/bin/xattr -d com.apple.quarantine "$f"

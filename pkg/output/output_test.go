@@ -697,3 +697,24 @@ func TestFinalFlushBoundedByHangingEndpoint(t *testing.T) {
 		t.Fatalf("stats %v", st)
 	}
 }
+
+// A Close timeout shorter than finalFlushTimeout shortens the final flush
+// too, so Close never returns while a Send still runs on the transport.
+func TestFinalFlushFollowsCloseTimeout(t *testing.T) {
+	tr := &blocking{release: make(chan struct{})}
+	defer close(tr.release)
+	sp, _ := OpenSpool(filepath.Join(t.TempDir(), "sp"), 1<<20, false)
+	f := NewForwarder(ForwarderConfig{Transport: tr, Spool: sp, FlushEvery: time.Hour})
+	_ = f.Send(testAlert("short close"))
+	time.Sleep(20 * time.Millisecond)
+	start := time.Now()
+	if err := f.Close(1500 * time.Millisecond); err != nil {
+		t.Fatalf("Close: %v (the loop must finish within the timeout)", err)
+	}
+	if el := time.Since(start); el > 1500*time.Millisecond {
+		t.Fatalf("Close took %v", el)
+	}
+	if f.Stats()["spooled"] != 1 {
+		t.Fatalf("stats %v", f.Stats())
+	}
+}
