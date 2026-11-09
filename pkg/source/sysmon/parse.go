@@ -11,11 +11,13 @@ import (
 	"time"
 )
 
-// Bounds on one event. Sysmon command lines are at most 32 767 UTF-16 code
-// units, so a legitimate event stays far below MaxEventBytes.
+// Bounds on one event. A Sysmon command line is at most 32 767 UTF-16 code
+// units; escaped as XML ("&amp;" is 5 bytes) and with the parent's command
+// line in the same event 1, a legitimate event stays below 400 KiB, so
+// MaxEventBytes leaves a wide margin. MaxFieldBytes bounds the decoded value.
 const (
 	// MaxEventBytes bounds the XML of one event (UTF-8).
-	MaxEventBytes = 256 << 10
+	MaxEventBytes = 1 << 20
 	// MaxFieldBytes bounds one <Data> value.
 	MaxFieldBytes = 128 << 10
 	maxDataItems  = 128
@@ -35,7 +37,13 @@ var (
 // Record is the parsed form of one rendered event (the System header fields
 // ZAAFVesper uses and the named EventData values).
 type Record struct {
-	Provider   string
+	Provider string
+	// ExecPID is System/Execution/@ProcessID and UserID System/Security/@UserID
+	// (Windows; Sysmon for Linux writes @UserId): who wrote the event, as the
+	// event log recorded it. The Windows source checks them (Sysmon's service
+	// process, LocalSystem); see pkg/source/winevt.
+	ExecPID    uint32
+	UserID     string
 	EventID    int
 	Version    int
 	RecordID   uint64
@@ -52,10 +60,19 @@ type Record struct {
 // (an XML declaration naming another encoding is refused), and no DTD:
 // encoding/xml never fetches external entities and knows only the five
 // predefined ones, so entity expansion attacks do not apply.
+//
+// Characters XML forbids (C0 controls other than tab, CR and LF, U+FFFE,
+// U+FFFF, invalid UTF-8, and character references to any of them) do not
+// fail the event: they are replaced by U+FFFD first (Sanitize), so a command
+// line with a control character cannot make an event disappear.
+//
+// Each System header element ZAAFVesper reads, and System and EventData
+// themselves, may appear only once.
 func Parse(raw []byte) (*Record, error) {
 	if len(raw) > MaxEventBytes {
 		return nil, ErrTooLarge
 	}
+	raw = Sanitize(raw)
 	d := xml.NewDecoder(bytes.NewReader(raw))
 	d.Strict = true
 	r := &Record{Data: map[string]string{}}
@@ -63,6 +80,7 @@ func Parse(raw []byte) (*Record, error) {
 	var text strings.Builder
 	dataName, inData, sawRoot := "", false, false
 	tokens := 0
+	seen := map[string]bool{}
 	for {
 		tok, err := d.Token()
 		if err == io.EOF {
@@ -92,7 +110,22 @@ func Parse(raw []byte) (*Record, error) {
 			}
 			text.Reset()
 			path := strings.Join(stack, "/")
+			if once[path] {
+				if seen[path] {
+					return nil, fmt.Errorf("%w: repeated %s", ErrMalformed, path)
+				}
+				seen[path] = true
+			}
 			switch path {
+			case "Event/System/Execution":
+				if n, err := strconv.ParseUint(attr(t, "ProcessID"), 10, 32); err == nil {
+					r.ExecPID = uint32(n)
+				}
+			case "Event/System/Security":
+				r.UserID = attr(t, "UserID")
+				if r.UserID == "" {
+					r.UserID = attr(t, "UserId")
+				}
 			case "Event/System/Provider":
 				r.Provider = attr(t, "Name")
 			case "Event/System/TimeCreated":
@@ -158,6 +191,14 @@ func Parse(raw []byte) (*Record, error) {
 		return nil, fmt.Errorf("%w: %q", ErrNotSysmon, r.Provider)
 	}
 	return r, nil
+}
+
+// once lists the elements that may appear only once in an event.
+var once = map[string]bool{
+	"Event/System": true, "Event/EventData": true,
+	"Event/System/Provider": true, "Event/System/EventID": true, "Event/System/Version": true,
+	"Event/System/TimeCreated": true, "Event/System/EventRecordID": true, "Event/System/Execution": true,
+	"Event/System/Computer": true, "Event/System/Security": true,
 }
 
 func attr(t xml.StartElement, name string) string {

@@ -69,11 +69,30 @@ Not mapped (counted as `unsupported`): 2 (file creation time changed),
 
 ## Parser bounds
 
-At most 256 KiB per event, 128 `<Data>` items, 128 KiB per value, nesting
-depth 8 and 4096 XML tokens. A DTD or other directive, an encoding other than
-UTF-8, an element inside `<Data>`, a second root element or a duplicate
-`<Data Name>` is refused. `encoding/xml` never resolves external entities.
+At most 1 MiB per event, 128 `<Data>` items, 128 KiB per decoded value,
+nesting depth 8 and 4096 XML tokens. A DTD or other directive, an encoding
+other than UTF-8, an element inside `<Data>`, a second root element, a
+duplicate `<Data Name>`, or a repeated `System`, `EventData` or System header
+element (Provider, EventID, EventRecordID, TimeCreated, Execution, Security,
+...) is refused. `encoding/xml` never resolves external entities.
+
+Characters XML forbids (control characters other than tab, CR and LF,
+U+FFFE/U+FFFF, invalid UTF-8, and `&#..;` references to them) are replaced by
+U+FFFD before parsing (`Sanitize`): a command line holding one cannot make the
+event disappear. Events that still cannot be read, or that exceed the bounds,
+raise a `sysmon_events_unreadable` sensor-degraded alert (at most one a
+minute), as gaps in EventRecordID raise `sysmon_events_dropped`.
 `FuzzDecode` exercises the parser (`make fuzz`).
+
+## Provenance
+
+The decoder also returns who wrote the event (`System/Execution/@ProcessID`,
+`System/Security/@UserID`). On Windows any program can write events under
+Sysmon's provider name, so the Windows source accepts an event only from the
+process of a running Sysmon service (Service Control Manager) as LocalSystem;
+anything else is dropped and raises `sysmon_events_untrusted`. On Linux the
+journald source accepts only records whose journald-set fields say root in
+`sysmon.service`.
 
 ## Process identity (Binder)
 

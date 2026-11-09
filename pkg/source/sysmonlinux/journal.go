@@ -23,8 +23,11 @@ const (
 	SysmonUnit = "sysmon.service"
 	// Name is the source name (source.Source.Name).
 	Name = "sysmon-journald"
-	// MaxLineBytes bounds one journal JSON line; longer lines are skipped.
-	MaxLineBytes = 2 << 20
+	// MaxLineBytes bounds one journal JSON line; longer lines are skipped
+	// and reported. An event of sysmon.MaxEventBytes printed as a JSON byte
+	// array (journald does that for non-UTF-8 data) takes up to 4 bytes per
+	// byte.
+	MaxLineBytes = 6 << 20
 	// IdentityTolerance is the Binder tolerance on Linux: the start time in
 	// /proc has 10 ms ticks and Sysmon's UtcTime 1 ms.
 	IdentityTolerance = 20 * time.Millisecond

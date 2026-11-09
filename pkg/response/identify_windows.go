@@ -5,6 +5,7 @@ package response
 import (
 	"errors"
 	"fmt"
+	"os"
 	"syscall"
 
 	"golang.org/x/sys/windows"
@@ -21,18 +22,27 @@ import (
 // and start-time comparison is a ProcessGuid plus creation-time check.
 //
 // There is no code-signing "platform binary" flag here: CSKnown is true
-// with no flags. Protection rests on ProtectedNames (below), the critical
-// process flag and the pid guards. A critical process (IsProcessCritical:
-// csrss, wininit, smss, services and others; terminating one stops Windows)
-// is never killed: identify returns an error, so the decision is
-// refused-unknown-process with that reason.
+// with no flags. Protection rests on the image's full path
+// (protectedWinImage in winprotect.go: critical System32 images, Sysmon,
+// Defender, ZAAFVesper itself; case-insensitive, never a base name alone),
+// the critical process flag and the pid guards. A critical process
+// (IsProcessCritical: csrss, wininit, smss, services and others; terminating
+// one stops Windows), a protected image, or a process whose image path
+// cannot be read is never killed: identify returns an error, so the
+// decision is refused-unknown-process with that reason. Pseudo-processes
+// (System, Registry, Memory Compression, Secure System) cannot be opened,
+// which refuses them the same way.
 
-func init() {
-	ProtectedNames = append(ProtectedNames,
-		"System", "Registry", "Memory Compression", "Secure System",
-		"smss.exe", "csrss.exe", "wininit.exe", "winlogon.exe", "services.exe",
-		"lsass.exe", "LsaIso.exe", "fontdrvhost.exe", "dwm.exe",
-		"Sysmon.exe", "Sysmon64.exe", "Sysmon64a.exe", "MsMpEng.exe", "zaafvesper.exe")
+// folders returns the Windows folders protectedWinImage compares against.
+func folders() winFolders {
+	f := winFolders{ProgramData: os.Getenv("ProgramData"), ProgramFiles: os.Getenv("ProgramFiles")}
+	if d, err := windows.GetSystemWindowsDirectory(); err == nil {
+		f.SystemRoot = d
+	}
+	if exe, err := os.Executable(); err == nil {
+		f.Self = exe
+	}
+	return f
 }
 
 // errCritical is returned for critical system processes.
@@ -59,11 +69,14 @@ func identify(pid int32) (Identity, error) {
 		return Identity{}, errCritical
 	}
 	id := Identity{StartTime: start, UniqueID: ft, UniqueKnown: true, CSKnown: true}
-	if exe, err := winproc.ImagePath(h); err != nil {
-		id.ExeErr = err
-	} else {
-		id.Exe = exe
+	exe, err := winproc.ImagePath(h)
+	if err != nil {
+		return Identity{}, fmt.Errorf("cannot read the image path of pid %d (protection unknown): %w", pid, err)
 	}
+	if why := protectedWinImage(exe, folders()); why != "" {
+		return Identity{}, fmt.Errorf("%s: %s", why, exe)
+	}
+	id.Exe = exe
 	rememberStamp(pid, ft)
 	return id, nil
 }

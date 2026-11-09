@@ -48,7 +48,19 @@ output in `C:\ProgramData\ZAAFVesper\logs`.
    start otherwise: it checks the owner and the DACL of the binary, the
    configuration, the rules and every folder above them, and refuses symbolic
    links and junctions inside them.
-4. **Create the service** (LocalSystem, automatic start, restart on failure):
+4. **Create the output folder** with an access list that only SYSTEM and
+   Administrators can use (any user can create folders in `C:\ProgramData`, so
+   create it before anyone else can, and check it):
+   ```
+   New-Item -ItemType Directory 'C:\ProgramData\ZAAFVesper' | Out-Null
+   icacls 'C:\ProgramData\ZAAFVesper' /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F'
+   icacls 'C:\ProgramData\ZAAFVesper'
+   ```
+   If the folder already existed, delete it first unless you know who made it.
+   ZAAFVesper refuses to start when the folder, or any folder above it, is a
+   junction or symbolic link, or when anyone but SYSTEM, Administrators or
+   TrustedInstaller owns it or can change it.
+5. **Create the service** (LocalSystem, automatic start, restart on failure):
    ```
    sc.exe create ZAAFVesper start= auto obj= LocalSystem binPath= "\"C:\Program Files\ZAAFVesper\zaafvesper.exe\" run --config \"C:\Program Files\ZAAFVesper\zaafvesper.yml\" --rules \"C:\Program Files\ZAAFVesper\rules\" --output-dir C:\ProgramData\ZAAFVesper\logs --no-console"
    sc.exe failure ZAAFVesper reset= 86400 actions= restart/5000/restart/30000//
@@ -57,10 +69,9 @@ output in `C:\ProgramData\ZAAFVesper\logs`.
    ```
    A service has no console: start-up messages and errors go to
    `C:\ProgramData\ZAAFVesper\logs\service.log`, alerts to `alerts-*.jsonl` in
-   the same folder. ZAAFVesper creates the folder with a DACL that only SYSTEM and
-   Administrators can use. If `ProgramData\ZAAFVesper` already exists with other
-   rights (for example created by another user beforehand), it refuses to start.
-5. **Check**: `Get-Content C:\ProgramData\ZAAFVesper\logs\service.log` shows the
+   the same folder. ZAAFVesper creates `logs` with a DACL that only SYSTEM and
+   Administrators can use.
+6. **Check**: `Get-Content C:\ProgramData\ZAAFVesper\logs\service.log` shows the
    rules enabled and the events subscribed.
 
 Uninstall: `sc.exe stop ZAAFVesper; sc.exe delete ZAAFVesper`, then remove the
@@ -83,10 +94,23 @@ process's Sysmon create event (event 1) was seen and, right then, the process
 holding that pid had a creation time no later than the event (so the pid had not
 been reused); the event carries the same ProcessGuid; and at kill time the
 creation time read on the very handle that is then terminated is still the same.
-Critical processes (`IsProcessCritical`: terminating one stops Windows), System,
-smss, csrss, wininit, winlogon, services, lsass, Sysmon, Defender and ZAAFVesper
-itself are never killed. Processes that were running before ZAAFVesper started
-are never killed.
+Critical processes (`IsProcessCritical`: terminating one stops Windows) and
+the images of smss, csrss, wininit, winlogon, services, lsass, LsaIso,
+fontdrvhost and dwm in `%SystemRoot%\System32`, Sysmon in `%SystemRoot%`,
+Defender and ZAAFVesper itself are never killed. Protection is by full path,
+compared without regard to case, not by name: malware called `lsass.exe` in a
+temporary folder stays killable. Processes that were running before ZAAFVesper
+started are never killed.
+
+## Forged events
+
+Any program can write events under Sysmon's provider name. ZAAFVesper accepts
+an event only when the event log recorded it as written by LocalSystem from
+the process of a running Sysmon service (`Sysmon64`, `Sysmon` or `Sysmon64a`,
+asked from the Service Control Manager). Other events are dropped and raise a
+`sysmon_events_untrusted` sensor-degraded alert. A Sysmon installed under
+another service name is not recognised (all its events are then reported as
+untrusted): rename it back or open an issue.
 
 ## Known limits
 

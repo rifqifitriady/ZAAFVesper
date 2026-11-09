@@ -48,14 +48,12 @@ func checkSourceBinary(*config.Config) error {
 	return nil
 }
 
-// newSource builds the journald source for Sysmon for Linux.
-func newSource(_ *config.Config, p *pipeline, stderr io.Writer) source.Source {
+// newSource builds the journald source for Sysmon for Linux. The current
+// journalctl child is protected from kills through the responder's
+// DynamicPIDs (the source's PID method), only while it runs, so a pid it
+// leaves behind after a restart is not protected forever.
+func newSource(_ *config.Config, _ *pipeline, stderr io.Writer) source.Source {
 	return sysmonlinux.New(sysmonlinux.Config{
-		OnStart: func(pid int32) {
-			if p.responder != nil {
-				p.responder.Protect(pid)
-			}
-		},
 		Logf: func(format string, args ...any) {
 			say(stderr, "sysmon: %s", fmt.Sprintf(format, args...))
 		},

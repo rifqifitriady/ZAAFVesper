@@ -24,10 +24,14 @@ const protectedDirSDDL = "D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)"
 
 // openOutputDir creates dir when it is missing (elevated: with a
 // SYSTEM/Administrators-only DACL), refuses a reparse point, and, elevated,
-// checks the directory and its ancestors with config.CheckOwnership. Windows
-// has no directory descriptors to work relative to: every later operation
-// names a file directly in this directory and never follows a reparse point
-// (CREATE_NEW, FILE_FLAG_OPEN_REPARSE_POINT, Lstat).
+// checks the directory and every ancestor with config.CheckOwnership, which
+// refuses a junction or symbolic link anywhere on the literal path. File
+// operations name files inside this directory by path; that is safe because
+// only SYSTEM and Administrators can change the directory or any ancestor
+// in a way that replaces an entry, and the directory itself is held open
+// without FILE_SHARE_DELETE so it cannot be renamed or removed while the
+// sensor runs. Creation never follows an existing name (CREATE_NEW), and
+// pruning only removes regular, non-reparse files.
 func openOutputDir(dir string, asRoot bool) (*outputDir, error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
@@ -48,7 +52,32 @@ func openOutputDir(dir string, asRoot bool) (*outputDir, error) {
 			return nil, fmt.Errorf("output directory %s is not safe to write as an administrator:\n%w", abs, err)
 		}
 	}
-	return &outputDir{path: abs, fd: -1, now: time.Now}, nil
+	h, err := holdDir(abs)
+	if err != nil {
+		return nil, fmt.Errorf("output directory %s: %w", abs, err)
+	}
+	return &outputDir{path: abs, fd: int(h), now: time.Now}, nil
+}
+
+// holdDir opens the directory itself (not following a reparse point) and
+// shares it for read and write but not delete, so nobody can rename or
+// remove it while the handle is open.
+func holdDir(abs string) (windows.Handle, error) {
+	p, err := windows.UTF16PtrFromString(abs)
+	if err != nil {
+		return 0, err
+	}
+	h, err := windows.CreateFile(p, windows.FILE_LIST_DIRECTORY, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil,
+		windows.OPEN_EXISTING, windows.FILE_FLAG_BACKUP_SEMANTICS|windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
+	if err != nil {
+		return 0, err
+	}
+	var info windows.ByHandleFileInformation
+	if err := windows.GetFileInformationByHandle(h, &info); err != nil || info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+		_ = windows.CloseHandle(h)
+		return 0, errors.New("not a plain directory")
+	}
+	return h, nil
 }
 
 func mkdirOutput(abs string, protected bool) error {
@@ -119,4 +148,11 @@ func (d *outputDir) regularSize(name string) (int64, bool) {
 
 func (d *outputDir) unlink(name string) error { return os.Remove(filepath.Join(d.path, name)) }
 
-func (d *outputDir) close() error { return nil }
+func (d *outputDir) close() error {
+	if d.fd <= 0 {
+		return nil
+	}
+	h := windows.Handle(d.fd)
+	d.fd = 0
+	return windows.CloseHandle(h)
+}

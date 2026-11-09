@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -101,6 +102,8 @@ func (s *Source) Run(ctx context.Context, events []string, out chan<- *event.Eve
 		return fmt.Errorf("winevt: %w", err)
 	}
 	feed := sysmon.NewFeeder(events, sysmon.NewBinder(ReadStamp, IdentityTolerance))
+	prov := &provenance{}
+	feed.Trust = prov.check
 	if s.pending != nil {
 		feed.OnDegraded(s.pending)
 	}
@@ -116,7 +119,7 @@ func (s *Source) Run(ctx context.Context, events []string, out chan<- *event.Eve
 	}
 	defer windows.CloseHandle(cancel)
 	ch, _ := windows.UTF16PtrFromString(Channel)
-	q, _ := windows.UTF16PtrFromString("*")
+	q, _ := windows.UTF16PtrFromString(Query)
 	sub, err := call(procEvtSubscribe, 0, uintptr(signal), uintptr(unsafe.Pointer(ch)), uintptr(unsafe.Pointer(q)), 0, 0, 0, evtSubscribeToFutureEvents)
 	switch {
 	case errors.Is(err, errorEvtChannelNotFound):
@@ -168,6 +171,7 @@ func (s *Source) Run(ctx context.Context, events []string, out chan<- *event.Eve
 				raw, rerr := s.render(handles[i])
 				evtClose(handles[i])
 				if rerr != nil {
+					feed.Unreadable("EvtRender: " + rerr.Error())
 					continue
 				}
 				if err := feed.Handle(ctx, raw, out); err != nil {
@@ -214,4 +218,67 @@ func (s *Source) logf(format string, args ...any) {
 	if s.cfg.Logf != nil {
 		s.cfg.Logf(format, args...)
 	}
+}
+
+// provenance checks who wrote an event (security review, finding 1): any
+// program can register an ETW provider under Sysmon's name, so an event is
+// accepted only when the event log recorded it as written by LocalSystem
+// (System/Security/@UserID) from the process of a running Sysmon service
+// (System/Execution/@ProcessID), as the Service Control Manager reports it.
+// Creating or reconfiguring a service needs an administrator.
+type provenance struct {
+	pids      map[uint32]bool
+	refreshed time.Time
+}
+
+// sysmonServices are the service names Sysmon installs under (64-bit,
+// 32-bit, ARM64). A renamed Sysmon (sysmon -i with another image name) is
+// not recognised: its events are then reported as untrusted.
+var sysmonServices = []string{"Sysmon64", "Sysmon", "Sysmon64a"}
+
+const provenanceRefresh = 5 * time.Second
+
+func (p *provenance) check(r *sysmon.Record) error {
+	if r.UserID != "S-1-5-18" {
+		return fmt.Errorf("written as %q, not LocalSystem", r.UserID)
+	}
+	if r.ExecPID == 0 {
+		return errors.New("no writer process id")
+	}
+	if p.pids[r.ExecPID] {
+		return nil
+	}
+	if time.Since(p.refreshed) >= provenanceRefresh {
+		p.pids, p.refreshed = sysmonServicePIDs(), time.Now()
+		if p.pids[r.ExecPID] {
+			return nil
+		}
+	}
+	return fmt.Errorf("written by pid %d, which is not a running Sysmon service", r.ExecPID)
+}
+
+// sysmonServicePIDs asks the Service Control Manager for the process ids of
+// the running Sysmon services.
+func sysmonServicePIDs() map[uint32]bool {
+	out := map[uint32]bool{}
+	m, err := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_CONNECT)
+	if err != nil {
+		return out
+	}
+	defer windows.CloseServiceHandle(m)
+	for _, name := range sysmonServices {
+		n, _ := windows.UTF16PtrFromString(name)
+		h, err := windows.OpenService(m, n, windows.SERVICE_QUERY_STATUS)
+		if err != nil {
+			continue
+		}
+		var st windows.SERVICE_STATUS_PROCESS
+		var need uint32
+		if windows.QueryServiceStatusEx(h, windows.SC_STATUS_PROCESS_INFO, (*byte)(unsafe.Pointer(&st)), uint32(unsafe.Sizeof(st)), &need) == nil &&
+			st.CurrentState == windows.SERVICE_RUNNING && st.ProcessId != 0 {
+			out[st.ProcessId] = true
+		}
+		_ = windows.CloseServiceHandle(h)
+	}
+	return out
 }

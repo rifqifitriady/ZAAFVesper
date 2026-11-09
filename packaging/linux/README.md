@@ -70,8 +70,10 @@ the event carries the same ProcessGuid; and at kill time the start time is
 still the same. The kill goes through a pidfd opened before that last check, so
 a pid reused in between is never signalled (kernels before 5.3 have no pidfd;
 then the check and `kill(2)` are separate calls). Processes that were running
-before ZAAFVesper started are never killed. systemd, journald, journalctl,
-Sysmon and ZAAFVesper itself are protected.
+before ZAAFVesper started are never killed. Images under `/usr/lib/systemd/`,
+`/lib/systemd/` and `/opt/sysmon/`, journalctl, init, pid 1, ZAAFVesper and its
+running journalctl child are protected. Protection is by full path, not by
+name: a program called `sysmon` in `/tmp` stays killable.
 
 ## Known limits
 

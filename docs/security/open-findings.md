@@ -49,6 +49,23 @@ Status values:
 | New-5 attacker-chosen signing identifier length | **Closed (code)** | Capped at 256 B in the decoder and the encoder (`TestIdentityCapped`, `TestEncodeCapsSigningFields`) |
 | AppleDouble `._*` entries in the package payload | Accepted | `com.apple.provenance` cannot be removed by the user. Every loader skips dotfiles (`TestDotfilesSkipped`). |
 
+## v0.2 S4: Windows and Linux adapters (preview, 9 Nov 2026)
+
+Independent security review of the Sysmon adapters before the PR. Nothing here
+was run on a Windows host or with Sysmon for Linux; the Linux code ran in a
+container (unit tests, pidfd kill, a replayed journal).
+
+| # | Finding | Status | Mechanism and evidence | Residual |
+|---|---|---|---|---|
+| S4-1 | Windows accepted any event carrying Sysmon's provider name; ETW providers are not authenticated, so a forged event 1 plus a kill rule could make the LocalSystem sensor kill a chosen process. | **Closed (code)** | The source accepts only events whose `Execution/@ProcessID` is a running Sysmon service's pid (SCM) and `Security/@UserID` is S-1-5-18; others are dropped and raise `sysmon_events_untrusted` ([winevt_windows.go](../../pkg/source/winevt/winevt_windows.go) `provenance`, `TestFeeder` trust case). The subscription also filters on the provider. | Untested on Windows; assumes the event log fills Execution and Security from the writer, not from the payload. |
+| S4-2 | Windows output directory could be redirected through a junction above it, giving arbitrary create or delete as SYSTEM. | **Closed (code)** | CheckOwnership refuses any reparse point among the ancestors on the literal path; the output directory is held open without FILE_SHARE_DELETE; install steps create `C:\ProgramData\ZAAFVesper` with a SYSTEM/Administrators-only ACL first. | Untested on Windows. File operations inside the directory are by path (safe while only SYSTEM and Administrators can write there). |
+| S4-3 | One control character or invalid UTF-8 byte in a command line made an event fail to parse, silently. | **Closed (code)** | `Sanitize` replaces characters XML forbids with U+FFFD before parsing; unreadable events raise `sysmon_events_unreadable` (`TestControlCharactersDoNotDropEvents`, fuzz seeds). | What Sysmon itself emits for such characters is not verified. |
+| S4-4 | Escaping could push a legitimate event over the 256 KiB limit and drop it. | **Closed (code)** | Limit raised to 1 MiB (journald lines 6 MiB); oversize events are reported (`TestLongestCommandLinesFit`). | |
+| S4-5 | Protected processes matched by base name, case-sensitively, so malware named lsass.exe or sysmon could not be killed. | **Closed (code)** for Windows and Linux | Windows: protection by full image path, case-insensitive, plus IsProcessCritical (`TestProtectedWinImage`). Linux: protected paths only (`TestLinuxProtected`). | macOS keeps its name list (S1's area). |
+| S4-6 | The identity map was cleared when full. | **Closed (code)** | Oldest entries are evicted (`TestBinderEvictsOldest`). | |
+| S4-7 | Repeated System header elements were accepted (last one won). | **Closed (code)** | Refused (`TestRepeatedHeaderRejected`). | |
+| S4-8 | The journalctl child's pid stayed protected after a restart. | **Closed (code)** | Protected only while running (responder DynamicPIDs). | macOS eslogger keeps the old pattern. |
+
 ## Decisions pending with the owner
 
 - **H1:** a CI build with a Developer ID signature.

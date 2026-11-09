@@ -268,6 +268,10 @@ func FuzzDecode(f *testing.F) {
 	for _, file := range fixtures(f) {
 		f.Add(mustRead(f, file))
 	}
+	l := string(mustRead(f, "testdata/l01_process_create.xml"))
+	for _, bad := range []string{"\x01", "\x1b[2J", "\xff\xfe", "&#x1;", "&#xFFFE;", "\uFFFF"} {
+		f.Add([]byte(strings.Replace(l, "curl -fsSL", "curl"+bad, 1)))
+	}
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		e, err := Decode(raw)
 		if err != nil {

@@ -38,7 +38,7 @@ type Source struct {
 	pending func(string, string)
 	cursor  string
 
-	restarts, oversize, untrusted, badLines atomic.Uint64
+	restarts, oversize, untrusted, badLines, otherMessages atomic.Uint64
 }
 
 // New returns the source.
@@ -63,6 +63,7 @@ func (s *Source) Stats() map[string]uint64 {
 	st := f.Stats()
 	st["restarts"], st["oversize"] = s.restarts.Load(), s.oversize.Load()
 	st["untrusted_records"], st["bad_lines"] = s.untrusted.Load(), s.badLines.Load()
+	st["other_messages"] = s.otherMessages.Load()
 	return st
 }
 
@@ -177,6 +178,7 @@ func (s *Source) read(ctx context.Context, r *bufio.Reader, feed *sysmon.Feeder,
 			case skipping:
 			case len(line)+len(chunk) > MaxLineBytes:
 				s.oversize.Add(1)
+				feed.Unreadable("journal line longer than MaxLineBytes")
 				skipping, line = true, line[:0]
 			default:
 				line = append(line, chunk...)
@@ -211,6 +213,9 @@ func (s *Source) handle(ctx context.Context, line []byte, feed *sysmon.Feeder, o
 		return nil
 	case err != nil:
 		s.badLines.Add(1)
+		return nil
+	case !bytes.HasPrefix(bytes.TrimSpace(msg), []byte("<Event")):
+		s.otherMessages.Add(1) // Sysmon's own status lines, not events
 		return nil
 	}
 	return feed.Handle(ctx, msg, out)

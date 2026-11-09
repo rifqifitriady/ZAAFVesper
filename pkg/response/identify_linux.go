@@ -20,14 +20,17 @@ import (
 // the event (pkg/source/sysmon Binder).
 //
 // There is no code-signing "platform binary" flag: CSKnown is true with no
-// flags. Protection rests on ProtectedNames, ProtectedExePrefixes and
-// ProtectedExes (below) and the pid guards. Kernel threads have no
-// executable, so their identity has ExeErr set and verify refuses them.
+// flags. Protection rests on full executable paths (ProtectedExePrefixes
+// and ProtectedExes, below: systemd and its helpers, journalctl, Sysmon;
+// both the image at event time and the current one are checked) and the pid
+// guards (pid 1, the sensor, its journalctl child). Base names are not
+// added: a copy of malware named systemd or sysmon in /tmp must stay
+// killable (ATT&CK T1036.005). Kernel threads have no executable, so their
+// identity has ExeErr set and verify refuses them.
 
 func init() {
-	ProtectedNames = append(ProtectedNames, "systemd", "init", "systemd-journald", "journalctl", "sysmon", "zaafvesper")
 	ProtectedExePrefixes = append(ProtectedExePrefixes, "/usr/lib/systemd/", "/lib/systemd/", "/opt/sysmon/")
-	ProtectedExes = append(ProtectedExes, "/usr/bin/journalctl", "/bin/journalctl")
+	ProtectedExes = append(ProtectedExes, "/usr/bin/journalctl", "/bin/journalctl", "/sbin/init", "/usr/sbin/init")
 }
 
 var proc = procfs.Default

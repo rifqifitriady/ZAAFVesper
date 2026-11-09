@@ -90,6 +90,7 @@ func openServiceLog(dir string) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer od.close()
 	p := filepath.Join(od.path, "service.log")
 	if size, ok := od.regularSize("service.log"); ok && size > maxServiceLog {
 		_ = os.Remove(p + ".old")

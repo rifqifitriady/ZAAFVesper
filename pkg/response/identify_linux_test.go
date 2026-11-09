@@ -80,4 +80,14 @@ func TestLinuxProtected(t *testing.T) {
 			t.Errorf("%s not protected", p.Exe)
 		}
 	}
+	// A copy of malware named like a protected program is not protected.
+	for _, p := range []*event.Proc{
+		{PID: 1300, Exe: "/tmp/sysmon", Name: "sysmon"},
+		{PID: 1301, Exe: "/dev/shm/systemd", Name: "systemd"},
+		{PID: 1302, Exe: "/home/u/journalctl", Name: "journalctl"},
+	} {
+		if why := r.protectedReason(p); why != "" {
+			t.Errorf("%s protected by name: %s", p.Exe, why)
+		}
+	}
 }

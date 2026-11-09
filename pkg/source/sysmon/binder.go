@@ -1,6 +1,7 @@
 package sysmon
 
 import (
+	"container/list"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -46,12 +47,14 @@ type Binder struct {
 	read      StampReader
 	tolerance time.Duration
 	mu        sync.Mutex
-	byPID     map[int32]bound
+	byPID     map[int32]*list.Element // of *bound, oldest create first in order
+	order     *list.List
 
 	bound, late, readErrors, resets, matched, unmatched atomic.Uint64
 }
 
 type bound struct {
+	pid   int32
 	guid  string
 	stamp Stamp // ID 0: no kernel identity
 	ppid  int32
@@ -61,7 +64,7 @@ type bound struct {
 // between the event's time and the kernel's start time (milliseconds on
 // Windows, a tick plus clock rounding on Linux).
 func NewBinder(read StampReader, tolerance time.Duration) *Binder {
-	return &Binder{read: read, tolerance: tolerance, byPID: map[int32]bound{}}
+	return &Binder{read: read, tolerance: tolerance, byPID: map[int32]*list.Element{}, order: list.New()}
 }
 
 // Bind sets Proc.UniqueID and Proc.StartTime (and those of e.Target) from
@@ -82,7 +85,7 @@ func (b *Binder) Bind(e *event.Event) {
 			b.lookup(p)
 		}
 		if e.Name == event.TerminateProcess {
-			delete(b.byPID, p.PID)
+			b.forget(p.PID)
 		}
 	}
 	if t := e.Target; t != nil && t.PID > 0 {
@@ -90,20 +93,29 @@ func (b *Binder) Bind(e *event.Event) {
 	}
 }
 
+func (b *Binder) forget(pid int32) {
+	if el, ok := b.byPID[pid]; ok {
+		b.order.Remove(el)
+		delete(b.byPID, pid)
+	}
+}
+
 func (b *Binder) create(p *event.Proc, at time.Time) {
-	delete(b.byPID, p.PID)
+	b.forget(p.PID)
 	p.UniqueID = 0
 	if p.GUID == "" {
 		return
 	}
-	if len(b.byPID) >= MaxBound {
-		clear(b.byPID)
+	// Full (exits not reported, e.g. a Sysmon config without event 5):
+	// forget the oldest creates, not everything.
+	for len(b.byPID) >= MaxBound {
+		b.forget(b.order.Front().Value.(*bound).pid)
 		b.resets.Add(1)
 	}
 	// The parent pid is remembered even without a kernel identity: later
 	// Sysmon events of the process carry no ParentProcessId.
-	bd := bound{guid: p.GUID, ppid: p.PPID}
-	defer func() { b.byPID[p.PID] = bd }()
+	bd := &bound{pid: p.PID, guid: p.GUID, ppid: p.PPID}
+	b.byPID[p.PID] = b.order.PushBack(bd)
 	st, err := b.read(p.PID)
 	switch {
 	case err != nil || st.ID == 0:
@@ -119,7 +131,11 @@ func (b *Binder) create(p *event.Proc, at time.Time) {
 }
 
 func (b *Binder) lookup(p *event.Proc) {
-	bd, ok := b.byPID[p.PID]
+	el, ok := b.byPID[p.PID]
+	var bd *bound
+	if ok {
+		bd = el.Value.(*bound)
+	}
 	if !ok || p.GUID == "" || !sameGUID(bd.guid, p.GUID) {
 		p.UniqueID = 0
 		b.unmatched.Add(1)
@@ -149,7 +165,7 @@ func (b *Binder) Stats() map[string]uint64 {
 	b.mu.Unlock()
 	return map[string]uint64{
 		"identity_bound": b.bound.Load(), "identity_late": b.late.Load(), "identity_read_errors": b.readErrors.Load(),
-		"identity_resets": b.resets.Load(), "identity_matched": b.matched.Load(), "identity_unmatched": b.unmatched.Load(),
+		"identity_evicted": b.resets.Load(), "identity_matched": b.matched.Load(), "identity_unmatched": b.unmatched.Load(),
 		"identity_live": n,
 	}
 }

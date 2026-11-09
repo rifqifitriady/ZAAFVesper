@@ -31,7 +31,7 @@ const (
 // outdir_unix.go and outdir_windows.go.
 type outputDir struct {
 	path string
-	fd   int // open directory descriptor (Unix); unused on Windows
+	fd   int // open directory descriptor (Unix) or held directory handle (Windows)
 	now  func() time.Time
 }
 
@@ -118,8 +118,8 @@ func (d *outputDir) list(prefix, ext string) ([]ownFile, error) {
 // it fits. A file is deleted only if it is a regular file, is not in open
 // (the files ZAAFVesper is writing), and is either empty or named with a
 // time at least minPruneAge before now. A file named in the future (the
-// clock stepped back) is never old enough. Everything is fd-relative and
-// nothing is followed.
+// clock stepped back) is never old enough. On Unix everything is
+// fd-relative and nothing is followed; on Windows see outdir_windows.go.
 func (d *outputDir) makeRoom(prefix, ext string, keep int, open map[string]bool) (room bool, removed []string, err error) {
 	own, err := d.list(prefix, ext)
 	if err != nil {

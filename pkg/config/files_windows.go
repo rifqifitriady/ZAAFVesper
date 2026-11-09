@@ -24,7 +24,7 @@ import (
 //     everything beneath it, and (with the narrower ancestor rule in
 //     winacl.go) every ancestor directory up to the volume root, and
 //     refuses any symbolic link, junction or other reparse point inside
-//     the checked trees.
+//     the checked trees or among the ancestors (literal path, not resolved).
 //
 // What is not enforced: privileges such as SeBackupPrivilege or
 // SeRestorePrivilege, and SeTakeOwnershipPrivilege held by an administrator
@@ -147,15 +147,19 @@ func checkOwnership(_ uint32, paths ...string) error {
 			errs = append(errs, err)
 			continue
 		}
-		parent, err := filepath.EvalSymlinks(filepath.Dir(abs))
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		for d := parent; ; d = filepath.Dir(d) {
+		// Ancestors, on the literal path: a symbolic link or junction above
+		// the checked tree is refused outright. Its target could pass the
+		// checks while whoever owns the link can point it elsewhere later
+		// (security review, finding 2).
+		for d := filepath.Dir(abs); ; d = filepath.Dir(d) {
 			fi, err := os.Lstat(d)
 			if err != nil {
 				errs = append(errs, err)
+				break
+			}
+			if isReparse(fi) && !seen[d] {
+				seen[d] = true
+				errs = append(errs, fmt.Errorf("%s: parent directory is a symbolic link, junction or other reparse point (not allowed when running elevated)", d))
 				break
 			}
 			check(d, fi, true)

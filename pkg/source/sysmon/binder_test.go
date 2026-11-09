@@ -81,4 +81,23 @@ func TestBinder(t *testing.T) {
 	if st["identity_bound"] != 2 || st["identity_late"] != 1 || st["identity_read_errors"] != 1 {
 		t.Fatalf("stats %v", st)
 	}
+
+	if st["identity_live"] != 2 { // 200 (late) and 300 (unreadable) keep their parent pid
+		t.Fatalf("live %v", st)
+	}
+}
+
+func TestBinderEvictsOldest(t *testing.T) {
+	t0 := time.Date(2026, 11, 8, 10, 0, 0, 0, time.UTC)
+	b := NewBinder(func(pid int32) (Stamp, error) { return Stamp{ID: uint64(pid), Start: t0, Precise: t0}, nil }, time.Millisecond)
+	for pid := int32(1); pid <= MaxBound+2; pid++ {
+		b.Bind(&event.Event{Name: event.CreateProcess, Time: t0, Proc: &event.Proc{PID: pid, GUID: "{g}"}})
+	}
+	old := &event.Event{Name: event.CreateFile, Proc: &event.Proc{PID: 1, GUID: "{g}"}}
+	recent := &event.Event{Name: event.CreateFile, Proc: &event.Proc{PID: MaxBound + 2, GUID: "{g}"}}
+	b.Bind(old)
+	b.Bind(recent)
+	if old.Proc.UniqueID != 0 || recent.Proc.UniqueID == 0 || b.Stats()["identity_evicted"] != 2 || b.Stats()["identity_live"] != MaxBound {
+		t.Fatalf("old %d recent %d stats %v", old.Proc.UniqueID, recent.Proc.UniqueID, b.Stats())
+	}
 }

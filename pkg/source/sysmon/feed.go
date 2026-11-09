@@ -16,6 +16,16 @@ import (
 // ZAAFVesper (event log overwrite, journald rate limiting, a restart).
 const CondEventsDropped = "sysmon_events_dropped"
 
+// CondEventsUnreadable is reported when events could not be decoded or were
+// larger than the bounds (they never reach the rules), and
+// CondEventsUntrusted when an event failed the source's provenance check
+// (on Windows: not written by Sysmon's service process as LocalSystem),
+// which is what a forged event looks like.
+const (
+	CondEventsUnreadable = "sysmon_events_unreadable"
+	CondEventsUntrusted  = "sysmon_events_untrusted"
+)
+
 // degradedEvery rate-limits reports per condition.
 const degradedEvery = time.Minute
 
@@ -24,23 +34,26 @@ const degradedEvery = time.Minute
 // the subscription and send. It runs on one reading goroutine.
 type Feeder struct {
 	Binder *Binder // nil: no identity binding (kills then always refuse)
+	// Trust, when set, checks who wrote a parsed event before it is mapped;
+	// an error drops the event and is reported as CondEventsUntrusted.
+	Trust  func(*Record) error
 	wanted map[string]bool
 
 	mu       sync.Mutex
 	fn       func(condition, detail string)
-	lastRep  time.Time
-	suppress uint64
+	lastRep  map[string]time.Time
+	suppress map[string]uint64
 	now      func() time.Time
 
 	lastRecord                                                   uint64
 	received, decoded, unsupported, decodeErrors, filtered, sent atomic.Uint64
-	gaps, missed                                                 atomic.Uint64
+	gaps, missed, untrusted                                      atomic.Uint64
 }
 
 // NewFeeder returns a feeder for the subscribed canonical events (empty:
 // all).
 func NewFeeder(events []string, b *Binder) *Feeder {
-	f := &Feeder{Binder: b, now: time.Now}
+	f := &Feeder{Binder: b, now: time.Now, lastRep: map[string]time.Time{}, suppress: map[string]uint64{}}
 	if len(events) > 0 {
 		f.wanted = map[string]bool{}
 		for _, n := range events {
@@ -50,8 +63,8 @@ func NewFeeder(events []string, b *Binder) *Feeder {
 	return f
 }
 
-// OnDegraded registers fn for CondEventsDropped reports (at most one a
-// minute; the next report counts the suppressed ones). fn is called on the
+// OnDegraded registers fn for the Cond* reports (at most one a minute per
+// condition; the next report counts the suppressed ones). fn is called on the
 // reading goroutine and must not block.
 func (f *Feeder) OnDegraded(fn func(condition, detail string)) {
 	f.mu.Lock()
@@ -65,8 +78,15 @@ func (f *Feeder) Handle(ctx context.Context, raw []byte, out chan<- *event.Event
 	f.received.Add(1)
 	r, err := Parse(raw)
 	if err != nil {
-		f.decodeErrors.Add(1)
+		f.Unreadable(err.Error())
 		return nil
+	}
+	if f.Trust != nil {
+		if terr := f.Trust(r); terr != nil {
+			n := f.untrusted.Add(1)
+			f.report(CondEventsUntrusted, fmt.Sprintf("dropped a Sysmon-looking event (EventID %d, record %d) that failed the provenance check: %v; %d in total", r.EventID, r.RecordID, terr, n))
+			return nil
+		}
 	}
 	f.checkRecord(r.RecordID)
 	e, err := Map(r)
@@ -75,7 +95,7 @@ func (f *Feeder) Handle(ctx context.Context, raw []byte, out chan<- *event.Event
 		return nil
 	}
 	if err != nil {
-		f.decodeErrors.Add(1)
+		f.Unreadable(err.Error())
 		return nil
 	}
 	f.decoded.Add(1)
@@ -93,6 +113,17 @@ func (f *Feeder) Handle(ctx context.Context, raw []byte, out chan<- *event.Event
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// Unreadable counts an event that could not be decoded or exceeded the
+// bounds and reports CondEventsUnreadable (sources call it for oversize
+// events they drop before decoding).
+func (f *Feeder) Unreadable(why string) {
+	n := f.decodeErrors.Add(1)
+	if len(why) > 200 {
+		why = why[:200]
+	}
+	f.report(CondEventsUnreadable, fmt.Sprintf("a Sysmon event could not be read and was not evaluated (%s); %d in total", why, n))
 }
 
 // checkRecord tracks EventRecordID. A number that does not increase starts
@@ -129,15 +160,15 @@ func (f *Feeder) report(cond, detail string) {
 		f.mu.Unlock()
 		return
 	}
-	if !f.lastRep.IsZero() && now.Sub(f.lastRep) < degradedEvery {
-		f.suppress++
+	if last, ok := f.lastRep[cond]; ok && now.Sub(last) < degradedEvery {
+		f.suppress[cond]++
 		f.mu.Unlock()
 		return
 	}
-	if f.suppress > 0 {
-		detail = fmt.Sprintf("%s (%d earlier reports suppressed)", detail, f.suppress)
+	if n := f.suppress[cond]; n > 0 {
+		detail = fmt.Sprintf("%s (%d earlier reports suppressed)", detail, n)
 	}
-	f.lastRep, f.suppress = now, 0
+	f.lastRep[cond], f.suppress[cond] = now, 0
 	f.mu.Unlock()
 	fn(cond, detail)
 }
@@ -147,7 +178,7 @@ func (f *Feeder) Stats() map[string]uint64 {
 	st := map[string]uint64{
 		"received": f.received.Load(), "decoded": f.decoded.Load(), "unsupported": f.unsupported.Load(),
 		"decode_errors": f.decodeErrors.Load(), "filtered": f.filtered.Load(), "sent": f.sent.Load(),
-		"seq_gaps": f.gaps.Load(), "events_missed": f.missed.Load(),
+		"seq_gaps": f.gaps.Load(), "events_missed": f.missed.Load(), "untrusted_events": f.untrusted.Load(),
 	}
 	if f.Binder != nil {
 		for k, v := range f.Binder.Stats() {

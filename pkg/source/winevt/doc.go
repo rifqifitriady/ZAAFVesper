@@ -11,6 +11,9 @@ import "time"
 // Channel is Sysmon's event log channel.
 const Channel = "Microsoft-Windows-Sysmon/Operational"
 
+// Query is the subscription's XPath filter: Sysmon's provider only.
+const Query = "*[System[Provider[@Name='Microsoft-Windows-Sysmon']]]"
+
 // Name is the source name (source.Source.Name).
 const Name = "sysmon-winevt"
 
