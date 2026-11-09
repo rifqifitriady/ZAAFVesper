@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/netip"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -73,6 +74,15 @@ type runOptions struct {
 	// Test hooks for the responder (nil in production).
 	killFunc func(pid int, sig syscall.Signal) error
 	identify func(pid int32) (response.Identity, error)
+	// Test hooks of the other actions (response_actions.go): a stub runner
+	// for pfctl/launchctl/codesign, a state directory instead of
+	// /private/var/db/zaafvesper, and the codesign, console-user and
+	// interface-address lookups.
+	responseRunner      response.Runner
+	responseStateDir    string
+	responseAppleSigned func(string) (bool, error)
+	responseConsoleUID  func() (uint32, error)
+	responseLocalAddrs  func() ([]netip.Addr, error)
 	// netout holds the W2 flags (network polling, SIEM and ZAAFElegia
 	// outputs; see outputs.go).
 	netout netOutOptions
@@ -92,8 +102,8 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 	fs.IntVar(&o.jsonHighKeep, "json-high-keep", defaultJSONHighKeep, "high/critical alert files (alerts-high-*.jsonl) kept in --output-dir; a separate budget")
 	fs.IntVar(&o.captureKeep, "capture-keep", defaultCaptureKeep, "capture files kept in --output-dir with --capture-in-dir (oldest deleted)")
 	fs.BoolVar(&o.noConsole, "no-console", false, "do not print alerts on stdout (the LaunchDaemon uses --output-dir instead)")
-	fs.BoolVar(&o.enableResponse, "enable-response", false, "allow the kill action of rules that request it")
-	fs.BoolVar(&o.dryRunResponse, "dry-run-response", false, "log what would be killed, kill nothing")
+	fs.BoolVar(&o.enableResponse, "enable-response", false, "allow the response actions of rules that request them (kill, suspend, quarantine_file, requarantine, remove_persistence, isolate_process)")
+	fs.BoolVar(&o.dryRunResponse, "dry-run-response", false, "log what the response actions would do, do nothing")
 	fs.BoolVar(&o.noColor, "no-color", false, "disable coloured severities")
 	fs.BoolVar(&o.noYara, "no-yara", false, "run without the YARA scanner")
 	fs.BoolVar(&o.keepEnv, "keep-env", false, "store full environment values in captures and JSONL alerts (default: names only, plus DYLD_* values)")
@@ -354,7 +364,7 @@ func buildSensor(o runOptions, stdout, stderr io.Writer) (*sensor, error) {
 		}
 	}
 	if o.enableResponse || o.dryRunResponse {
-		p.responder = response.New(response.Config{
+		rc := response.Config{
 			DryRun: o.dryRunResponse, // dry-run wins over enable-response
 			Log:    func(d response.Decision) { say(stderr, "%s", d.String()) },
 			Lookup: func(pid int32) (*event.Proc, bool) {
@@ -366,16 +376,21 @@ func buildSensor(o runOptions, stdout, stderr io.Writer) (*sensor, error) {
 			DynamicPIDs: func() []int32 { return s.sourcePIDs() },
 			KillFunc:    o.killFunc,
 			Identify:    o.identify,
-			// A refused kill because a budget is spent is a degraded
+			// A refused action because a budget is spent is a degraded
 			// response, raised as SensorDegraded response_rate_limited.
 			OnDegraded: p.degraded,
-		})
+		}
+		if err := responseActionConfig(&rc, o, cfg, rulesDir); err != nil {
+			return fail(err)
+		}
+		p.responder = response.New(rc)
+		s.startResponse(o, stderr)
+		warnIsolation(rs, cfg, stderr)
 		mode := "ENABLED"
 		if o.dryRunResponse {
 			mode = "DRY-RUN"
 		}
-		say(stderr, "response: %s (kill only for rules with action kill; at most %d per rule and %d in all per minute)",
-			mode, response.DefaultMaxPerRulePerMinute, response.DefaultMaxPerMinute)
+		say(stderr, "%s", responseSummary(mode))
 	}
 
 	if err := s.wireNetOut(o, engine, snap, stdout, stderr); err != nil {
@@ -495,6 +510,7 @@ loop:
 			p.periodicStats(stderr)
 		case <-flush.C:
 			p.flushAggregates(time.Now(), false) // summaries of windows that ended
+			p.responseTick(time.Now())           // resume suspended processes, expire isolations
 			p.drainDegraded()                    // reports from YARA workers while idle
 			if p.capture != nil {
 				_ = p.capture.Flush()

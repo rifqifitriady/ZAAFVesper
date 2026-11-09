@@ -1,6 +1,6 @@
 name: Binary dropped in a temp or shared folder and executed without developer identity
 id: 4c8d26ca-f48c-4da1-b3b4-e1648b057ecb
-version: 1.1.0
+version: 1.2.0
 platforms: [macos]
 description: |
   Sequence: a file is created in /tmp, /var/tmp or /Users/Shared and, within ten
@@ -11,6 +11,11 @@ description: |
   that run from /tmp carry a verified Team ID and do not match.
   Note: shebang scripts execute as their interpreter (ps.exe is /bin/sh), so this rule
   covers Mach-O payloads only.
+  Response (only with --enable-response): quarantine_file with target process moves the
+  executable that ran into the root-only vault /private/var/db/zaafvesper/quarantine
+  (bound to the dev/ino Endpoint Security reported at exec; restore with
+  `zaafvesper quarantine restore <id>`). The running process is NOT stopped: this only
+  removes the file so it cannot be started again.
 labels:
   tactic.id: TA0002
   tactic.name: Execution
@@ -26,7 +31,7 @@ condition: >
     |spawn_process and no_developer_identity and ps.exe imatches temp_drop_globs| by ps.exe
 output: "%2.ps.exe (pid %2.ps.pid, signing %2.ps.signing_id) ran after being written by %1.ps.exe"
 severity: high
-action: []
+action: [{name: quarantine_file, target: process}]
 tests:
   atomic: []
 min-engine-version: 0.1.0

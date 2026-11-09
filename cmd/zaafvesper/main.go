@@ -37,6 +37,8 @@ usage:
                <file.rcap|events.jsonl|eslogger.jsonl>
   zaafvesper rules list|validate|test [--rules dir | dir] [--config file] [-v]
   zaafvesper coverage --navigator layer.json|- [--rules dir]
+  zaafvesper quarantine list|restore <id> [--state-dir dir]
+  zaafvesper isolation list|release <address|all> [--state-dir dir]
   zaafvesper sigma convert <sigma dir|file> -o <rules dir> [--report report.json] [--force]
   zaafvesper version
 
@@ -51,8 +53,11 @@ at --json-max-bytes (default 256 MiB), keeping the newest --json-keep files;
 an explicit --json file stops at the cap. Alerts over 64 KiB are truncated.
 Captures and JSONL alerts keep environment variable names but redact values
 (except DYLD_*) unless --keep-env is given.
-The kill response is off unless --enable-response is given; --dry-run-response
-only logs what would be killed and wins over --enable-response.
+The response actions (kill, suspend, quarantine_file, requarantine,
+remove_persistence, isolate_process) are off unless --enable-response is given;
+--dry-run-response only logs what they would do and wins over --enable-response.
+They act after the event that triggered them: none of them prevents anything.
+quarantine and isolation manage what they did; both need root.
 sigma convert turns Sigma rules (macos, windows, linux) into ZAAFVesper rules;
 rules it cannot convert exactly are skipped with a reason. It never follows
 symbolic links and never replaces an existing rule file unless --force is given.`
@@ -76,6 +81,10 @@ func realMain(args []string, stdout, stderr io.Writer) int {
 		return cmdRules(args[1:], stdout, stderr)
 	case "coverage":
 		return cmdCoverage(args[1:], stdout, stderr)
+	case "quarantine":
+		return cmdQuarantine(args[1:], stdout, stderr)
+	case "isolation":
+		return cmdIsolation(args[1:], stdout, stderr)
 	case "sigma":
 		return cmdSigma(args[1:], stdout, stderr)
 	case "version", "--version", "-version":

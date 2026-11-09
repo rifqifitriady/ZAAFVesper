@@ -1,6 +1,6 @@
 name: Launch Daemon persistence via plist write
 id: 3bbbda85-d32e-4ae9-b6b9-86f0a980a562
-version: 1.1.0
+version: 1.2.0
 platforms: [macos]
 description: |
   A property list was created, modified or renamed into /Library/LaunchDaemons. Daemons
@@ -10,6 +10,10 @@ description: |
   process" (a forged or unverified Team ID stays here). PackageKit is not excluded: it installs any .pkg, malicious ones included.
   Known benign: legitimate .pkg installers that ship a daemon (payload written by
   PackageKit, or a postinstall script that `cp`s the plist); review the package.
+  Writers without any verified identity (unsigned, ad-hoc, self-signed or a forged Team
+  ID) are handled by the companion rule "Launch Agent or Daemon written by an untrusted
+  process" (high, removes the persistence), so this rule keeps Apple file tools,
+  interpreters, PackageKit and Homebrew's homebrew.mxcl.* plists.
 labels:
   tactic.id: TA0003
   tactic.name: Persistence
@@ -24,6 +28,7 @@ condition: >
   )
   and not (apple_trusted_process)
   and not (developer_id_signed)
+  and not (untrusted_launch_item_writer)
 output: "%ps.exe (pid %ps.pid, uid %ps.uid, parent %ps.parent.exe) wrote launch daemon %file.path %file.dest"
 severity: high
 action: []
