@@ -340,13 +340,13 @@ func (h *vHarness) record(action, kase, expect string, ok bool, detail string) {
 	if d.Detail != "" {
 		detail = strings.TrimSpace(detail + " | decision: " + d.Detail)
 	}
-	r := vResult{Action: action, Case: kase, Expect: expect, Outcome: d.Outcome, Verdict: v, Detail: detail}
+	r := vResult{Action: action, Case: kase, Expect: expect, Outcome: d.Outcome, Verdict: v, Detail: oneLine(detail)}
 	h.results = append(h.results, r)
 	say(h.stdout, "[%s] %s / %s: outcome=%s %s", strings.ToUpper(v), action, kase, d.Outcome, detail)
 }
 
 func (h *vHarness) untestable(action, kase, why string) {
-	h.results = append(h.results, vResult{Action: action, Case: kase, Verdict: vUntested, Detail: why})
+	h.results = append(h.results, vResult{Action: action, Case: kase, Verdict: vUntested, Detail: oneLine(why)})
 	say(h.stdout, "[NOT TESTABLE] %s / %s: %s", action, kase, why)
 }
 
@@ -356,7 +356,7 @@ func (h *vHarness) writeTable(w io.Writer) {
 	say(w, "| Action | Case | Expected | Outcome | Result | Detail |")
 	say(w, "|---|---|---|---|---|---|")
 	for _, r := range h.results {
-		detail := strings.ReplaceAll(r.Detail, "|", "/")
+		detail := oneLine(r.Detail)
 		if len(detail) > 300 {
 			detail = detail[:300] + "..."
 		}
@@ -392,7 +392,9 @@ func (h *vHarness) runCommon() {
 	}
 	h.reset()
 	err := h.r.KillEvent(&event.Event{Source: vSource(), Proc: self}, "validate-kill", "validation: kill self")
-	h.record("kill", "the sensor's own process", expectDeny, errors.Is(err, response.ErrProtected), "")
+	alive := pidAlive(self.PID)
+	h.record("kill", "the sensor's own process", expectDeny, errors.Is(err, response.ErrProtected) && alive,
+		fmt.Sprintf("pid %d still present after the decision=%v", self.PID, alive))
 	// Refused: pid 1 (launchd, init) or the Windows System process.
 	pid := int32(1)
 	if runtime.GOOS == "windows" {
@@ -400,7 +402,9 @@ func (h *vHarness) runCommon() {
 	}
 	h.reset()
 	err = h.r.KillEvent(&event.Event{Source: vSource(), Proc: &event.Proc{PID: pid, Exe: "system", UniqueID: 1, StartTime: time.Now()}}, "validate-kill", "validation: kill system")
-	h.record("kill", fmt.Sprintf("system process (pid %d)", pid), expectDeny, err != nil && strings.HasPrefix(h.decision().Outcome, "refused-"), "")
+	alive = pidAlive(pid)
+	h.record("kill", fmt.Sprintf("system process (pid %d)", pid), expectDeny, err != nil && strings.HasPrefix(h.decision().Outcome, "refused-") && alive,
+		fmt.Sprintf("pid %d still present after the decision=%v", pid, alive))
 
 	say(h.stdout, "--- suspend")
 	if runtime.GOOS == "windows" {
@@ -426,7 +430,9 @@ func (h *vHarness) runCommon() {
 	}
 	if s, err := h.spawn(); err != nil {
 		h.untestable("suspend", "then kill", err.Error())
-	} else if p, err := procOf(s.pid); err == nil {
+	} else if p, err := procOf(s.pid); err != nil {
+		h.untestable("suspend", "then kill", err.Error())
+	} else {
 		e := &event.Event{Source: vSource(), Proc: p}
 		_ = h.r.SuspendEvent(e, "validate-suspend", "validation: suspend then kill")
 		h.reset()
@@ -436,15 +442,20 @@ func (h *vHarness) runCommon() {
 			fmt.Sprintf("exited=%v pending resumes=%d", gone, len(h.r.Suspended())))
 	}
 	// Refused: a suspend of a process whose identity no longer matches.
-	if s, err := h.spawn(); err == nil {
-		if p, err := procOf(s.pid); err == nil {
-			p.UniqueID++
-			h.reset()
-			err := h.r.SuspendEvent(&event.Event{Source: vSource(), Proc: p}, "validate-suspend", "validation: suspend mismatch")
-			stopped := waitState(s.pid, true, time.Second)
-			h.record("suspend", "kernel unique id differs", expectDeny, errors.Is(err, response.ErrMismatch) && !stopped, fmt.Sprintf("stopped=%v", stopped))
-		}
+	s, err := h.spawn()
+	var p *event.Proc
+	if err == nil {
+		p, err = procOf(s.pid)
 	}
+	if err != nil {
+		h.untestable("suspend", "kernel unique id differs", err.Error())
+		return
+	}
+	p.UniqueID++
+	h.reset()
+	err = h.r.SuspendEvent(&event.Event{Source: vSource(), Proc: p}, "validate-suspend", "validation: suspend mismatch")
+	stopped := waitState(s.pid, true, time.Second)
+	h.record("suspend", "kernel unique id differs", expectDeny, errors.Is(err, response.ErrMismatch) && !stopped, fmt.Sprintf("stopped=%v", stopped))
 }
 
 // killRefused starts a test process, alters its event identity with mod,
@@ -472,4 +483,9 @@ func (h *vHarness) killRefused(kase string, mod func(*event.Proc), outcome strin
 func (h *vHarness) runSelf(args ...string) (string, error) {
 	out, err := exec.Command(h.self, args...).CombinedOutput()
 	return string(out), err
+}
+
+// oneLine makes text safe for one Markdown table cell.
+func oneLine(s string) string {
+	return strings.Join(strings.Fields(strings.NewReplacer("|", "/", "\r", " ", "\n", " ").Replace(s)), " ")
 }

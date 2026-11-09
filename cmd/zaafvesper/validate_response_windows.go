@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/response"
@@ -37,4 +38,16 @@ func platformAccidentGuard() error {
 		return errors.New("the ZAAFVesper service is installed here; the harness runs only on a throw-away runner")
 	}
 	return nil
+}
+
+// pidAlive reports whether pid exists: it can be opened, or opening it is
+// denied (a protected or kernel process).
+func pidAlive(pid int32) bool {
+	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
+	if err == nil {
+		defer windows.CloseHandle(h)
+		var code uint32
+		return windows.GetExitCodeProcess(h, &code) == nil && code == 259 // STILL_ACTIVE
+	}
+	return errors.Is(err, windows.ERROR_ACCESS_DENIED)
 }

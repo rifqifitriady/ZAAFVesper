@@ -82,6 +82,14 @@ func (h *vHarness) runPlatform() {
 		say(h.stdout, "note: StartResponse: %v", err)
 	}
 	h.cleanup = append(h.cleanup, func() { _ = h.r.Close() })
+	// The vault was empty when the run started (platformAccidentGuard):
+	// every entry in it now is a copy this run made.
+	h.cleanup = append(h.cleanup, func() {
+		ents, _ := os.ReadDir(response.DefaultVaultDir)
+		for _, e := range ents {
+			_ = os.Remove(filepath.Join(response.DefaultVaultDir, e.Name()))
+		}
+	})
 	h.execIntoPlatform()
 	h.quarantineCases()
 	h.requarantineCases()
@@ -458,7 +466,9 @@ func (h *vHarness) persistenceCases() {
 	// Refused: Apple tool writer under a trusted chain.
 	labelT := vLabelPrefix + "t" + randID()
 	pathT := "/Library/LaunchDaemons/" + labelT + ".plist"
-	if err := h.launchItem("system", pathT, labelT, 0, true); err == nil {
+	if err := h.launchItem("system", pathT, labelT, 0, true); err != nil {
+		h.untestable("remove_persistence", "written by /bin/cp under a trusted chain", err.Error())
+	} else {
 		cp := &event.Proc{PID: w.PID, PPID: 1, Exe: "/bin/cp", Name: "cp", IsPlatform: true, UniqueID: w.UniqueID, StartTime: w.StartTime,
 			Parent: &event.Proc{PID: 1, Exe: "/sbin/launchd", Name: "launchd", IsPlatform: true}}
 		e := h.mustEvent(event.CreateFile, pathT, cp)
@@ -554,7 +564,17 @@ func (h *vHarness) isolateCases() {
 	observe := func(ip string) {
 		h.r.Observe(&event.Event{Name: event.NetworkConnect, Source: "netpoll", Proc: p, Net: &event.Net{Proto: "tcp", Direction: "outbound", DstIP: ip, DstPort: 443}})
 	}
+	// The never-block set, offered as peers: loopback, Apple, multicast,
+	// the default gateway, the DNS resolvers and every address of this
+	// runner's own interfaces (all but the test alias).
 	never := []string{"127.0.0.1", "17.253.144.10", "224.0.0.251"}
+	if as, err := net.InterfaceAddrs(); err == nil {
+		for _, a := range as {
+			if p, err := netip.ParsePrefix(a.String()); err == nil && !p.Addr().IsLoopback() && p.Addr().String() != vAlias && p.Addr().Zone() == "" {
+				never = append(never, p.Addr().Unmap().String())
+			}
+		}
+	}
 	if gw := defaultGateway(); gw != "" {
 		never = append(never, gw)
 	}

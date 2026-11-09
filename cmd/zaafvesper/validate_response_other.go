@@ -17,3 +17,4 @@ func waitState(int32, bool, time.Duration) bool     { return false }
 func (h *vHarness) platformConfig(*response.Config) {}
 func (h *vHarness) runPlatform()                    {}
 func platformAccidentGuard() error                  { return nil }
+func pidAlive(int32) bool                           { return false }
