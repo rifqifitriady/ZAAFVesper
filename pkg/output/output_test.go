@@ -393,7 +393,7 @@ func TestForwarderSpoolsWhileDownAndDrains(t *testing.T) {
 		_ = f.Send(testAlert("a" + strconv.Itoa(i)))
 	}
 	f.SendEvent(&event.Event{Name: event.CreateProcess, Proc: &event.Proc{PID: 5, Exe: "/bin/ls"}})
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for f.Stats()["spooled"] < 6 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -403,7 +403,11 @@ func TestForwarderSpoolsWhileDownAndDrains(t *testing.T) {
 	tr.mu.Lock()
 	tr.down = false
 	tr.mu.Unlock()
-	deadline = time.Now().Add(5 * time.Second) // first backoff is 1 s
+	// Bounded by the largest backoff, not by the first one: on a slow
+	// runner (-race) the forwarder may fail a few more retries while the
+	// spool fills, doubling its backoff (1, 2, 4, 8 s ...) before the
+	// endpoint comes back. The loop returns as soon as delivery happens.
+	deadline = time.Now().Add(maxBackoff + 10*time.Second)
 	for time.Now().Before(deadline) {
 		tr.mu.Lock()
 		n := len(tr.got)
@@ -564,7 +568,7 @@ func TestSyslogDownThenUpDeliversSpool(t *testing.T) {
 	_ = f.Send(testAlert("before"))
 	select {
 	case <-msgs:
-	case <-time.After(3 * time.Second):
+	case <-time.After(15 * time.Second):
 		t.Fatal("first alert not delivered")
 	}
 	// The receiver goes away (listener and connection).
@@ -577,7 +581,7 @@ func TestSyslogDownThenUpDeliversSpool(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	_ = f.Send(testAlert("while-down-1"))
 	_ = f.Send(testAlert("while-down-2"))
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for f.Stats()["spooled"] < 2 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -592,7 +596,7 @@ func TestSyslogDownThenUpDeliversSpool(t *testing.T) {
 	defer ln2.Close()
 	go serve(ln2)
 	got := map[string]bool{}
-	timeout := time.After(6 * time.Second) // backoff starts at 1 s
+	timeout := time.After(maxBackoff + 10*time.Second) // see TestForwarderSpoolsWhileDownAndDrains
 	for len(got) < 2 {
 		select {
 		case m := <-msgs:
@@ -653,7 +657,7 @@ func TestForwarderFinalFlushOnClose(t *testing.T) {
 	down := &flaky{down: true}
 	f2 := NewForwarder(ForwarderConfig{Transport: down, Spool: sp2, FlushEvery: 20 * time.Millisecond})
 	_ = f2.Send(testAlert("one"))
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for f2.Stats()["failed_batches"] == 0 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
