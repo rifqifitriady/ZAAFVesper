@@ -16,6 +16,7 @@ correlation:
   group-by:
     - Computer
     - User
+  generate: false
   timespan: 5m
   condition:
     gte: 5

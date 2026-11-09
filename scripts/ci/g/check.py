@@ -28,6 +28,15 @@ def verdict(ok, what, detail):
 
 m = re.search(r"checked (\d+) files: (\d+) rules, \d+ filters, (\d+) correlations skipped, (\d+) errors", check_txt)
 verdict(m is not None and m.group(4) == "0", "zaaf check: no rule errors", m.group(0) if m else "no summary line")
+if not correlations_live:
+    want = len(exp["correlations"])
+    verdict(m is not None and m.group(2) == str(len(exp["base"])) and m.group(3) == str(want),
+            f"zaaf check: {len(exp['base'])} rules compiled, {want} correlations parsed and skipped (pre-M2)",
+            m.group(0) if m else "no summary line")
+# Under M2 (decision M2-D8), a rule referenced only by correlations with
+# generate: false alerts no longer on its own: every base rule here is such a
+# rule, so its standalone matches are expected to disappear.
+base_expect = {r: (0 if correlations_live else n) for r, n in exp["base"].items()}
 for mode in ("segments", "pipe"):
     counts = {}
     for line in open(os.path.join(out, f"findings-{mode}.ndjson")):
@@ -43,7 +52,7 @@ for mode in ("segments", "pipe"):
     ev = re.search(r"(\d+) events, (\d+) malformed", tail)
     verdict(ev is not None and int(ev.group(1)) == exp["events"] and ev.group(2) == "0",
             f"{mode}: {exp['events']} events read, none malformed", tail)
-    for rule, want in exp["base"].items():
+    for rule, want in base_expect.items():
         verdict(counts.get(rule, 0) == want, f"{mode}: {rule}", f"{counts.get(rule, 0)} matches, want {want}")
     for rule, want in exp["correlations"].items():
         if correlations_live:

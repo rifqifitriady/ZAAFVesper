@@ -43,7 +43,22 @@ The same preset is proposed to ZAAFElegia as `pipelines/zaafvesper.yml`; the cop
 
 ## Scheduled hunts
 
-Run the sensor with `--elegia-dir /var/db/zaafvesper/elegia` and hunt the closed segments on a schedule, for example from a root LaunchDaemon with `StartInterval` 900. The directory is `0700` and the files `0600`, root-owned, because they hold command lines; the hunt therefore runs as root. ZAAFElegia has no daemon or network ingest (its v0.1 scope); segments are the file-based hand-over.
+Run the sensor with `--elegia-dir /var/db/zaafvesper/elegia` and hunt the closed segments on a schedule, for example from a root LaunchDaemon with `StartInterval` 900. ZAAFElegia has no daemon or network ingest (its v0.1 scope); segments are the file-based hand-over.
+
+The segments are `0600` in a `0700` directory, root-owned, because they hold command lines, so the hunt runs as root. **Everything that root hunt executes or reads as instructions must be root-owned too**, or malware running as your account could change the rules (blinding the hunt) or swap the binary (running code as root):
+- `zaaf` installed as `/usr/local/bin/zaaf`;
+- the rules in `/usr/local/share/zaafelegia/rules`;
+- the preset as `/usr/local/share/zaafelegia/zaafvesper.yml`;
+- findings written into a root-owned `0700` directory.
+
+All of these must be `root:wheel` and not group- or world-writable, never in a user's checkout:
+
+```bash
+sudo /usr/local/bin/zaaf hunt -p /usr/local/share/zaafelegia/zaafvesper.yml -r /usr/local/share/zaafelegia/rules \
+  -o ndjson /var/db/zaafvesper/elegia/*.ndjson >> /var/db/zaafvesper/hunts/findings.ndjson
+```
+
+Records are bounded before they reach `zaaf`: every string is capped at 2 KiB, every list at 64 items, and every record at 64 KiB. `zaaf` is memory-safe Rust and bounds its own input lines (8 MiB).
 
 ## Correlation rules (ready for ZAAFElegia M2)
 
@@ -55,6 +70,8 @@ Run the sensor with `--elegia-dir /var/db/zaafvesper/elegia` and hunt the closed
 | `zv_corr_macos_quarantine_strip_burst` | event_count ≥ 5, 5m | Computer, User | five or more quarantine removals by one user |
 
 ZAAFElegia 0.0.1 (and `main` at `16ba447`) parses these and skips them with "correlation support arrives in milestone M2". Their base rules run today.
+
+The correlations set `generate: false` (the Sigma default). Under ZAAFElegia's M2 decision M2-D8, a base rule referenced only by such correlations stops alerting on its own once correlations run, so the correlation becomes the alert. The base rules match on `EventID` as well as their own fields, so that each one only counts records of its own category.
 
 ## Tested in CI
 

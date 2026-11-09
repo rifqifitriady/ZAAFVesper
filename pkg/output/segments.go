@@ -3,6 +3,7 @@
 package output
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -32,18 +33,20 @@ import (
 // happens only between writes. It implements io.Writer, io.Closer and the
 // LineWriter's rotator.
 type Segments struct {
-	mu      sync.Mutex
-	cfg     SegmentConfig
-	path    string
-	fd      int
-	cur     *os.File
-	curName string // final name of the open segment
-	curSize int64
-	opened  time.Time
-	closed  []segment // oldest first
-	total   int64     // bytes in closed segments
-	pruned  uint64
-	rotated uint64
+	mu        sync.Mutex
+	cfg       SegmentConfig
+	path      string
+	fd        int
+	cur       *os.File
+	curName   string // final name of the open segment
+	curSize   int64
+	lineEnd   int64 // size of the open segment up to its last complete line
+	opened    time.Time
+	closed    []segment // oldest first
+	total     int64     // bytes in closed segments
+	pruned    uint64
+	rotated   uint64
+	recovered uint64
 }
 
 type segment struct {
@@ -126,11 +129,13 @@ func (s *Segments) scan() error {
 		}
 		name := e.Name()
 		if m[3] != "" { // a crash left it open
+			trimPartialLine(s.fd, name)
 			final := name[:len(name)-len(partExt)]
 			if err := unix.Renameat(s.fd, name, s.fd, final); err != nil {
 				continue
 			}
 			name = final
+			s.recovered++
 		}
 		var st unix.Stat_t
 		if err := unix.Fstatat(s.fd, name, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
@@ -141,6 +146,39 @@ func (s *Segments) scan() error {
 	}
 	sort.Slice(s.closed, func(i, j int) bool { return s.closed[i].name < s.closed[j].name })
 	return s.prune()
+}
+
+// trimPartialLine cuts a segment left open by a crash back to its last
+// complete line (the process may have died in the middle of a write).
+func trimPartialLine(dirfd int, name string) {
+	fd, err := unix.Openat(dirfd, name, unix.O_RDWR|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return
+	}
+	f := os.NewFile(uintptr(fd), name)
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil || !fi.Mode().IsRegular() {
+		return
+	}
+	end := fi.Size()
+	buf := make([]byte, 64<<10)
+	for end > 0 {
+		off := end - int64(len(buf))
+		if off < 0 {
+			off = 0
+		}
+		n, err := f.ReadAt(buf[:end-off], off)
+		if err != nil && n == 0 {
+			return
+		}
+		if i := bytes.LastIndexByte(buf[:n], '\n'); i >= 0 {
+			_ = f.Truncate(off + int64(i) + 1)
+			return
+		}
+		end = off
+	}
+	_ = f.Truncate(0)
 }
 
 // open starts a new segment. Caller holds mu.
@@ -163,7 +201,7 @@ func (s *Segments) open() error {
 		if err != nil {
 			return fmt.Errorf("elegia dir %s: %w", s.path, err)
 		}
-		s.cur, s.curName, s.curSize, s.opened = os.NewFile(uintptr(fd), filepath.Join(s.path, final+partExt)), final, 0, now
+		s.cur, s.curName, s.curSize, s.lineEnd, s.opened = os.NewFile(uintptr(fd), filepath.Join(s.path, final+partExt)), final, 0, 0, now
 		return nil
 	}
 	return fmt.Errorf("elegia dir %s: no free segment name", s.path)
@@ -182,8 +220,33 @@ func (s *Segments) Write(p []byte) (int, error) {
 		}
 	}
 	n, err := s.cur.Write(p)
+	if i := bytes.LastIndexByte(p[:n], '\n'); i >= 0 {
+		s.lineEnd = s.curSize + int64(i) + 1
+	}
 	s.curSize += int64(n)
+	if err != nil {
+		s.dropPartial()
+	}
 	return n, err
+}
+
+// Recover drops a partial line left by a failed write (the LineWriter calls
+// it after an error), so a segment never holds broken JSON.
+func (s *Segments) Recover() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.dropPartial()
+}
+
+// dropPartial truncates the open segment to its last complete line. Caller
+// holds mu.
+func (s *Segments) dropPartial() {
+	if s.cur == nil || s.curSize == s.lineEnd {
+		return
+	}
+	if err := s.cur.Truncate(s.lineEnd); err == nil {
+		s.curSize = s.lineEnd
+	}
 }
 
 // Due reports whether the open segment should be closed now.
@@ -207,7 +270,8 @@ func (s *Segments) finish() error {
 	if s.cur == nil {
 		return nil
 	}
-	err := s.cur.Close()
+	// Data reaches the disk before the segment becomes visible as closed.
+	err := errors.Join(s.cur.Sync(), s.cur.Close())
 	s.cur = nil
 	part := s.curName + partExt
 	if s.curSize == 0 {
@@ -255,7 +319,7 @@ func (s *Segments) Stats() map[string]uint64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return map[string]uint64{"segments_closed": uint64(len(s.closed)), "segments_bytes": uint64(s.total),
-		"open_segment_bytes": uint64(s.curSize), "rotations": s.rotated, "pruned": s.pruned}
+		"open_segment_bytes": uint64(s.curSize), "rotations": s.rotated, "pruned": s.pruned, "recovered_at_start": s.recovered}
 }
 
 var _ io.WriteCloser = (*Segments)(nil)

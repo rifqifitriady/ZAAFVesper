@@ -19,6 +19,10 @@ import (
 const (
 	condElegiaDropped = "elegia_out_dropped"
 	condElegiaCapped  = "elegia_out_capped"
+	condElegiaError   = "elegia_out_error"
+	// Lower bounds: smaller segments only multiply files and directory work.
+	minSegmentBytes = 4096
+	minSegmentAge   = time.Second
 )
 
 const defaultElegiaMaxBytes = 1 << 30
@@ -47,8 +51,8 @@ func (e *elegiaOptions) check() error {
 	switch {
 	case e.outMax <= 0:
 		return errors.New("--elegia-max-bytes must be positive")
-	case e.segBytes <= 0 || e.keepBytes <= 0 || e.segAge <= 0:
-		return errors.New("--elegia-segment-bytes, --elegia-segment-age and --elegia-keep-bytes must be positive")
+	case e.segBytes < minSegmentBytes || e.segAge < minSegmentAge || e.keepBytes <= 0:
+		return fmt.Errorf("--elegia-segment-bytes must be at least %d, --elegia-segment-age at least %v, and --elegia-keep-bytes positive", minSegmentBytes, minSegmentAge)
 	case e.dir != "" && e.keepBytes < e.segBytes:
 		return errors.New("--elegia-keep-bytes must be at least --elegia-segment-bytes, or a closed segment is deleted at once")
 	case len(e.host) > 255:
@@ -105,7 +109,8 @@ func (e *elegiaOptions) wire(asRoot bool, opts output.SigmaOptions, closeTimeout
 		}
 		add("elegia out", output.NewLineWriter(dst, output.LineWriterConfig{Name: "elegia-out", MaxBytes: maxBytes, Written: written,
 			OnDrop:   func(d string) { degraded(condElegiaDropped, d) },
-			OnCapped: func(d string) { degraded(condElegiaCapped, d) }}))
+			OnCapped: func(d string) { degraded(condElegiaCapped, d) },
+			OnError:  func(d string) { degraded(condElegiaError, d) }}))
 		say(stderr, "output: every event as Sigma-named NDJSON (%s) to %s", output.ElegiaSchema, where)
 	}
 	if e.dir != "" {
@@ -117,7 +122,8 @@ func (e *elegiaOptions) wire(asRoot bool, opts output.SigmaOptions, closeTimeout
 			return nil, fmt.Errorf("--elegia-dir: %w", err)
 		}
 		add("elegia dir", output.NewLineWriter(seg, output.LineWriterConfig{Name: "elegia-dir",
-			OnDrop: func(d string) { degraded(condElegiaDropped, d) }}))
+			OnDrop:  func(d string) { degraded(condElegiaDropped, d) },
+			OnError: func(d string) { degraded(condElegiaError, d) }}))
 		segStats := seg.Stats
 		w.stats["elegia segments"] = segStats
 		say(stderr, "output: every event as Sigma-named NDJSON (%s) into segments in %s (close at %d bytes or %v, keep %d bytes)",

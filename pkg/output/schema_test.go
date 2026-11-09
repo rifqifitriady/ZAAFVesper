@@ -27,6 +27,7 @@ func TestElegiaRecordsMatchSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	signed := true
+	seen := map[string]bool{} // schema properties seen in some record
 	t0 := time.Date(2026, 11, 9, 8, 0, 0, 0, time.UTC)
 	for _, name := range event.Names() {
 		for _, platform := range []string{event.PlatformMacOS, event.PlatformWindows, ""} {
@@ -34,7 +35,7 @@ func TestElegiaRecordsMatchSchema(t *testing.T) {
 				Proc: &event.Proc{PID: 10, PPID: 1, PIDVersion: 3, UniqueID: 99, Exe: "/bin/x", Name: "x", Cmdline: "x -a",
 					Args: []string{"x", "-a"}, Cwd: "/", Username: "u", SigningID: "s", TeamID: "T", CSCategory: "platform",
 					IsPlatform: true, IsSigned: true, Seeded: true, GUID: "{g}", Hashes: "SHA256=00", Integrity: "High",
-					Parent: &event.Proc{PID: 1, UniqueID: 1, Exe: "/sbin/launchd", Cmdline: "launchd", SigningID: "l", IsPlatform: true}},
+					Parent: &event.Proc{PID: 1, UniqueID: 1, Exe: "/sbin/launchd", Cmdline: "launchd", SigningID: "l", TeamID: "P", IsPlatform: true}},
 				Target:   &event.Proc{PID: 11, Exe: "/bin/t"},
 				File:     &event.File{Path: "/tmp/f", Dest: "/tmp/g"},
 				Net:      &event.Net{Proto: "tcp", Direction: "outbound", SrcIP: "10.0.0.1", SrcPort: 1, DstIP: "10.0.0.2", DstPort: 2},
@@ -48,7 +49,16 @@ func TestElegiaRecordsMatchSchema(t *testing.T) {
 				if errs := validate(schema, schema, rec, "$"); len(errs) > 0 {
 					t.Fatalf("%s/%s: record does not match the schema:\n%s\nrecord: %v", name, platform, strings.Join(errs, "\n"), rec)
 				}
+				markSeen(seen, "", rec)
 			}
+		}
+	}
+	// The other direction: every property the schema names explicitly is
+	// emitted by some record (the truncated flag by the capped one below).
+	seen["truncated"] = true
+	for _, path := range declared(schema, "", schema) {
+		if !seen[path] {
+			t.Errorf("the schema declares %q but the encoder never emits it", path)
 		}
 	}
 	// The size-capped fallback ("truncated": true) also matches.
@@ -193,4 +203,31 @@ func jsonType(v any, want string) bool {
 		return ok
 	}
 	return false
+}
+
+// markSeen records every key path of rec ("zaafvesper.proc.pid").
+func markSeen(seen map[string]bool, prefix string, v any) {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return
+	}
+	for k, x := range m {
+		seen[prefix+k] = true
+		markSeen(seen, prefix+k+".", x)
+	}
+}
+
+// declared lists the explicitly named property paths of a schema node
+// (patternProperties, the open Sigma field set, are not listed).
+func declared(root map[string]any, prefix string, s map[string]any) []string {
+	if ref, ok := s["$ref"].(string); ok {
+		s = root["$defs"].(map[string]any)[strings.TrimPrefix(ref, "#/$defs/")].(map[string]any)
+	}
+	var out []string
+	props, _ := s["properties"].(map[string]any)
+	for k, ps := range props {
+		out = append(out, prefix+k)
+		out = append(out, declared(root, prefix+k+".", ps.(map[string]any))...)
+	}
+	return out
 }

@@ -197,3 +197,78 @@ func TestSegmentsThroughLineWriter(t *testing.T) {
 		t.Fatalf("%d of %d lines found", len(seen), n)
 	}
 }
+
+// failOnce fails its first write with ENOSPC (a disk filled for a moment)
+// and accepts everything after.
+type failOnce struct {
+	mu     sync.Mutex
+	failed bool
+	buf    bytes.Buffer
+}
+
+func (f *failOnce) Write(p []byte) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.failed {
+		f.failed = true
+		return 0, fmt.Errorf("write: %w", errNoSpace)
+	}
+	return f.buf.Write(p)
+}
+
+var errNoSpace = fmt.Errorf("no space left on device")
+
+// One write error must not silence the writer for good (security review
+// v0.4 G): later lines are written and the error is reported.
+func TestLineWriterRecoversAfterWriteError(t *testing.T) {
+	w := &failOnce{}
+	var mu sync.Mutex
+	var reports []string
+	lw := NewLineWriter(w, LineWriterConfig{Name: "elegia-out", OnError: func(d string) {
+		mu.Lock()
+		reports = append(reports, d)
+		mu.Unlock()
+	}})
+	lw.WriteLine([]byte(`{"n":0}`))
+	time.Sleep(50 * time.Millisecond) // the first flush fails
+	for i := 1; i <= 100; i++ {
+		lw.WriteLine([]byte(fmt.Sprintf(`{"n":%d}`, i)))
+	}
+	if err := lw.Close(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Count(w.buf.String(), "\n")
+	if got < 100 {
+		t.Fatalf("%d lines written after the error, want at least 100 (the writer stayed broken)", got)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(reports) == 0 || !strings.Contains(reports[0], "writing continues") {
+		t.Fatalf("error not reported: %v", reports)
+	}
+}
+
+// A segment left open by a crash in the middle of a line is cut back to its
+// last complete line before it is closed, and counted.
+func TestSegmentsCrashTrimsPartialLine(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "elegia")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	part := filepath.Join(dir, "events-20261109T120000.000000000Z.ndjson.part")
+	if err := os.WriteFile(part, []byte("{\"a\":1}\n{\"b\":2}\n{\"c\":"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := OpenSegments(dir, SegmentConfig{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	b, err := os.ReadFile(strings.TrimSuffix(part, ".part"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "{\"a\":1}\n{\"b\":2}\n" || s.Stats()["recovered_at_start"] != 1 {
+		t.Fatalf("recovered %q, stats %v", b, s.Stats())
+	}
+}

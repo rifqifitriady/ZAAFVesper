@@ -17,6 +17,7 @@ correlation:
   group-by:
     - Computer
     - ParentProcessGuid
+  generate: false
   timespan: 1m
   condition:
     field: Image

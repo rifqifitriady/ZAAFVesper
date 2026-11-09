@@ -1,5 +1,5 @@
 {
-  "_comment": "What zaaf hunt -p pipeline/zaafvesper.yml -r rules must find in macos-scenarios (the NDJSON sample, or the same events replayed from a capture). base: matches per base rule name. correlations: alerts per correlation rule name once ZAAFElegia supports correlation rules (milestone M2); until then zaaf parses and skips them.",
+  "_comment": "What zaaf hunt -p pipeline/zaafvesper.yml -r rules must find in macos-scenarios (the NDJSON sample, or the same events replayed from a capture). base: matches per base rule name. correlations: alerts per correlation rule name once ZAAFElegia supports correlation rules (milestone M2); until then zaaf parses and skips them. Once correlations run, the base rules (all referenced by correlations with generate: false, decision M2-D8) no longer alert on their own and are expected at 0.",
   "events": 18,
   "base": {
     "zv_macos_curl_http_download": 1,

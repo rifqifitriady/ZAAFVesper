@@ -328,6 +328,7 @@ type LineWriter struct {
 	max      int64
 	onCapped func(detail string)
 	onDrop   func(detail string)
+	onError  func(detail string)
 
 	mu      sync.Mutex
 	written int64
@@ -354,6 +355,10 @@ type LineWriterConfig struct {
 	// OnCapped is called once when the cap is reached; OnDrop for drops
 	// (both rate-limited by the pipeline).
 	OnCapped, OnDrop func(detail string)
+	// OnError is called for each write or flush error (the pipeline
+	// rate-limits the resulting SensorDegraded). The writer recovers: the
+	// lines buffered at the error are lost, later lines are written.
+	OnError func(detail string)
 }
 
 // NewLineWriter starts the writer.
@@ -365,7 +370,7 @@ func NewLineWriter(w io.Writer, cfg LineWriterConfig) *LineWriter {
 		cfg.QueueBytes = 32 << 20
 	}
 	lw := &LineWriter{name: cfg.Name, w: w, ch: make(chan []byte, cfg.Queue), done: make(chan struct{}),
-		max: cfg.MaxBytes, onCapped: cfg.OnCapped, onDrop: cfg.OnDrop, maxQueued: cfg.QueueBytes, written: cfg.Written}
+		max: cfg.MaxBytes, onCapped: cfg.OnCapped, onDrop: cfg.OnDrop, onError: cfg.OnError, maxQueued: cfg.QueueBytes, written: cfg.Written}
 	go lw.loop()
 	return lw
 }
@@ -415,10 +420,10 @@ func (lw *LineWriter) loop() {
 			return
 		}
 		if err := bw.Flush(); err != nil {
-			lw.errs.Add(1)
+			lw.failed(bw, err)
 		}
 		if err := rot.Rotate(); err != nil {
-			lw.errs.Add(1)
+			lw.failed(bw, err)
 		}
 	}
 	var tick <-chan time.Time
@@ -438,7 +443,7 @@ func (lw *LineWriter) loop() {
 			lw.write(bw, line)
 			if len(lw.ch) == 0 {
 				if err := bw.Flush(); err != nil {
-					lw.errs.Add(1)
+					lw.failed(bw, err)
 				}
 			}
 			rotate()
@@ -466,10 +471,26 @@ func (lw *LineWriter) write(bw *bufio.Writer, line []byte) {
 	n, err := bw.Write(line)
 	lw.written += int64(n)
 	if err != nil {
-		lw.errs.Add(1)
+		lw.failed(bw, err)
 		return
 	}
 	lw.lines.Add(1)
+}
+
+// failed recovers from a write or flush error. bufio.Writer keeps its first
+// error and refuses every later write, so one moment of a full disk would
+// silence the output until a restart: the buffer is reset (the lines in it
+// are lost), a Segments destination drops any partial line, and the error is
+// counted and reported.
+func (lw *LineWriter) failed(bw *bufio.Writer, err error) {
+	lw.errs.Add(1)
+	bw.Reset(lw.w)
+	if r, ok := lw.w.(interface{ Recover() }); ok {
+		r.Recover()
+	}
+	if lw.onError != nil {
+		lw.onError(fmt.Sprintf("%s: write failed (%v); the lines buffered at that moment are lost, writing continues", lw.name, err))
+	}
 }
 
 // Close drains the queue (within timeout), flushes and closes w when it is

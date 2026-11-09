@@ -18,6 +18,7 @@ correlation:
   group-by:
     - Computer
     - ProcessGuid
+  generate: false
   timespan: 10m
   condition:
     field: DestinationPort

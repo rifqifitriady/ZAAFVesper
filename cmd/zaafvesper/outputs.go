@@ -30,6 +30,7 @@ const (
 	webhookMaxRecordBytes  = alert.DefaultMaxAlertBytes
 	outputCloseTimeout     = 5 * time.Second
 	condOCSFCapped         = "alerts_ocsf_capped"
+	condOCSFError          = "alerts_ocsf_error"
 	defaultSyslogFacility  = "local4"
 	defaultWebhookFormat   = output.FormatJSON
 	netpollChannelCapacity = 1024
@@ -108,6 +109,9 @@ func (n *netOutOptions) check() error {
 		if _, err := output.Facility(n.syslogFacility); err != nil {
 			return fmt.Errorf("--syslog-facility: %w", err)
 		}
+	}
+	if n.elegia.dir != "" && (n.syslogAddr != "" || n.webhookURL != "") && filepath.Clean(n.elegia.dir) == filepath.Clean(n.spoolDir) {
+		return errors.New("--elegia-dir and --spool-dir must be different directories")
 	}
 	return n.elegia.check()
 }
@@ -222,7 +226,8 @@ func (s *sensor) wireNetOut(o runOptions, engine *rules.Engine, snap *ps.Snapsho
 		}
 		lw := output.NewLineWriter(f, output.LineWriterConfig{Name: "alerts-ocsf", MaxBytes: n.ocsfMaxBytes, Written: size,
 			OnDrop:   func(d string) { p.degraded(condOCSFCapped, d) },
-			OnCapped: func(d string) { p.degraded(condOCSFCapped, d) }})
+			OnCapped: func(d string) { p.degraded(condOCSFCapped, d) },
+			OnError:  func(d string) { p.degraded(condOCSFError, d) }})
 		p.sinks = append(p.sinks, &output.OCSFSink{W: lw, Version: version, Options: output.SigmaOptions{DefaultProduct: hostPlatform(), Host: host}})
 		s.closers = append(s.closers, func() error { return lw.Close(outputCloseTimeout) })
 		s.extra["alerts ocsf"] = lw.Stats

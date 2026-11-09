@@ -20,6 +20,7 @@ correlation:
   group-by:
     - Computer
     - User
+  generate: false
   timespan: 10m
 falsepositives:
   - Install scripts that download, chmod and run a helper from /tmp
