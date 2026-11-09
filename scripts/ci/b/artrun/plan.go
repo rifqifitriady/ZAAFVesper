@@ -22,6 +22,9 @@ type Plan struct {
 	// that are not run as they are, and why (each is replaced by an inline
 	// equivalent or left out).
 	SkippedAtomics []SkippedAtomic `json:"skipped_atomics"`
+	// RuleNotes explain known reasons a rule may not fire on some images;
+	// the report adds the note to a "did not fire" row (the row stays a miss).
+	RuleNotes []Untestable `json:"rule_notes,omitempty"`
 }
 
 // SkippedAtomic is a linked Atomic test that is not run as is.

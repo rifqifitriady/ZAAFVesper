@@ -114,7 +114,8 @@ jobs:
         shell: pwsh
         continue-on-error: true
         run: |
-          .\build\artrun.exe report -plan scripts\ci\b\windows-plan.json -results out\results.json -alerts out\alerts -rules rules -platform windows -run-url $env:RUN_URL -out out\windows.md -json out\windows.json
+          $img = "$env:ImageOS $env:ImageVersion"
+          .\build\artrun.exe report -plan scripts\ci\b\windows-plan.json -results out\results.json -alerts out\alerts -rules rules -platform windows -label "windows-latest ($img)" -run-url $env:RUN_URL -out out\windows.md -json out\windows.json
           Get-Content out\windows.md | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
@@ -134,7 +135,13 @@ jobs:
           REPORT_OUTCOME: ${{ steps.report.outcome }}
 
   linux:
-    runs-on: ubuntu-latest
+    # ubuntu-latest (26.04 since November 2026) and the 24.04 LTS that most
+    # servers still run.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     env:
       # Microsoft's packages (packages.microsoft.com ubuntu/<release>/prod),
@@ -197,12 +204,15 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
-          ./build/artrun report -plan scripts/ci/b/linux-plan.json -results out/results.json -alerts out/alerts -rules rules -platform linux -run-url "$RUN_URL" -out out/linux.md -json out/linux.json
+          . /etc/os-release
+          ./build/artrun report -plan scripts/ci/b/linux-plan.json -results out/results.json -alerts out/alerts -rules rules -platform linux -label "$PRETTY_NAME ($RUNNER_OS_LABEL)" -run-url "$RUN_URL" -out out/linux.md -json out/linux.json
           cat out/linux.md >> "$GITHUB_STEP_SUMMARY"
+        env:
+          RUNNER_OS_LABEL: ${{ matrix.os }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: validation-linux
+          name: validation-linux-${{ matrix.os }}
           path: out
           retention-days: 30
       - name: Fail if the run was incomplete

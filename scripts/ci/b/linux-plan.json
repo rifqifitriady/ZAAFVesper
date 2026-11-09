@@ -6,12 +6,13 @@
       "canary": true,
       "inline": {
         "executor": "bash",
-        "command": "rm -f /var/log/syslog.zaafvesper-canary"
+        "command": "mkdir -p /tmp/zaafvesper/canary && install -m 0755 /usr/bin/bash /tmp/zaafvesper/canary/nuclei && /tmp/zaafvesper/canary/nuclei -c true",
+        "cleanup": "rm -rf /tmp/zaafvesper/canary"
       },
       "expect": [
-        "Syslog Clearing or Removal Via System Utilities"
+        "Linux HackTool Execution"
       ],
-      "note": "Canary: proves the sensor receives and evaluates events at this point of the run."
+      "note": "Canary: a bash copy named nuclei. It proves the sensor receives and evaluates events at this point of the run, independent of which coreutils the image ships."
     },
     {
       "id": "art-T1053.003-078e69eb",
@@ -177,27 +178,42 @@
       "id": "inline-webshell-parent",
       "inline": {
         "executor": "bash",
-        "command": "mkdir -p /tmp/zaafvesper && install -m 0755 /bin/bash /tmp/zaafvesper/nginx && /tmp/zaafvesper/nginx -c '/usr/bin/whoami; true'",
+        "command": "mkdir -p /tmp/zaafvesper && install -m 0755 /bin/bash /tmp/zaafvesper/nginx && /tmp/zaafvesper/nginx -c 'sleep 1; /usr/bin/whoami; true'",
         "cleanup": "rm -f /tmp/zaafvesper/nginx"
       },
       "expect": [
         "Linux Webshell Indicators"
       ],
-      "note": "bash copied under the name nginx starts whoami, as a web server running a webshell would."
+      "note": "bash copied under the name nginx starts whoami a second after it starts, as a running web server with a webshell would. (Without the pause, Sysmon for Linux can report the child before the parent's exec, so the parent still looks like bash.)"
     },
     {
       "id": "canary-end",
       "canary": true,
       "inline": {
         "executor": "bash",
-        "command": "rm -f /var/log/syslog.zaafvesper-canary"
+        "command": "mkdir -p /tmp/zaafvesper/canary && install -m 0755 /usr/bin/bash /tmp/zaafvesper/canary/nuclei && /tmp/zaafvesper/canary/nuclei -c true",
+        "cleanup": "rm -rf /tmp/zaafvesper/canary"
       },
       "expect": [
-        "Syslog Clearing or Removal Via System Utilities"
+        "Linux HackTool Execution"
       ],
-      "note": "Canary: proves the sensor receives and evaluates events at this point of the run."
+      "note": "Canary: a bash copy named nuclei. It proves the sensor receives and evaluates events at this point of the run, independent of which coreutils the image ships."
     }
   ],
   "untestable": [],
-  "skipped_atomics": []
+  "skipped_atomics": [],
+  "rule_notes": [
+    {
+      "rule": "Syslog Clearing or Removal Via System Utilities",
+      "reason": "on Ubuntu 26.04 rm runs as /usr/bin/gnurm (the Rust coreutils switch keeps GNU rm under that name); the SigmaHQ rule matches only images ending in /rm."
+    },
+    {
+      "rule": "History File Deletion",
+      "reason": "on Ubuntu 26.04 rm runs as /usr/bin/gnurm; the SigmaHQ rule matches only images ending in /rm, /unlink or /shred. The hand-written rule 'Shell history file deleted' (file event) still fires."
+    },
+    {
+      "rule": "Copy Passwd Or Shadow From TMP Path",
+      "reason": "on Ubuntu 26.04 cp runs as /usr/bin/gnucp; the SigmaHQ rule matches only images ending in /cp."
+    }
+  ]
 }

@@ -46,6 +46,7 @@ func cmdReport(args []string) error {
 	alertsDir := fs.String("alerts", "", "folder with the sensor's alerts-*.jsonl")
 	rulesDir := fs.String("rules", "rules", "rules folder")
 	platform := fs.String("platform", "", "windows or linux")
+	label := fs.String("label", "", "runner description shown in the report (e.g. the OS release)")
 	runURL := fs.String("run-url", "", "workflow run link")
 	out := fs.String("out", "", "markdown output (also printed)")
 	jsonOut := fs.String("json", "", "optional JSON summary")
@@ -78,6 +79,9 @@ func cmdReport(args []string) error {
 		broken = canaryProblem(p, results, alerts)
 	}
 	md := render(rows, p, results, *platform, *runURL, fired)
+	if *label != "" {
+		md = "Runner: " + *label + "\n\n" + md
+	}
 	if broken != "" {
 		md = "> **INCOMPLETE RUN:** " + broken + ". The rows below are not a valid result.\n\n" + md
 	}
@@ -191,6 +195,10 @@ func buildRows(p *Plan, results []Result, fired map[string]uint64, first map[str
 	for _, u := range p.Untestable {
 		untestable[u.Rule] = u.Reason
 	}
+	ruleNote := map[string]string{}
+	for _, n := range p.RuleNotes {
+		ruleNote[n.Rule] = n.Reason
+	}
 	var rows []Row
 	for _, r := range rs.Rules {
 		if len(r.Platforms) != 1 || r.Platforms[0] != platform {
@@ -242,6 +250,9 @@ func buildRows(p *Plan, results []Result, fired map[string]uint64, first map[str
 			row.Status = "did not fire"
 			if fired[r.Name] > 0 {
 				notes = append(notes, fmt.Sprintf("fired %d time(s) outside the test windows", fired[r.Name]))
+			}
+			if n := ruleNote[r.Name]; n != "" {
+				notes = append(notes, "Known reason: "+n)
 			}
 			row.Detail = strings.Join(notes, "; ")
 		case notRun > 0:
