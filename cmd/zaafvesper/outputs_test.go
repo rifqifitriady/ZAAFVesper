@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -59,6 +60,11 @@ func TestNetOutFlagChecks(t *testing.T) {
 // that the event reaches the ZAAFElegia file with Sigma names, and that
 // the netpoll event left the process table untouched (N7).
 func TestRunWiresNetworkAndOutputs(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		// Socket polling and the macOS network rules this test drives exist
+		// only on macOS (Windows and Linux get network events from Sysmon).
+		t.Skip("macOS socket polling")
+	}
 	dir := t.TempDir()
 	// HTTPS webhook.
 	var mu sync.Mutex

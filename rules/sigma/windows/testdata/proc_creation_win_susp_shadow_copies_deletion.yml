@@ -1,0 +1,15 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "vssadmin delete shadows (ART T1490 #1)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6228, "ppid": 4000, "exe": "C:\\Windows\\System32\\vssadmin.exe", "name": "vssadmin.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "vssadmin.exe delete shadows /all /quiet", "original_name": "VSSADMIN.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "wmic shadowcopy delete (ART T1490 #2)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6229, "ppid": 4000, "exe": "C:\\Windows\\System32\\wbem\\WMIC.exe", "name": "WMIC.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "wmic.exe shadowcopy delete", "original_name": "wmic.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - vssadmin list shadows"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6240, "ppid": 4000, "exe": "C:\\Windows\\System32\\vssadmin.exe", "name": "vssadmin.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "vssadmin.exe list shadows", "original_name": "VSSADMIN.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "PowerShell lists shadow copies"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6241, "ppid": 4000, "exe": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "name": "powershell.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "powershell.exe Get-CimInstance Win32_ShadowCopy", "original_name": "PowerShell.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

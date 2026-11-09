@@ -1,0 +1,33 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: CobaltStrike Named Pipe
+id: d5601f8c-b26f-4ab0-9035-69e11a8d4ad2
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects the creation of a named pipe as used by CobaltStrike
+
+  Converted from Sigma rule d5601f8c-b26f-4ab0-9035-69e11a8d4ad2 by zaafvesper sigma convert. Sigma author: Florian Roth (Nextron Systems), Wojciech Lesicki.
+labels:
+  sigma.author: Florian Roth (Nextron Systems), Wojciech Lesicki
+  sigma.id: d5601f8c-b26f-4ab0-9035-69e11a8d4ad2
+  sigma.level: critical
+  sigma.source: rules/windows/pipe_created/pipe_created_hktl_cobaltstrike.yml
+  sigma.status: test
+  sigma.tags: attack.privilege-escalation, attack.stealth, attack.t1055
+  sigma.title: CobaltStrike Named Pipe
+  tactic.id: TA0004, TA0005
+  tactic.name: Privilege Escalation, Stealth
+  technique.id: T1055
+references:
+  - https://twitter.com/d4rksystem/status/1357010969264873472
+  - https://labs.f-secure.com/blog/detecting-cobalt-strike-default-modules-via-named-pipe-analysis/
+  - https://github.com/SigmaHQ/sigma/issues/253
+  - https://blog.cobaltstrike.com/2021/02/09/learn-pipe-fitting-for-all-of-your-offense-projects/
+  - https://redcanary.com/threat-detection-report/threats/cobalt-strike/
+condition: evt.name in ('PipeConnect', 'PipeCreate') and ((evt.arg[pipe_name] icontains '\\MSSE-' and evt.arg[pipe_name] icontains '-server') or evt.arg[pipe_name] istartswith '\\postex_' or evt.arg[pipe_name] istartswith '\\status_' or evt.arg[pipe_name] istartswith '\\msagent_' or evt.arg[pipe_name] istartswith '\\mojo_' or evt.arg[pipe_name] istartswith '\\interprocess_' or evt.arg[pipe_name] istartswith '\\samr_' or evt.arg[pipe_name] istartswith '\\netlogon_' or evt.arg[pipe_name] istartswith '\\srvsvc_' or evt.arg[pipe_name] istartswith '\\lsarpc_' or evt.arg[pipe_name] istartswith '\\wkssvc_')
+output: '%ps.exe (pid %ps.pid) matched on %evt.name (Sigma rule by Florian Roth (Nextron Systems), Wojciech Lesicki)'
+severity: critical
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

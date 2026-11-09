@@ -1,0 +1,15 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "default Cobalt Strike SMB beacon pipe"
+    events:
+      - {"name": "PipeCreate", "platform": "windows", "proc": {"pid": 6228, "ppid": 4000, "exe": "C:\\Users\\alice\\AppData\\Local\\Temp\\beacon.exe", "name": "beacon.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}, "args": {"pipe_name": "\\MSSE-1234-server", "event_type": "CreatePipe"}}
+  - desc: "post-exploitation job pipe"
+    events:
+      - {"name": "PipeCreate", "platform": "windows", "proc": {"pid": 6229, "ppid": 4000, "exe": "C:\\Windows\\System32\\rundll32.exe", "name": "rundll32.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}, "args": {"pipe_name": "\\postex_8a3f", "event_type": "CreatePipe"}}
+nomatch:
+  - desc: "benign lookalike - Chrome's mojo pipe (dot, not underscore)"
+    events:
+      - {"name": "PipeCreate", "platform": "windows", "proc": {"pid": 5000, "ppid": 4000, "exe": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "name": "chrome.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}, "args": {"pipe_name": "\\mojo.5000.1234.5678901234567890", "event_type": "CreatePipe"}}
+  - desc: "the srvsvc pipe itself"
+    events:
+      - {"name": "PipeConnect", "platform": "windows", "proc": {"pid": 5001, "ppid": 4000, "exe": "C:\\Windows\\System32\\svchost.exe", "name": "svchost.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}, "args": {"pipe_name": "\\srvsvc", "event_type": "ConnectPipe"}}

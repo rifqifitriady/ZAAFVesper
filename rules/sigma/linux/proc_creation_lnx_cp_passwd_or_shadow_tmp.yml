@@ -1,0 +1,30 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Copy Passwd Or Shadow From TMP Path
+id: fa4aaed5-4fe0-498d-bbc0-08e3346387ba
+version: 1.0.0
+platforms: [linux]
+description: |-
+  Detects when the file "passwd" or "shadow" is copied from tmp path
+
+  Converted from Sigma rule fa4aaed5-4fe0-498d-bbc0-08e3346387ba by zaafvesper sigma convert. Sigma author: Joseliyo Sanchez, @Joseliyo_Jstnk.
+labels:
+  sigma.author: Joseliyo Sanchez, @Joseliyo_Jstnk
+  sigma.id: fa4aaed5-4fe0-498d-bbc0-08e3346387ba
+  sigma.level: high
+  sigma.source: rules/linux/process_creation/proc_creation_lnx_cp_passwd_or_shadow_tmp.yml
+  sigma.status: test
+  sigma.tags: attack.credential-access, attack.t1552.001
+  sigma.title: Copy Passwd Or Shadow From TMP Path
+  tactic.id: TA0006
+  tactic.name: Credential Access
+  technique.id: T1552.001
+references:
+  - https://blogs.blackberry.com/
+  - https://twitter.com/Joseliyo_Jstnk/status/1620131033474822144
+condition: evt.name in ('CreateProcess') and (ps.exe iendswith '/cp' and ps.cmdline icontains '/tmp/' and ps.cmdline icontains ('passwd', 'shadow'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Joseliyo Sanchez, @Joseliyo_Jstnk)'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

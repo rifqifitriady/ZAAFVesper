@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"syscall"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/alert"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/config"
@@ -343,7 +342,7 @@ func existingRuleIDs(dir string) map[string]string {
 // createNew creates name in dir exclusively: it never replaces an existing
 // file and never follows a symbolic link.
 func createNew(dir *os.Root, name string, data []byte) error {
-	f, err := dir.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o644)
+	f, err := dir.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL|oNoFollow, 0o644)
 	if err != nil {
 		return err
 	}
@@ -380,7 +379,7 @@ func replaceIn(dir *os.Root, name string, data []byte, check func(*os.File) erro
 	case !fi.Mode().IsRegular():
 		return fmt.Errorf("%s exists and is not a regular file; refusing to replace it", name)
 	case check != nil:
-		f, err := dir.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+		f, err := dir.OpenFile(name, os.O_RDONLY|oNoFollow, 0)
 		if err != nil {
 			return err
 		}
@@ -394,7 +393,7 @@ func replaceIn(dir *os.Root, name string, data []byte, check func(*os.File) erro
 	var f *os.File
 	for i := 0; ; i++ {
 		tmp = fmt.Sprintf(".zaafvesper-%d-%d.tmp", os.Getpid(), i)
-		f, err = dir.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o644)
+		f, err = dir.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL|oNoFollow, 0o644)
 		if err == nil || !errors.Is(err, fs.ErrExist) || i > 100 {
 			break
 		}

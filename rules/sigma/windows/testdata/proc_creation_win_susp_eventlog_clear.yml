@@ -1,0 +1,15 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "wevtutil clears the Security log"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6228, "ppid": 4000, "exe": "C:\\Windows\\System32\\wevtutil.exe", "name": "wevtutil.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "wevtutil.exe cl Security", "original_name": "wevtutil.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "PowerShell Clear-EventLog"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6229, "ppid": 4000, "exe": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "name": "powershell.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "powershell.exe Clear-EventLog -LogName Application", "original_name": "PowerShell.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - wevtutil queries events"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6240, "ppid": 4000, "exe": "C:\\Windows\\System32\\wevtutil.exe", "name": "wevtutil.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "wevtutil.exe qe Security /c:5 /f:text", "original_name": "wevtutil.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "wevtutil reads a log's settings"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6241, "ppid": 4000, "exe": "C:\\Windows\\System32\\wevtutil.exe", "name": "wevtutil.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "wevtutil.exe gl Security", "original_name": "wevtutil.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

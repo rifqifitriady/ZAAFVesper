@@ -1,0 +1,26 @@
+match:
+  - desc: script added to /etc/cron.d (ART T1053.003 cron.d)
+    events:
+      - name: CreateFile
+        platform: linux
+        proc: {pid: 24101, ppid: 24090, exe: /usr/bin/bash, name: bash, username: root, uid: -1, euid: -1}
+        file: {path: /etc/cron.d/persistevil}
+  - desc: user crontab written directly in the spool (ART T1053.003 spool)
+    events:
+      - name: CreateFile
+        platform: linux
+        proc: {pid: 24102, ppid: 24090, exe: /usr/bin/bash, name: bash, username: root, uid: -1, euid: -1}
+        file: {path: /var/spool/cron/crontabs/root}
+nomatch:
+  - desc: benign lookalike - crontab -e saves the user's table
+    events:
+      - name: CreateFile
+        platform: linux
+        proc: {pid: 24110, ppid: 24090, exe: /usr/bin/crontab, name: crontab, username: alice, uid: -1, euid: -1}
+        file: {path: /var/spool/cron/crontabs/alice}
+  - desc: package upgrade installs a cron job
+    events:
+      - name: CreateFile
+        platform: linux
+        proc: {pid: 24111, ppid: 1, exe: /usr/bin/dpkg, name: dpkg, username: root, uid: -1, euid: -1}
+        file: {path: /etc/cron.daily/logrotate}

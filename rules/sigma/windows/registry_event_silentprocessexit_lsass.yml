@@ -1,0 +1,30 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Potential Credential Dumping Via LSASS SilentProcessExit Technique
+id: 55e29995-75e7-451a-bef0-6225e2f13597
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects changes to the Registry in which a monitor program gets registered to dump the memory of the lsass.exe process
+
+  Converted from Sigma rule 55e29995-75e7-451a-bef0-6225e2f13597 by zaafvesper sigma convert. Sigma author: Florian Roth (Nextron Systems).
+labels:
+  sigma.author: Florian Roth (Nextron Systems)
+  sigma.id: 55e29995-75e7-451a-bef0-6225e2f13597
+  sigma.level: critical
+  sigma.source: rules/windows/registry/registry_event/registry_event_silentprocessexit_lsass.yml
+  sigma.status: test
+  sigma.tags: attack.credential-access, attack.t1003.001
+  sigma.title: Potential Credential Dumping Via LSASS SilentProcessExit Technique
+  tactic.id: TA0006
+  tactic.name: Credential Access
+  technique.id: T1003.001
+references:
+  - https://www.deepinstinct.com/2021/02/16/lsass-memory-dumps-are-stealthier-than-ever-before-part-2/
+  - https://oddvar.moe/2018/04/10/persistence-using-globalflags-in-image-file-execution-options-hidden-from-autoruns-exe/
+condition: evt.name in ('RegistryCreateKey', 'RegistryDeleteKey', 'RegistryRename', 'RegistrySetValue') and (registry.key icontains 'Microsoft\\Windows NT\\CurrentVersion\\SilentProcessExit\\lsass.exe')
+output: '%ps.exe (pid %ps.pid) matched on %evt.name (Sigma rule by Florian Roth (Nextron Systems))'
+severity: critical
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unlikely'

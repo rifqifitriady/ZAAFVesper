@@ -1,0 +1,30 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Potential PHP Reverse Shell
+id: c6714a24-d7d5-4283-a36b-3ffd091d5f7e
+version: 1.0.0
+platforms: [linux]
+description: |-
+  Detects usage of the PHP CLI with the "-r" flag which allows it to run inline PHP code. The rule looks for calls to the "fsockopen" function which allows the creation of sockets.
+  Attackers often leverage this in combination with functions such as "exec" or "fopen" to initiate a reverse shell connection.
+
+  Converted from Sigma rule c6714a24-d7d5-4283-a36b-3ffd091d5f7e by zaafvesper sigma convert. Sigma author: @d4ns4n_.
+labels:
+  sigma.author: '@d4ns4n_'
+  sigma.id: c6714a24-d7d5-4283-a36b-3ffd091d5f7e
+  sigma.level: high
+  sigma.source: rules/linux/process_creation/proc_creation_lnx_php_reverse_shell.yml
+  sigma.status: test
+  sigma.tags: attack.execution
+  sigma.title: Potential PHP Reverse Shell
+  tactic.id: TA0002
+  tactic.name: Execution
+references:
+  - https://pentestmonkey.net/cheat-sheet/shells/reverse-shell-cheat-sheet
+  - https://www.revshells.com/
+condition: evt.name in ('CreateProcess') and (ps.exe icontains '/php' and (ps.cmdline icontains ' -r ' and ps.cmdline icontains 'fsockopen') and ps.cmdline icontains ('ash', 'bash', 'bsh', 'csh', 'ksh', 'pdksh', 'sh', 'tcsh', 'zsh'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by @d4ns4n_)'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

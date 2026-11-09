@@ -23,6 +23,18 @@ ZAAFVesper watches what processes on a Mac actually **do**: what they spawn, whi
 > [!WARNING]
 > **Pre-release.** Every rule passes its fixtures and the code has been through several independent security review rounds. However, the installer package, the LaunchDaemon, Full Disk Access and the response actions (kills, suspend, quarantine, launchctl and pf) have **not yet been validated live as root**. Treat a first install as a test on a machine you can recover. Open items and residual risks are tracked in [docs/security/open-findings.md](docs/security/open-findings.md).
 
+## Platform support
+
+| Platform | Event source | Status |
+|---|---|---|
+| macOS 13+ | Endpoint Security via `eslogger` | Main platform. Rules and fixtures pass; live install as root still to be validated (above). |
+| Windows 10/11, Server 2016+ | Sysmon through the event log (`EvtSubscribe`), Windows service | **Preview, untested on a real host.** Cross-compiled; the Sysmon decoder passes fixtures built from Microsoft's documented schema. See [packaging/windows](packaging/windows/README.md). |
+| Linux (systemd) | Sysmon for Linux through journald, systemd unit | **Preview, untested on a real host with Sysmon.** Unit tests, the `/proc` process table, the pidfd kill and a replayed journal run pass in a Linux container. See [packaging/linux](packaging/linux/README.md). |
+
+Rules declare their platforms (`platforms: [windows]`); `run` loads only the
+rules for the host, and `rules test` checks all of them on any machine. YARA is
+macOS-only for now (the Windows and Linux builds are pure Go).
+
 ## What it does
 
 <table>
@@ -206,6 +218,9 @@ The status of every finding, with the tests that back it, is in **[docs/security
 cmd/zaafvesper/        CLI: run, replay, rules, coverage, sigma, quarantine, isolation
 pkg/event/             platform-neutral event model and field registry
 pkg/source/eslogger/   eslogger decoder and supervisor
+pkg/source/sysmon/     Sysmon XML decoder (Windows and Linux) and identity binder
+pkg/source/winevt/     Windows event log source (Sysmon channel)
+pkg/source/sysmonlinux/ journald source (Sysmon for Linux)
 pkg/source/netpoll/    socket polling (network events without an entitlement)
 pkg/output/            syslog/TLS, webhook, Splunk HEC, spool, ZAAFElegia and OCSF
 pkg/ps/                process tree, ancestry and identity
@@ -214,15 +229,15 @@ pkg/rules/             rule loading, engine, sequences, fixtures
 pkg/sigma/             Sigma parser and converter
 pkg/yara/              YARA scanner bound to file identity
 pkg/alert/, response/  alert sinks and caps, response actions and their guard rails
-rules/                 46 rules, macros, fixtures, YARA signatures
-rules/sigma/macos/     12 converted SigmaHQ rules (DRL 1.1)
+rules/                 46 macOS rules, rules/windows, rules/linux, macros, fixtures, YARA signatures
+rules/sigma/           converted SigmaHQ rules (DRL 1.1): macos/, windows/, linux/
 integrations/          ZAAFElegia example and notes
-packaging/             LaunchDaemon plist, newsyslog config (the package also creates /var/db/zaafvesper)
+packaging/             LaunchDaemon plist, newsyslog config (the package also creates /var/db/zaafvesper); windows/ and linux/ install notes
 ```
 
 ## Roadmap
 
-- Windows adapter (Sysmon with sysmon-modular configs), then Linux.
+- Windows and Linux adapters (Sysmon): in preview, to be validated on real hosts.
 - Complete network telemetry (DNS, short connections) through a NetworkExtension.
 - Native Endpoint Security client with AUTH events: real blocking before execution (needs Apple's entitlement; today's response only acts after the event).
 - Signed and notarized package built in CI.
@@ -231,7 +246,7 @@ packaging/             LaunchDaemon plist, newsyslog config (the package also cr
 
 - [rabbitstack/fibratus](https://github.com/rabbitstack/fibratus): the rule language and the overall model.
 - [redcanaryco/atomic-red-team](https://github.com/redcanaryco/atomic-red-team): the tests that rules are linked to.
-- [SigmaHQ/sigma](https://github.com/SigmaHQ/sigma): the converted rules in `rules/sigma/macos/`, under the [Detection Rule License 1.1](https://github.com/SigmaHQ/Detection-Rule-License) (see [rules/sigma/NOTICE.md](rules/sigma/NOTICE.md)).
+- [SigmaHQ/sigma](https://github.com/SigmaHQ/sigma): the converted rules in `rules/sigma/` (macos, windows, linux), under the [Detection Rule License 1.1](https://github.com/SigmaHQ/Detection-Rule-License) (see [rules/sigma/NOTICE.md](rules/sigma/NOTICE.md)).
 - [ZAAFElegia](https://github.com/rifqifitriady/ZAAFElegia): the Sigma conformance cases the converter is tested against.
 - [olafhartong/sysmon-modular](https://github.com/olafhartong/sysmon-modular): the modular approach to telemetry noise.
 - [A-poc/RedTeam-Tools](https://github.com/A-poc/RedTeam-Tools) and [mukul975/Anthropic-Cybersecurity-Skills](https://github.com/mukul975/Anthropic-Cybersecurity-Skills): attacker tradecraft and detection practice.

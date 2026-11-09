@@ -1,0 +1,28 @@
+name: Remote thread created in another process from a user-writable location
+id: 17046134-6fe5-44f9-b1a3-c1171138fd54
+version: 1.0.0
+platforms: [windows]
+description: |
+  A process whose image lives in a user-writable location (the user profile, ProgramData,
+  Windows\Temp, Public) created a thread in another process: the classic
+  CreateRemoteThread injection used by loaders and RATs to hide in explorer.exe or a
+  browser.
+  Known benign: some accessibility, game overlay and debugging tools run from the user
+  profile and inject threads.
+labels:
+  tactic.id: TA0005
+  tactic.name: Stealth
+  technique.id: T1055
+  technique.name: Process Injection
+references:
+  - https://attack.mitre.org/techniques/T1055/
+condition: >
+  evt.name = 'CreateRemoteThread'
+  and ps.exe imatches ('C:\\Users\\*', 'C:\\ProgramData\\*', 'C:\\Windows\\Temp\\*', 'C:\\Users\\Public\\*')
+  and ps.pid != target.ps.pid
+output: "%ps.exe (pid %ps.pid) created a thread in %target.ps.exe (pid %target.ps.pid) at %evt.arg[start_address]"
+severity: high
+action: []
+tests:
+  atomic: []
+min-engine-version: 0.1.0

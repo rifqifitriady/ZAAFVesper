@@ -1,0 +1,53 @@
+# ZAAFVesper on Linux: reads Sysmon for Linux from journald (systemd unit).
+# Install steps and what each setting is for: packaging/linux/README.md.
+# Untested on a real host: written against systemd 249+ documentation.
+[Unit]
+Description=ZAAFVesper behaviour-detection sensor (Sysmon for Linux)
+Documentation=https://github.com/rifqifitriady/ZAAFVesper/blob/main/packaging/linux/README.md
+After=systemd-journald.service sysmon.service
+Wants=sysmon.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/zaafvesper run --config /usr/local/etc/zaafvesper/zaafvesper.yml --rules /usr/local/etc/zaafvesper/rules --output-dir /var/log/zaafvesper --no-console
+Restart=on-failure
+RestartSec=5s
+# root is needed to read the system journal, other users' /proc entries and
+# to kill; the capability bounding set below keeps only what that needs.
+User=root
+CapabilityBoundingSet=CAP_KILL CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
+NoNewPrivileges=yes
+UMask=0077
+# Filesystem: everything read-only except the output directory.
+ProtectSystem=strict
+ReadWritePaths=/var/log/zaafvesper
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+# Kernel and system state.
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# No network: alerts go to files. To use --syslog or --webhook, change all
+# three (see packaging/linux/README.md, "Network outputs"):
+#   RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+#   IPAddressAllow=<the receiver's address>   (keep IPAddressDeny=any)
+#   ReadWritePaths=/var/log/zaafvesper /var/db/zaafvesper   (the outputs' spool)
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+# Do not set ProtectProc=invisible or PrivatePIDs: the sensor must see every
+# process in /proc.
+
+[Install]
+WantedBy=multi-user.target

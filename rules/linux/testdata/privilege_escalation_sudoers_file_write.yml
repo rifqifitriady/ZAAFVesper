@@ -1,0 +1,20 @@
+match:
+  - desc: NOPASSWD drop-in written with tee
+    events:
+      - name: CreateFile
+        platform: linux
+        proc: {pid: 24101, ppid: 24090, exe: /usr/bin/tee, name: tee, username: root, uid: -1, euid: -1}
+        file: {path: /etc/sudoers.d/99-backdoor}
+nomatch:
+  - desc: benign lookalike - visudo writes its temporary file
+    events:
+      - name: CreateFile
+        platform: linux
+        proc: {pid: 24110, ppid: 24090, exe: /usr/sbin/visudo, name: visudo, username: root, uid: -1, euid: -1}
+        file: {path: /etc/sudoers.tmp}
+  - desc: a file in another /etc directory
+    events:
+      - name: CreateFile
+        platform: linux
+        proc: {pid: 24111, ppid: 24090, exe: /usr/bin/tee, name: tee, username: root, uid: -1, euid: -1}
+        file: {path: /etc/security/limits.d/90-nproc.conf}

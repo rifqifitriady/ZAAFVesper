@@ -24,7 +24,6 @@ import (
 	"github.com/rifqifitriady/ZAAFVesper/pkg/source/eslogger"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/source/netpoll"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/yara"
-	"golang.org/x/sys/unix"
 )
 
 // snapshotEvents keep the process table correct; run always subscribes them
@@ -122,16 +121,18 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 		say(stderr, "zaafvesper run: %v", err)
 		return 2
 	}
-	if os.Geteuid() != 0 {
-		say(stderr, "zaafvesper run: needs root, because eslogger does (sudo zaafvesper run). Use 'zaafvesper replay' to test rules without root.")
+	if err := checkPrivileges(); err != nil {
+		say(stderr, "zaafvesper run: %v", err)
 		return 1
 	}
 	o.asRoot = true
 	config.RequireOwner(0)
+	if code, handled := runAsService(o, stdout, stderr); handled {
+		return code // Windows service (run_windows.go)
+	}
 	ignoreJobControlSignals()
 	if stdinIsTerminal() {
-		say(stderr, "warning: zaafvesper is running in a terminal: development only, the normal account can stop or pause it there. "+
-			"For live use install the package and load the LaunchDaemon: sudo /bin/launchctl bootstrap system /Library/LaunchDaemons/%s.plist", daemonLabel)
+		say(stderr, "warning: zaafvesper is running in a terminal: development only, the normal account can stop or pause it there. %s", liveHint)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -157,21 +158,6 @@ func (o *runOptions) checkOutputFlags() error {
 		return errors.New("--json-keep, --json-high-keep and --capture-keep must be at least 1")
 	}
 	return o.netout.check()
-}
-
-// ignoreJobControlSignals keeps a terminal from stopping or pausing the
-// sensor: SIGHUP (terminal closed), SIGTSTP (^Z), SIGTTIN and SIGTTOU
-// (background terminal I/O). SIGINT and SIGTERM still shut it down cleanly.
-// The ignored dispositions are inherited by the eslogger child.
-func ignoreJobControlSignals() {
-	signal.Ignore(syscall.SIGHUP, syscall.SIGTSTP, syscall.SIGTTIN, syscall.SIGTTOU)
-}
-
-// stdinIsTerminal reports whether standard input is a terminal (run started
-// from a shell rather than by launchd).
-func stdinIsTerminal() bool {
-	_, err := unix.IoctlGetTermios(int(os.Stdin.Fd()), unix.TIOCGETA)
-	return err == nil
 }
 
 // subscription computes the canonical events to subscribe at the source.
@@ -275,7 +261,7 @@ func buildSensor(o runOptions, stdout, stderr io.Writer) (*sensor, error) {
 		if err := checkRulesLocation(rulesDir, yaraDir); err != nil {
 			return nil, err
 		}
-		if err := pinnedEslogger(cfg.Eslogger.Binary); err != nil {
+		if err := checkSourceBinary(cfg); err != nil {
 			return nil, err
 		}
 	}
@@ -386,6 +372,7 @@ func buildSensor(o runOptions, stdout, stderr io.Writer) (*sensor, error) {
 		p.responder = response.New(rc)
 		s.startResponse(o, stderr)
 		warnIsolation(rs, cfg, stderr)
+		warnUnsupportedActions(rs, stderr)
 		mode := "ENABLED"
 		if o.dryRunResponse {
 			mode = "DRY-RUN"
@@ -433,22 +420,9 @@ func buildSensor(o runOptions, stdout, stderr io.Writer) (*sensor, error) {
 	if s.events == nil {
 		say(stderr, "warning: a rule is not limited by evt.name, so every event type is subscribed (high volume)")
 	}
-	s.src = eslogger.New(eslogger.Config{
-		Binary:         cfg.Eslogger.Binary,
-		ExcludePaths:   cfg.Eslogger.ExcludePaths,
-		ExcludeSigning: cfg.Eslogger.ExcludeSigning,
-		SubscribeWrite: cfg.Source.SubscribeWrite,
-		// Protect each eslogger child by pid as soon as it (re)starts.
-		OnStart: func(pid int32) {
-			if p.responder != nil {
-				p.responder.Protect(pid)
-			}
-		},
-		Logf: func(format string, args ...any) {
-			say(stderr, "eslogger: %s", fmt.Sprintf(format, args...))
-		},
-	})
-	// Dropped events at the source (es_events_dropped, workstream B).
+	s.src = newSource(cfg, p, stderr) // eslogger, Windows event log or journald (run_<os>.go)
+	// Dropped events at the source (es_events_dropped, workstream B;
+	// sysmon_events_dropped on Windows and Linux).
 	if d, ok := any(s.src).(degradedReporter); ok {
 		d.OnDegraded(p.degradedFrom)
 	}

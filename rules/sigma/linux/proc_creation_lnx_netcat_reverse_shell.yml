@@ -1,0 +1,33 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Potential Netcat Reverse Shell Execution
+id: 7f734ed0-4f47-46c0-837f-6ee62505abd9
+version: 1.0.0
+platforms: [linux]
+description: |-
+  Detects execution of netcat with the "-e" or "-c" flags followed by common shells, which are commonly used to spawn reverse shells.
+
+  Converted from Sigma rule 7f734ed0-4f47-46c0-837f-6ee62505abd9 by zaafvesper sigma convert. Sigma author: @d4ns4n_, Nasreddine Bencherchali (Nextron Systems).
+labels:
+  sigma.author: '@d4ns4n_, Nasreddine Bencherchali (Nextron Systems)'
+  sigma.id: 7f734ed0-4f47-46c0-837f-6ee62505abd9
+  sigma.level: high
+  sigma.source: rules/linux/process_creation/proc_creation_lnx_netcat_reverse_shell.yml
+  sigma.status: test
+  sigma.tags: attack.execution, attack.t1059
+  sigma.title: Potential Netcat Reverse Shell Execution
+  tactic.id: TA0002
+  tactic.name: Execution
+  technique.id: T1059
+references:
+  - https://pentestmonkey.net/cheat-sheet/shells/reverse-shell-cheat-sheet
+  - https://www.revshells.com/
+  - https://www.hackingtutorials.org/networking/hacking-netcat-part-2-bind-reverse-shells/
+  - https://www.infosecademy.com/netcat-reverse-shells/
+  - https://man7.org/linux/man-pages/man1/ncat.1.html
+condition: evt.name in ('CreateProcess') and (ps.exe iendswith ('/nc.openbsd', '/nc.traditional', '/nc', '/ncat', '/netcat.openbsd', '/netcat.traditional', '/netcat') and ps.cmdline icontains (' -c ', ' -e ') and ps.cmdline icontains (' ash', ' bash', ' bsh', ' csh', ' ksh', ' pdksh', ' sh', ' tcsh', '/bin/ash', '/bin/bash', '/bin/bsh', '/bin/csh', '/bin/ksh', '/bin/pdksh', '/bin/sh', '/bin/tcsh', '/bin/zsh', '$IFSash', '$IFSbash', '$IFSbsh', '$IFScsh', '$IFSksh', '$IFSpdksh', '$IFSsh', '$IFStcsh', '$IFSzsh'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by @d4ns4n_, Nasreddine Bencherchali (Nextron Systems))'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unlikely'

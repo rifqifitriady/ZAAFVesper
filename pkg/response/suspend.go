@@ -2,7 +2,6 @@ package response
 
 import (
 	"fmt"
-	"syscall"
 	"time"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
@@ -30,13 +29,13 @@ type suspension struct {
 // triggered it: it only stops the process from doing more while the next
 // action is decided.
 func (r *Responder) SuspendEvent(e *event.Event, rule, reason string) error {
-	return r.signalEvent(e, rule, reason, syscall.SIGSTOP)
+	return r.signalEvent(e, rule, reason, sigStop)
 }
 
 // SuspendParent is SuspendEvent for the parent of e's process (action
 // suspend, target parent), with KillParent's identity rules.
 func (r *Responder) SuspendParent(e *event.Event, rule, reason string) error {
-	return r.signalParent(e, rule, reason, syscall.SIGSTOP)
+	return r.signalParent(e, rule, reason, sigStop)
 }
 
 // holdSuspended records a stopped process for its resume. Caller holds mu.
@@ -88,7 +87,7 @@ func (r *Responder) resumeLocked(pid int32, now time.Time, why string) {
 	case id.StartTime.Sub(s.proc.StartTime) > StartTolerance || s.proc.StartTime.Sub(id.StartTime) > StartTolerance:
 		d.Outcome, d.Detail = OutcomeResumeSkipped, "start time differs (pid reused)"
 	default:
-		if err := r.cfg.KillFunc(int(pid), syscall.SIGCONT); err != nil {
+		if err := r.cfg.KillFunc(int(pid), sigCont); err != nil {
 			d.Outcome, d.Detail = OutcomeError, "SIGCONT: "+err.Error()
 		} else {
 			d.Outcome, d.Detail = OutcomeResumed, why

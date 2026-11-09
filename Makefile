@@ -29,7 +29,8 @@ YARA_STATIC_ENV := CGO_ENABLED=1 CGO_CFLAGS="-I$(H)/yara/include" \
                CGO_LDFLAGS="-L$(STATICLIB) $(H)/libmagic/lib/libmagic.a $(H)/jansson/lib/libjansson.a $(H)/openssl@4/lib/libcrypto.a -lz -lbz2"
 YARA_STATIC_TAGS := yara yara_no_pkg_config
 
-.PHONY: build build-yara build-yara-dev check-static staticlib test test-race test-yara rules-test bench fuzz vet package install clean
+.PHONY: build build-yara build-yara-dev check-static staticlib test test-race test-yara rules-test bench fuzz vet package install clean \
+        build-windows build-linux cross vet-all test-linux-docker
 
 ## build: pure-Go binary (YARA disabled with a warning)
 build:
@@ -57,6 +58,33 @@ build-yara-dev:
 vet:
 	go vet ./...
 
+## vet-all: go vet for macOS, Linux and Windows (tests included)
+vet-all:
+	GOOS=darwin go vet ./...
+	GOOS=linux go vet ./...
+	GOOS=windows go vet ./...
+
+## build-windows / build-linux: pure-Go cross builds (no YARA), amd64 and arm64.
+## Install notes: packaging/windows/README.md, packaging/linux/README.md.
+build-windows:
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags '$(LDFLAGS)' -o bin/zaafvesper-windows-amd64.exe $(PKG)
+	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -trimpath -ldflags '$(LDFLAGS)' -o bin/zaafvesper-windows-arm64.exe $(PKG)
+
+build-linux:
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags '$(LDFLAGS)' -o bin/zaafvesper-linux-amd64 $(PKG)
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags '$(LDFLAGS)' -o bin/zaafvesper-linux-arm64 $(PKG)
+
+cross: build-windows build-linux
+
+## test-linux-docker: run every test on Linux in a golang container (needs a
+## running Docker; uses the local module cache, no network). TMPDIR is a
+## private directory because the ownership tests refuse world-writable /tmp.
+GO_IMAGE ?= golang:1.27
+test-linux-docker:
+	docker run --rm -v "$(CURDIR)":/src:ro -v "$$(go env GOMODCACHE)":/go/pkg/mod:ro \
+	  -e GOFLAGS=-buildvcs=false -e GOPROXY=off -e GOCACHE=/tmp/gocache -w /src $(GO_IMAGE) \
+	  sh -c 'mkdir -m 700 /root/t && TMPDIR=/root/t go test -race -count=1 ./...'
+
 ## test: vet plus all unit tests
 test: vet
 	go test ./...
@@ -78,6 +106,8 @@ bench:
 
 fuzz:
 	go test -run '^$$' -fuzz FuzzParse -fuzztime 60s ./pkg/filter/ql/
+	go test -run '^$$' -fuzz FuzzDecode -fuzztime 60s ./pkg/source/sysmon/
+	go test -run '^$$' -fuzz FuzzParseLine -fuzztime 30s ./pkg/source/sysmonlinux/
 
 ## package: build dist/ZAAFVesper-$(VERSION).pkg as the normal user (pure Go;
 ## YARA=1 for the static YARA build, checked with check-static). Payload:

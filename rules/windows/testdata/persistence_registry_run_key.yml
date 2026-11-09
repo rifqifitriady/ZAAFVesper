@@ -1,0 +1,26 @@
+match:
+  - desc: reg add HKCU Run (ART T1547.001 Reg Key Run)
+    events:
+      - name: RegistrySetValue
+        platform: windows
+        proc: {pid: 6228, exe: 'C:\Windows\System32\reg.exe', name: reg.exe, uid: -1, euid: -1}
+        registry: {key: 'HKU\S-1-5-21-1-2-3-1001\Software\Microsoft\Windows\CurrentVersion\Run\Atomic Red Team', value: Atomic Red Team, data: 'C:\Path\AtomicRedTeam.exe'}
+  - desc: RunOnce under WOW6432Node
+    events:
+      - name: RegistrySetValue
+        platform: windows
+        proc: {pid: 6229, exe: 'C:\Users\alice\AppData\Local\Temp\drop.exe', name: drop.exe, uid: -1, euid: -1}
+        registry: {key: 'HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\RunOnce\x', value: x, data: 'C:\ProgramData\x.exe'}
+nomatch:
+  - desc: benign lookalike - an application stores a value named Run in its own key
+    events:
+      - name: RegistrySetValue
+        platform: windows
+        proc: {pid: 7000, exe: 'C:\Program Files\App\app.exe', name: app.exe, uid: -1, euid: -1}
+        registry: {key: 'HKU\S-1-5-21-1-2-3-1001\Software\App\Settings\Run', value: Run, data: '1'}
+  - desc: the Run key itself created (no value)
+    events:
+      - name: RegistryCreateKey
+        platform: windows
+        proc: {pid: 7001, exe: 'C:\Windows\explorer.exe', name: explorer.exe, uid: -1, euid: -1}
+        registry: {key: 'HKU\S-1-5-21-1-2-3-1001\Software\Microsoft\Windows\CurrentVersion\Run'}

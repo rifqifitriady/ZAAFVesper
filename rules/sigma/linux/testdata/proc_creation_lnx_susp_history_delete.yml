@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "rm ~/.bash_history (ART T1070.003 #1)"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24101, "ppid": 24090, "exe": "/usr/bin/rm", "name": "rm", "uid": -1, "euid": -1, "username": "root", "cmdline": "rm /root/.bash_history", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}
+nomatch:
+  - desc: "benign lookalike - history file read, not deleted"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24110, "ppid": 24090, "exe": "/usr/bin/cat", "name": "cat", "uid": -1, "euid": -1, "username": "root", "cmdline": "cat /root/.bash_history", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "rm of a log named history.log"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24111, "ppid": 24090, "exe": "/usr/bin/rm", "name": "rm", "uid": -1, "euid": -1, "username": "root", "cmdline": "rm /tmp/history.log", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}

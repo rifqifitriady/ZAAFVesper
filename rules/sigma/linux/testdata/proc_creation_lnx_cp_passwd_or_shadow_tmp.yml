@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "shadow copied to /tmp"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24101, "ppid": 24090, "exe": "/usr/bin/cp", "name": "cp", "uid": -1, "euid": -1, "username": "root", "cmdline": "cp /etc/shadow /tmp/s", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}
+nomatch:
+  - desc: "benign lookalike - passwd backed up outside /tmp"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24110, "ppid": 24090, "exe": "/usr/bin/cp", "name": "cp", "uid": -1, "euid": -1, "username": "root", "cmdline": "cp /etc/passwd /root/backup/passwd", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "hosts copied to /tmp"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24111, "ppid": 24090, "exe": "/usr/bin/cp", "name": "cp", "uid": -1, "euid": -1, "username": "root", "cmdline": "cp /etc/hosts /tmp/hosts", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}

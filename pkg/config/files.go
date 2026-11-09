@@ -4,26 +4,18 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
-	"os"
-	"path/filepath"
 	"sync/atomic"
-	"syscall"
+
+	"github.com/rifqifitriady/ZAAFVesper/pkg/nofollow"
 )
 
 // requiredOwner is the uid every file read through SecureRead must belong
 // to; -1 disables the owner and mode checks. It defaults to 0 (root) when the
 // process runs as root, so a root ZAAFVesper never parses a file that a non-root
-// user could have written.
+// user could have written. On Windows any value >= 0 means "protected": owned
+// by SYSTEM, Administrators or TrustedInstaller and writable by nobody else
+// (see files_windows.go); it defaults to 0 when the process is elevated.
 var requiredOwner atomic.Int64
-
-func init() {
-	if os.Geteuid() == 0 {
-		requiredOwner.Store(0)
-	} else {
-		requiredOwner.Store(-1)
-	}
-}
 
 // RequireOwner sets the uid SecureRead demands (-1 = no ownership check).
 // ZAAFVesper sets it from its effective uid; tests use their own uid.
@@ -32,14 +24,15 @@ func RequireOwner(uid int64) { requiredOwner.Store(uid) }
 // RequiredOwner returns the current SecureRead owner policy (-1 = none).
 func RequiredOwner() int64 { return requiredOwner.Load() }
 
-// SecureRead opens path once with O_NOFOLLOW, checks the open descriptor
+// SecureRead opens path once without following a final symbolic link
+// (O_NOFOLLOW; on Windows FILE_FLAG_OPEN_REPARSE_POINT), checks the open descriptor
 // (regular file, at most max bytes, and - when an owner is required - owned
 // by that uid, not group/world writable and without a write-permitting ACL) and returns the bytes read from
 // that same descriptor. There is no window between the check and the read.
 func SecureRead(path string, max int64) ([]byte, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	f, err := nofollow.Open(path)
 	if err != nil {
-		if errors.Is(err, syscall.ELOOP) {
+		if errors.Is(err, nofollow.ErrLink) {
 			return nil, fmt.Errorf("%s: is a symbolic link (not allowed)", path)
 		}
 		return nil, err
@@ -53,11 +46,8 @@ func SecureRead(path string, max int64) ([]byte, error) {
 		return nil, fmt.Errorf("%s: not a regular file", path)
 	}
 	if owner := requiredOwner.Load(); owner >= 0 {
-		if err := checkInfo(path, fi, uint32(owner), false); err != nil {
+		if err := checkOpenFile(path, f, fi, owner); err != nil {
 			return nil, err
-		}
-		if err := checkACLFd(int(f.Fd())); err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
 		}
 	}
 	if fi.Size() > max {
@@ -85,107 +75,11 @@ func SecureRead(path string, max int64) ([]byte, error) {
 // ZAAFVesper calls this before parsing anything when it runs as root: anyone who
 // can write a rule, the configuration, or a directory on their path could
 // otherwise make ZAAFVesper kill arbitrary processes.
+//
+// On Windows the same walk requires the owner to be SYSTEM, Administrators or
+// TrustedInstaller and refuses any allow entry in the DACL that gives another
+// SID a write-like right; see files_windows.go for what is and is not
+// enforced there.
 func CheckOwnership(paths ...string) error {
 	return checkOwnership(0, paths...)
-}
-
-// checkOwnership accepts owner 0 or wantUID (the same thing in production,
-// where wantUID is 0; tests pass their own uid).
-func checkOwnership(wantUID uint32, paths ...string) error {
-	var errs []error
-	seen := map[string]bool{}
-	check := func(p string, fi fs.FileInfo, ancestor bool) {
-		if seen[p] {
-			return
-		}
-		seen[p] = true
-		if err := checkInfo(p, fi, wantUID, ancestor); err != nil {
-			errs = append(errs, err)
-			return
-		}
-		if err := checkACLPath(p); err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", p, err))
-		}
-	}
-	for _, p := range paths {
-		if p == "" {
-			continue
-		}
-		abs, err := filepath.Abs(p)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		// Ancestors, on their real location.
-		parent, err := filepath.EvalSymlinks(filepath.Dir(abs))
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		for d := parent; ; d = filepath.Dir(d) {
-			fi, err := os.Lstat(d)
-			if err != nil {
-				errs = append(errs, err)
-				break
-			}
-			check(d, fi, true)
-			if d == filepath.Dir(d) {
-				break
-			}
-		}
-		fi, err := os.Lstat(abs)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		if !fi.IsDir() {
-			check(abs, fi, false)
-			continue
-		}
-		err = filepath.WalkDir(abs, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				errs = append(errs, err)
-				return nil
-			}
-			info, err := os.Lstat(path)
-			if err != nil {
-				errs = append(errs, err)
-				return nil
-			}
-			check(path, info, false)
-			return nil
-		})
-		if err != nil {
-			errs = append(errs, err)
-		}
-	}
-	return errors.Join(errs...)
-}
-
-func checkInfo(p string, fi fs.FileInfo, wantUID uint32, ancestor bool) error {
-	if fi.Mode()&fs.ModeSymlink != 0 {
-		return fmt.Errorf("%s: is a symbolic link (not allowed when running as root)", p)
-	}
-	st, ok := fi.Sys().(*syscall.Stat_t)
-	if !ok {
-		return fmt.Errorf("%s: cannot read owner", p)
-	}
-	if st.Uid != 0 && st.Uid != wantUID {
-		what := "file"
-		if ancestor {
-			what = "parent directory"
-		}
-		return fmt.Errorf("%s: %s owned by uid %d, must be owned by root (install the package built by 'make package')", p, what, st.Uid)
-	}
-	if fi.Mode().Perm()&0o022 != 0 {
-		return fmt.Errorf("%s: mode %v is group- or world-writable", p, fi.Mode().Perm())
-	}
-	return nil
-}
-
-// CreatePrivate creates a new file with mode 0600. It fails if the path
-// already exists (including as a symbolic link), so an attacker cannot
-// pre-plant a link that makes a root process overwrite another file.
-func CreatePrivate(path string) (*os.File, error) {
-	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o600)
 }

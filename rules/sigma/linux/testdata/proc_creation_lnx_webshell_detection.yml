@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "Apache spawns whoami"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24101, "ppid": 24010, "exe": "/usr/bin/whoami", "name": "whoami", "uid": -1, "euid": -1, "username": "www-data", "cmdline": "whoami", "parent": {"pid": 24010, "exe": "/usr/sbin/apache2", "name": "apache2", "cmdline": "/usr/sbin/apache2 -k start"}}}
+nomatch:
+  - desc: "benign lookalike - whoami from an SSH session"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24110, "ppid": 24090, "exe": "/usr/bin/whoami", "name": "whoami", "uid": -1, "euid": -1, "username": "alice", "cmdline": "whoami", "parent": {"pid": 24020, "exe": "/usr/sbin/sshd", "name": "sshd", "cmdline": "sshd: alice [priv]"}}}
+  - desc: "Apache starts a PHP worker"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24111, "ppid": 24010, "exe": "/usr/sbin/php-fpm8.1", "name": "php-fpm8.1", "uid": -1, "euid": -1, "username": "www-data", "cmdline": "php-fpm: pool www", "parent": {"pid": 24010, "exe": "/usr/sbin/apache2", "name": "apache2", "cmdline": "/usr/sbin/apache2 -k start"}}}

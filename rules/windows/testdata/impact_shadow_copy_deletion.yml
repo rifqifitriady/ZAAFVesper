@@ -1,0 +1,27 @@
+match:
+  - desc: vssadmin delete shadows /all /quiet (ART T1490 #1)
+    events:
+      - name: CreateProcess
+        platform: windows
+        proc: {pid: 6228, ppid: 5480, exe: 'C:\Windows\System32\vssadmin.exe', name: vssadmin.exe, original_name: VSSADMIN.EXE, cmdline: 'vssadmin.exe delete shadows /all /quiet', args: [vssadmin.exe, delete, shadows, /all, /quiet], uid: -1, euid: -1}
+  - desc: wmic shadowcopy delete (ART T1490 #2)
+    events:
+      - name: CreateProcess
+        platform: windows
+        proc: {pid: 6229, ppid: 5480, exe: 'C:\Windows\System32\wbem\WMIC.exe', name: WMIC.exe, original_name: wmic.exe, cmdline: 'wmic.exe shadowcopy delete', args: [wmic.exe, shadowcopy, delete], uid: -1, euid: -1}
+  - desc: bcdedit turns off recovery
+    events:
+      - name: CreateProcess
+        platform: windows
+        proc: {pid: 6231, ppid: 5480, exe: 'C:\Windows\System32\bcdedit.exe', name: bcdedit.exe, original_name: bcdedit.exe, cmdline: 'bcdedit.exe /set {default} recoveryenabled No', args: [bcdedit.exe, /set, '{default}', recoveryenabled, No], uid: -1, euid: -1}
+nomatch:
+  - desc: benign lookalike - vssadmin list shadows
+    events:
+      - name: CreateProcess
+        platform: windows
+        proc: {pid: 6240, ppid: 5480, exe: 'C:\Windows\System32\vssadmin.exe', name: vssadmin.exe, original_name: VSSADMIN.EXE, cmdline: 'vssadmin.exe list shadows', args: [vssadmin.exe, list, shadows], uid: -1, euid: -1}
+  - desc: wmic used for an inventory query
+    events:
+      - name: CreateProcess
+        platform: windows
+        proc: {pid: 6241, ppid: 5480, exe: 'C:\Windows\System32\wbem\WMIC.exe', name: WMIC.exe, original_name: wmic.exe, cmdline: 'wmic.exe shadowcopy list brief', args: [wmic.exe, shadowcopy, list, brief], uid: -1, euid: -1}

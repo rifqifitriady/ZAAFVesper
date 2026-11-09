@@ -1,0 +1,32 @@
+{
+  "seq": 5003,
+  "time": "2026-11-08T10:00:00.9Z",
+  "name": "NetworkConnect",
+  "source": "sysmon",
+  "proc": {
+    "pid": 24101,
+    "ppid": 0,
+    "pidversion": 1955411581,
+    "exe": "/usr/bin/curl",
+    "name": "curl",
+    "uid": -1,
+    "euid": -1,
+    "username": "www-data",
+    "is_platform": false,
+    "is_signed": false,
+    "start_time": "0001-01-01T00:00:00Z",
+    "guid": "{6a8e8b0e-9c1a-6731-e8ad-1f2e00000000}"
+  },
+  "args": {
+    "sysmon_event_id": "3"
+  },
+  "platform": "linux",
+  "net": {
+    "proto": "tcp",
+    "direction": "outbound",
+    "sip": "10.0.0.20",
+    "sport": 40112,
+    "dip": "198.51.100.20",
+    "dport": 443
+  }
+}

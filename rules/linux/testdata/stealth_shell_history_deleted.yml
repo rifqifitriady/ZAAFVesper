@@ -1,0 +1,20 @@
+match:
+  - desc: rm ~/.bash_history (ART T1070.003 #1)
+    events:
+      - name: DeleteFile
+        platform: linux
+        proc: {pid: 24101, ppid: 24090, exe: /usr/bin/rm, name: rm, username: root, uid: -1, euid: -1}
+        file: {path: /root/.bash_history}
+nomatch:
+  - desc: benign lookalike - bash rewrites history through a temporary file
+    events:
+      - name: DeleteFile
+        platform: linux
+        proc: {pid: 24110, ppid: 24090, exe: /usr/bin/bash, name: bash, username: alice, uid: -1, euid: -1}
+        file: {path: /home/alice/.bash_history-01234.tmp}
+  - desc: a project's .history directory file outside the home root
+    events:
+      - name: DeleteFile
+        platform: linux
+        proc: {pid: 24111, ppid: 24090, exe: /usr/bin/rm, name: rm, username: alice, uid: -1, euid: -1}
+        file: {path: /srv/app/.history}

@@ -1,0 +1,17 @@
+{
+  "seq": 1006,
+  "time": "2026-11-08T10:00:02Z",
+  "name": "DriverLoad",
+  "source": "sysmon",
+  "args": {
+    "sysmon_event_id": "6"
+  },
+  "platform": "windows",
+  "module": {
+    "path": "C:\\Windows\\Temp\\vuln.sys",
+    "signed": true,
+    "signature": "Example Hardware Ltd",
+    "signature_status": "Expired",
+    "hashes": "SHA256=0000000000000000000000000000000000000000000000000000000000000001"
+  }
+}

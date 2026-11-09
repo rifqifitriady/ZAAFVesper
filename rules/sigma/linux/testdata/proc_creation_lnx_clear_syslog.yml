@@ -1,0 +1,15 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "rm -rf /var/log/syslog"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24101, "ppid": 24090, "exe": "/usr/bin/rm", "name": "rm", "uid": -1, "euid": -1, "username": "root", "cmdline": "rm -rf /var/log/syslog", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "syslog linked to /dev/null"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24102, "ppid": 24090, "exe": "/usr/bin/ln", "name": "ln", "uid": -1, "euid": -1, "username": "root", "cmdline": "ln -sf /dev/null /var/log/syslog", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}
+nomatch:
+  - desc: "benign lookalike - logrotate style copy of syslog"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24110, "ppid": 24090, "exe": "/usr/bin/gzip", "name": "gzip", "uid": -1, "euid": -1, "username": "root", "cmdline": "gzip -9 /var/log/syslog.2", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "rm of an unrelated file"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24111, "ppid": 24090, "exe": "/usr/bin/rm", "name": "rm", "uid": -1, "euid": -1, "username": "root", "cmdline": "rm -f /tmp/build.log", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}

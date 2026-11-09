@@ -1,0 +1,30 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Syslog Clearing or Removal Via System Utilities
+id: 3fcc9b35-39e4-44c0-a2ad-9e82b6902b31
+version: 1.0.0
+platforms: [linux]
+description: |-
+  Detects specific commands commonly used to remove or empty the syslog. Which is a technique often used by attacker as a method to hide their tracks
+
+  Converted from Sigma rule 3fcc9b35-39e4-44c0-a2ad-9e82b6902b31 by zaafvesper sigma convert. Sigma author: Max Altgelt (Nextron Systems), Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC.
+labels:
+  sigma.author: Max Altgelt (Nextron Systems), Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC
+  sigma.id: 3fcc9b35-39e4-44c0-a2ad-9e82b6902b31
+  sigma.level: high
+  sigma.source: rules/linux/process_creation/proc_creation_lnx_clear_syslog.yml
+  sigma.status: test
+  sigma.tags: attack.defense-impairment, attack.t1685.006
+  sigma.title: Syslog Clearing or Removal Via System Utilities
+  tactic.id: TA0112
+  tactic.name: Defense Impairment
+  technique.id: T1685.006
+references:
+  - https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1070.002/T1070.002.md
+  - https://www.virustotal.com/gui/file/54d60fd58d7fa3475fa123985bfc1594df26da25c1f5fbc7dfdba15876dd8ac5/behavior
+condition: 'evt.name in (''CreateProcess'') and ((ps.cmdline icontains ''/var/log/syslog'' and ((ps.exe iendswith ''/rm'' and ps.cmdline icontains ('' -r '', '' -f '', '' -rf '', ''/var/log/syslog'')) or ps.exe iendswith ''/unlink'' or ps.exe iendswith ''/mv'' or (ps.exe iendswith ''/truncate'' and (ps.cmdline icontains ''0 '' and ps.cmdline icontains ''/var/log/syslog'') and ps.cmdline icontains (''-s '', ''-c '', ''--size'')) or (ps.exe iendswith ''/ln'' and (ps.cmdline icontains ''/dev/null '' and ps.cmdline icontains ''/var/log/syslog'') and ps.cmdline icontains (''-sf '', ''-sfn '', ''-sfT '')) or (ps.exe iendswith ''/cp'' and ps.cmdline icontains ''/dev/null'') or (ps.exe iendswith ''/shred'' and ps.cmdline icontains ''-u ''))) or (ps.cmdline icontains ('' > /var/log/syslog'', '' >/var/log/syslog'', '' >| /var/log/syslog'', '': > /var/log/syslog'', '':> /var/log/syslog'', '':>/var/log/syslog'', ''>|/var/log/syslog'') or ps.cmdline icontains (''journalctl --vacuum'', ''journalctl --rotate'')))'
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Max Altgelt (Nextron Systems), Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC)'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Log rotation.; Maintenance.'

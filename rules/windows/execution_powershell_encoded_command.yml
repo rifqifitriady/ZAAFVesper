@@ -1,0 +1,28 @@
+name: PowerShell started with an encoded command
+id: 586bc005-8c3d-4304-9684-6d8bf9332f13
+version: 1.0.0
+platforms: [windows]
+description: |
+  PowerShell (Windows PowerShell or pwsh, also when renamed: the PE original file name
+  is checked) was started with -EncodedCommand or one of its accepted abbreviations
+  (-e, -en, -enc, -ec ...). Base64 command lines hide the script from casual review and are
+  the usual form of PowerShell download cradles in phishing and loaders.
+  Known benign: some management agents and installers pass encoded commands; exclude
+  them by parent image after review.
+labels:
+  tactic.id: TA0002
+  tactic.name: Execution
+  technique.id: T1059.001
+  technique.name: PowerShell
+references:
+  - https://attack.mitre.org/techniques/T1059/001/
+condition: >
+  evt.name = 'CreateProcess'
+  and (ps.name iin ('powershell.exe', 'pwsh.exe') or ps.original_name iin ('PowerShell.EXE', 'pwsh.dll'))
+  and ps.args imatches ('-e', '-ec', '-en', '-enc*', '/e', '/ec', '/en', '/enc*')
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran an encoded command: %ps.cmdline"
+severity: high
+action: []
+tests:
+  atomic: [86a43bad-12e3-4e85-b97c-4d5cf25b95c3, 0d181431-ddf3-4826-8055-2dbf63ae848b]
+min-engine-version: 0.1.0

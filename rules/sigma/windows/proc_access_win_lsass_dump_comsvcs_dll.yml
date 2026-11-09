@@ -1,0 +1,30 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Lsass Memory Dump via Comsvcs DLL
+id: a49fa4d5-11db-418c-8473-1e014a8dd462
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects adversaries leveraging the MiniDump export function from comsvcs.dll via rundll32 to perform a memory dump from lsass.
+
+  Converted from Sigma rule a49fa4d5-11db-418c-8473-1e014a8dd462 by zaafvesper sigma convert. Sigma author: Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research).
+labels:
+  sigma.author: Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)
+  sigma.id: a49fa4d5-11db-418c-8473-1e014a8dd462
+  sigma.level: high
+  sigma.source: rules/windows/process_access/proc_access_win_lsass_dump_comsvcs_dll.yml
+  sigma.status: test
+  sigma.tags: attack.credential-access, attack.t1003.001
+  sigma.title: Lsass Memory Dump via Comsvcs DLL
+  tactic.id: TA0006
+  tactic.name: Credential Access
+  technique.id: T1003.001
+references:
+  - https://twitter.com/shantanukhande/status/1229348874298388484
+  - https://modexp.wordpress.com/2019/08/30/minidumpwritedump-via-com-services-dll/
+condition: evt.name in ('OpenProcess') and (target.ps.exe iendswith '\\lsass.exe' and ps.exe iendswith '\\rundll32.exe' and evt.arg[call_trace] icontains 'comsvcs.dll')
+output: '%ps.exe (pid %ps.pid) matched on %evt.name (Sigma rule by Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research))'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

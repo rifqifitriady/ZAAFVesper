@@ -1,0 +1,27 @@
+{
+  "seq": 1020,
+  "time": "2026-11-08T10:00:10.1Z",
+  "name": "WMIEvent",
+  "source": "sysmon",
+  "proc": {
+    "pid": 0,
+    "ppid": 0,
+    "exe": "",
+    "name": "",
+    "uid": -1,
+    "euid": -1,
+    "username": "CORP\\alice",
+    "is_platform": false,
+    "is_signed": false,
+    "start_time": "0001-01-01T00:00:00Z"
+  },
+  "args": {
+    "destination": "\"C:\\\\Users\\\\Public\\\\upd.exe\"",
+    "event_type": "WmiConsumerEvent",
+    "name": "\"Updater\"",
+    "operation": "Created",
+    "sysmon_event_id": "20",
+    "type": "Command Line"
+  },
+  "platform": "windows"
+}

@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "comsvcs MiniDump of lsass (ART T1003.001 comsvcs)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6300, "ppid": 4000, "exe": "C:\\Windows\\System32\\rundll32.exe", "name": "rundll32.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "rundll32.exe C:\\Windows\\System32\\comsvcs.dll, MiniDump 720 C:\\Windows\\Temp\\out.dmp full", "original_name": "RUNDLL32.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - rundll32 opens a Control Panel applet"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6301, "ppid": 4000, "exe": "C:\\Windows\\System32\\rundll32.exe", "name": "rundll32.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "rundll32.exe shell32.dll,Control_RunDLL desk.cpl", "original_name": "RUNDLL32.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "rundll32 loads comsvcs without a dump"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6302, "ppid": 4000, "exe": "C:\\Windows\\System32\\rundll32.exe", "name": "rundll32.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "rundll32.exe comsvcs.dll,DllRegisterServer", "original_name": "RUNDLL32.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

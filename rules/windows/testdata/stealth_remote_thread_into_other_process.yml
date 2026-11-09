@@ -1,0 +1,21 @@
+match:
+  - desc: loader in the user profile injects into explorer.exe
+    events:
+      - name: CreateRemoteThread
+        platform: windows
+        proc: {pid: 6228, exe: 'C:\Users\alice\AppData\Local\Temp\inject.exe', name: inject.exe, uid: -1, euid: -1}
+        target: {pid: 1012, exe: 'C:\Windows\explorer.exe', name: explorer.exe, uid: -1, euid: -1}
+        args: {start_address: '0x00007FF6A1B21000'}
+nomatch:
+  - desc: benign lookalike - Windows component creates a remote thread (csrss)
+    events:
+      - name: CreateRemoteThread
+        platform: windows
+        proc: {pid: 600, exe: 'C:\Windows\System32\csrss.exe', name: csrss.exe, uid: -1, euid: -1}
+        target: {pid: 1012, exe: 'C:\Windows\explorer.exe', name: explorer.exe, uid: -1, euid: -1}
+  - desc: installed application (Program Files) creates a remote thread
+    events:
+      - name: CreateRemoteThread
+        platform: windows
+        proc: {pid: 4000, exe: 'C:\Program Files\Vendor\agent.exe', name: agent.exe, uid: -1, euid: -1}
+        target: {pid: 1012, exe: 'C:\Windows\explorer.exe', name: explorer.exe, uid: -1, euid: -1}

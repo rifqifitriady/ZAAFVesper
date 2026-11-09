@@ -40,6 +40,14 @@ func (p *pipeline) respondActions(a *rules.Alert) {
 	for _, act := range a.Response {
 		parent := act.KillTarget() == rules.TargetParent
 		target := act.EffectiveTarget()
+		if why := unsupportedAction(act.Name); why != "" {
+			pid := int32(0)
+			if ev != nil && ev.Proc != nil {
+				pid = ev.Proc.PID
+			}
+			r.RefuseUnsupported(act.Name, target, pid, rule, reason, why)
+			continue
+		}
 		var slow func(e *event.Event)
 		switch act.Name {
 		case rules.ActionKill:
@@ -211,7 +219,10 @@ func (s *sensor) startResponse(o runOptions, stderr io.Writer) {
 	if r == nil {
 		return
 	}
-	if o.asRoot || o.responseRunner != nil {
+	// pf (isolate_process) exists only on macOS; elsewhere the action is
+	// refused before it reaches the responder (unsupportedAction).
+	usePF := o.responseRunner != nil || (o.asRoot && pfAvailable)
+	if usePF {
 		if err := r.StartResponse(); err != nil {
 			say(stderr, "response: preparing the pf anchor %s: %v (isolate_process may fail)", response.PFAnchor, err)
 		}
@@ -221,7 +232,7 @@ func (s *sensor) startResponse(o runOptions, stderr io.Writer) {
 	// passed the exclusions (Observe keeps only network events).
 	s.p.taps = append(s.p.taps, r.Observe)
 	s.closers = append(s.closers, func() error {
-		if !o.asRoot && o.responseRunner == nil {
+		if !usePF {
 			r.StopWorker()
 			r.ResumeAll()
 			return nil

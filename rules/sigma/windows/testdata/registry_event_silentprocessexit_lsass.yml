@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "SilentProcessExit monitor set for lsass (ART T1003.001 Silent Process Exit)"
+    events:
+      - {"name": "RegistrySetValue", "platform": "windows", "proc": {"pid": 6228, "ppid": 4000, "exe": "C:\\Windows\\System32\\reg.exe", "name": "reg.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}, "registry": {"key": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SilentProcessExit\\lsass.exe\\ReportingMode", "value": "ReportingMode", "data": "DWORD (0x00000002)"}}
+nomatch:
+  - desc: "benign lookalike - SilentProcessExit for another program"
+    events:
+      - {"name": "RegistrySetValue", "platform": "windows", "proc": {"pid": 6240, "ppid": 4000, "exe": "C:\\Windows\\System32\\reg.exe", "name": "reg.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}, "registry": {"key": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SilentProcessExit\\notepad.exe\\ReportingMode", "value": "ReportingMode", "data": "DWORD (0x00000001)"}}
+  - desc: "Image File Execution Options for lsass"
+    events:
+      - {"name": "RegistrySetValue", "platform": "windows", "proc": {"pid": 6241, "ppid": 4000, "exe": "C:\\Windows\\System32\\reg.exe", "name": "reg.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}, "registry": {"key": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\lsass.exe\\AuditLevel", "value": "AuditLevel", "data": "DWORD (0x00000008)"}}

@@ -1,0 +1,29 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Suspicious Java Children Processes
+id: d292e0af-9a18-420c-9525-ec0ac3936892
+version: 1.0.0
+platforms: [linux]
+description: |-
+  Detects java process spawning suspicious children
+
+  Converted from Sigma rule d292e0af-9a18-420c-9525-ec0ac3936892 by zaafvesper sigma convert. Sigma author: Nasreddine Bencherchali (Nextron Systems).
+labels:
+  sigma.author: Nasreddine Bencherchali (Nextron Systems)
+  sigma.id: d292e0af-9a18-420c-9525-ec0ac3936892
+  sigma.level: high
+  sigma.source: rules/linux/process_creation/proc_creation_lnx_susp_java_children.yml
+  sigma.status: test
+  sigma.tags: attack.execution, attack.t1059
+  sigma.title: Suspicious Java Children Processes
+  tactic.id: TA0002
+  tactic.name: Execution
+  technique.id: T1059
+references:
+  - https://www.tecmint.com/different-types-of-linux-shells/
+condition: evt.name in ('CreateProcess') and (ps.parent.exe iendswith '/java' and ps.cmdline icontains ('/bin/sh', 'bash', 'dash', 'ksh', 'zsh', 'csh', 'fish', 'curl', 'wget', 'python'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Nasreddine Bencherchali (Nextron Systems))'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

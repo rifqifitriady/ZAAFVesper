@@ -1,4 +1,4 @@
-//go:build !darwin
+//go:build !darwin && !windows && !linux
 
 package ps
 
@@ -9,5 +9,5 @@ import (
 )
 
 func listProcesses() ([]event.Proc, error) {
-	return nil, errors.New("ps: bootstrap is only implemented on macOS")
+	return nil, errors.New("ps: bootstrap is only implemented on macOS, Windows and Linux")
 }

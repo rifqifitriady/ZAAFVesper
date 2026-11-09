@@ -1,0 +1,30 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Boot Configuration Tampering Via Bcdedit.EXE
+id: 1444443e-6757-43e4-9ea4-c8fc705f79a2
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects the use of the bcdedit command to tamper with the boot configuration data. This technique is often times used by malware or attackers as a destructive way before launching ransomware.
+
+  Converted from Sigma rule 1444443e-6757-43e4-9ea4-c8fc705f79a2 by zaafvesper sigma convert. Sigma author: E.M. Anhaus (originally from Atomic Blue Detections, Endgame), oscd.community.
+labels:
+  sigma.author: E.M. Anhaus (originally from Atomic Blue Detections, Endgame), oscd.community
+  sigma.id: 1444443e-6757-43e4-9ea4-c8fc705f79a2
+  sigma.level: high
+  sigma.source: rules/windows/process_creation/proc_creation_win_bcdedit_boot_conf_tamper.yml
+  sigma.status: stable
+  sigma.tags: attack.impact, attack.t1490
+  sigma.title: Boot Configuration Tampering Via Bcdedit.EXE
+  tactic.id: TA0040
+  tactic.name: Impact
+  technique.id: T1490
+references:
+  - https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1490/T1490.md
+  - https://eqllib.readthedocs.io/en/latest/analytics/c4732632-9c1d-4980-9fa8-1d98c93f918e.html
+condition: evt.name in ('CreateProcess') and ((ps.exe iendswith '\\bcdedit.exe' or ps.original_name iin ('bcdedit.exe')) and ps.cmdline icontains 'set' and ((ps.cmdline icontains 'bootstatuspolicy' and ps.cmdline icontains 'ignoreallfailures') or (ps.cmdline icontains 'recoveryenabled' and ps.cmdline icontains 'no')))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by E.M. Anhaus (originally from Atomic Blue Detections, Endgame), oscd.community)'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unlikely'

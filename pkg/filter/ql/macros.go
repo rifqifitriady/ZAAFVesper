@@ -5,12 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"regexp"
 	"sort"
-	"syscall"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
+	"github.com/rifqifitriady/ZAAFVesper/pkg/nofollow"
 	"gopkg.in/yaml.v3"
 )
 
@@ -150,7 +149,7 @@ type ReadFunc func(path string, max int64) ([]byte, error)
 // readNoFollow is the default ReadFunc: no symlinks, regular files only,
 // bounded size, read from the descriptor that was checked.
 func readNoFollow(path string, max int64) ([]byte, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	f, err := nofollow.Open(path)
 	if err != nil {
 		return nil, err
 	}

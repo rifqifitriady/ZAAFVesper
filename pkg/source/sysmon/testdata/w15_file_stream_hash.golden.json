@@ -1,0 +1,30 @@
+{
+  "seq": 1015,
+  "time": "2026-11-08T10:00:07Z",
+  "name": "FileStreamCreate",
+  "source": "sysmon",
+  "proc": {
+    "pid": 6228,
+    "ppid": 0,
+    "pidversion": 1650030055,
+    "exe": "C:\\Program Files\\Browser\\browser.exe",
+    "name": "browser.exe",
+    "uid": -1,
+    "euid": -1,
+    "username": "CORP\\alice",
+    "is_platform": false,
+    "is_signed": false,
+    "start_time": "0001-01-01T00:00:00Z",
+    "guid": "{a1b2c3d4-0001-6731-6b01-000000001400}"
+  },
+  "file": {
+    "path": "C:\\Users\\alice\\Downloads\\setup.exe:Zone.Identifier"
+  },
+  "args": {
+    "contents": "[ZoneTransfer]  ZoneId=3  HostUrl=https://downloads.example/setup.exe  ",
+    "creation_utc_time": "2026-11-08 09:59:00.000",
+    "hash": "SHA256=0000000000000000000000000000000000000000000000000000000000000003",
+    "sysmon_event_id": "15"
+  },
+  "platform": "windows"
+}

@@ -1,0 +1,30 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: HackTool - Mimikatz Execution
+id: a642964e-bead-4bed-8910-1bb4d63e3b4d
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detection well-known mimikatz command line arguments
+
+  Converted from Sigma rule a642964e-bead-4bed-8910-1bb4d63e3b4d by zaafvesper sigma convert. Sigma author: Teymur Kheirkhabarov, oscd.community, David ANDRE (additional keywords), Tim Shelton.
+labels:
+  sigma.author: Teymur Kheirkhabarov, oscd.community, David ANDRE (additional keywords), Tim Shelton
+  sigma.id: a642964e-bead-4bed-8910-1bb4d63e3b4d
+  sigma.level: high
+  sigma.source: rules/windows/process_creation/proc_creation_win_hktl_mimikatz_command_line.yml
+  sigma.status: test
+  sigma.tags: attack.credential-access, attack.t1003.001, attack.t1003.002, attack.t1003.004, attack.t1003.005, attack.t1003.006
+  sigma.title: HackTool - Mimikatz Execution
+  tactic.id: TA0006
+  tactic.name: Credential Access
+  technique.id: T1003.001, T1003.002, T1003.004, T1003.005, T1003.006
+references:
+  - https://www.slideshare.net/heirhabarov/hunting-for-credentials-dumping-in-windows-environment
+  - https://tools.thehacker.recipes/mimikatz/modules
+condition: evt.name in ('CreateProcess') and (ps.cmdline icontains ('DumpCreds', 'mimikatz') or ps.cmdline icontains ('::aadcookie', '::detours', '::memssp', '::mflt', '::ncroutemon', '::ngcsign', '::printnightmare', '::skeleton', '::preshutdown', '::mstsc', '::multirdp') or ps.cmdline icontains ('rpc::', 'token::', 'crypto::', 'dpapi::', 'sekurlsa::', 'kerberos::', 'lsadump::', 'privilege::', 'process::', 'vault::'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Teymur Kheirkhabarov, oscd.community, David ANDRE (additional keywords), Tim Shelton)'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unlikely'
