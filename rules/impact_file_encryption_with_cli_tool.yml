@@ -22,9 +22,9 @@ condition: >
   and (
     (ps.name = 'openssl'
      and ps.cmdline regex '^(\\S*/)?openssl\\s+(enc(\\s|$)|-?(aes|aria|camellia|sm4|des|bf|cast|chacha20|rc2|rc4|seed|idea)[a-z0-9-]*(\\s|$))'
-     and not (ps.args in ('-d', '-decrypt') and not ps.args in ('-e', '-encrypt'))
-     and not (ps.args = 'enc' and ps.args in ('-base64', '-a', '-A')
-              and not ps.args imatches ('-aes*', '-aria*', '-camellia*', '-sm4*', '-des*', '-bf*', '-cast*', '-chacha20*', '-rc2*', '-rc4*', '-seed*', '-idea*', '-pbkdf2', '-k', '-kfile', '-pass')))
+     and not (ps.args in ('-d', '-decrypt', '--d', '--decrypt') and not ps.args in ('-e', '-encrypt', '--e', '--encrypt'))
+     and not (ps.args in ('-base64', '-a', '-A')
+              and ps.cmdline regex '^(\\S*/)?openssl\\s+enc(\\s+(-(base64|a|A|e|d|v|nopad)|-(in|out|bufsize)\\s+\\S+))+\\s*$'))
     or (base(ps.exe) iin ('gpg', 'gpg2') and ps.args in ('-c', '--symmetric') and ps.args = '--batch')
     or (base(ps.exe) iin ('7z', '7zz', '7za') and ps.args = 'a' and ps.args imatches '-p*')
   )

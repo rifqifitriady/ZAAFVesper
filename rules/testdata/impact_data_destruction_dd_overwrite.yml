@@ -1,4 +1,10 @@
 match:
+  - desc: "GNU dd duplicate of= (last wins) hides behind of=/swapfile"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 5, "ppid": 4000, "exe": "/usr/bin/dd", "name": "dd", "uid": 1000, "euid": 1000, "username": "alice", "cmdline": "dd if=/dev/zero of=/swapfile of=/home/alice/thesis.docx bs=1M count=10", "args": ["dd", "if=/dev/zero", "of=/swapfile", "of=/home/alice/thesis.docx", "bs=1M", "count=10"], "parent": {"pid": 4000, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "same with pre-existing of=/dev/null"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 6, "ppid": 4000, "exe": "/usr/bin/dd", "name": "dd", "uid": 1000, "euid": 1000, "username": "alice", "cmdline": "dd if=/dev/zero of=/dev/null of=/home/alice/thesis.docx", "args": ["dd", "if=/dev/zero", "of=/dev/null", "of=/home/alice/thesis.docx"], "parent": {"pid": 4000, "exe": "/usr/bin/bash", "name": "bash"}}}
   - desc: "dd overwrites a log with zeros (ART T1485 #2)"
     events:
       - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5601, "ppid": 4000, "exe": "/bin/dd", "name": "dd", "args": ["dd", "of=/var/log/syslog", "if=/dev/zero", "count=2048", "iflag=count_bytes"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.dd", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}

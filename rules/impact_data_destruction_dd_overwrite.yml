@@ -8,8 +8,10 @@ description: |
   disk device. Wipers destroy data this way. A temp target that climbs out of the temp
   folder (of=/tmp/../...) is not treated as temp. Creating an empty disk image with dd in
   a home folder also matches; such runs are rare. Creating a swap file (/swapfile,
-  /swap.img, /var/swap*) is excluded. Not covered: other overwrite tools
-  (shred, srm, cat /dev/zero > file through a shell redirection).
+  /swap.img, /var/swap*) is excluded. A second of= is never excluded (GNU dd writes to
+  the last one, so an excluded first target can hide the real one). Not covered: other
+  overwrite tools (shred, srm, cat /dev/zero > file through a shell redirection), or a
+  temp path that is a symlink to a real file (the target is judged by its name).
 labels:
   tactic.id: TA0040
   tactic.name: Impact
@@ -25,7 +27,8 @@ condition: >
      and ps.args imatches 'of=*'
      and not (ps.args imatches ('of=/dev/null', 'of=/tmp/*', 'of=/private/tmp/*', 'of=/private/var/folders/*', 'of=/var/tmp/*',
                                 'of=/swapfile', 'of=/swap.img', 'of=/var/swap*', 'of=/var/vm/*', 'of=/private/var/vm/*')
-              and not ps.args imatches 'of=*/../*'))
+              and not ps.args imatches 'of=*/../*'
+              and not ps.cmdline regex '(^|\\s)of=.*\\sof='))
     or (not ps.args imatches 'if=*'
         and ps.args imatches ('of=/dev/disk*', 'of=/dev/rdisk*', 'of=/dev/sd*', 'of=/dev/nvme*', 'of=/dev/hd*', 'of=/dev/vd*', 'of=/dev/xvd*', 'of=/dev/mmcblk*'))
   )

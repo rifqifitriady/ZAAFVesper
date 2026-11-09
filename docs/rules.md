@@ -1,10 +1,10 @@
 # ZAAFVesper built-in rules
 
-136 rules: 61 hand-written rules in `rules/` (macOS, some of them also Linux or every
-platform), 12 hand-written Windows and Linux rules in `rules/windows/` and `rules/linux/`,
-and 63 rules converted from SigmaHQ (17 macOS, 30 Windows, 16 Linux; see
+135 rules: 61 hand-written rules in `rules/` (macOS, some of them also Linux or every
+platform), 13 hand-written Windows and Linux rules in `rules/windows/` and `rules/linux/`,
+and 61 rules converted from SigmaHQ (17 macOS, 28 Windows, 16 Linux; see
 [Sigma import](#sigma-import)). Also 5 YARA signatures and two shared macro files
-(`macros.yml`, `network.yml`). Together they cover **109 ATT&CK techniques** (see
+(`macros.yml`, `network.yml`). Together they cover **107 ATT&CK techniques** (see
 [Coverage and benchmark](#coverage-and-benchmark)). Every hand-written rule added since v0.4 maps to one
 MITRE ATT&CK technique (one older rule, the untrusted Launch item writer, keeps two), has a fixture file with at least one `match` and two `nomatch` scenarios (one of
 them a realistic benign lookalike), and, where Atomic Red Team ships a test for the
@@ -179,21 +179,21 @@ they list only tests whose command lines match the rule's condition.
 
 ## Coverage and benchmark
 
-**Coverage (v0.4, 9 Nov 2026).** 136 enabled rules cover **109 ATT&CK techniques**, up
-from 63 before v0.4: 61 on macOS, 43 on Windows and 26 on Linux (a rule without
+**Coverage (v0.4, 9 Nov 2026).** 135 enabled rules cover **107 ATT&CK techniques**, up
+from 63 before v0.4: 61 on macOS, 41 on Windows and 27 on Linux (a rule without
 `platforms:` counts for every platform). Techniques per tactic, thinnest first:
 
 | Tactic | Techniques | | Tactic | Techniques |
 |---|:-:|---|---|:-:|
 | Resource Development | 1 | | Impact | 11 |
-| Exfiltration | 3 | | Lateral Movement | 11 |
+| Exfiltration | 3 | | Lateral Movement | 10 |
 | Initial Access | 3 | | Privilege Escalation | 13 |
-| Discovery | 4 | | Execution | 18 |
+| Discovery | 4 | | Execution | 16 |
 | Collection | 5 | | Credential Access | 20 |
-| Command and Control | 6 | | Stealth | 24 |
+| Command and Control | 6 | | Stealth | 23 |
 | Defense Impairment | 10 | | Persistence | 28 |
 
-67 of the 136 rules link at least one Atomic Red Team test. The other 69 are listed by the
+65 of the 135 rules link at least one Atomic Red Team test. The other 70 are listed by the
 report; most are converted SigmaHQ rules for tools that have no atomic (hacktools, malware
 families) or hand-written rules for behaviour no atomic exercises.
 
@@ -212,13 +212,16 @@ What v0.4 added, thinnest tactics first:
   a renamed rclone with none of its options, shell-builtin reads of `/etc/shadow`,
   overwrites without dd (shred, shell redirection), and curl uploads that hide a
   scheme-less URL behind another `://` argument.
-- **Linux:** a hand-written `/etc/shadow` reader rule, and converted SigmaHQ rules for
+- **Linux:** hand-written rules for `/etc/shadow` readers and scripted SSH (sshpass, host key
+  checking off), and converted SigmaHQ rules for
   immutable-flag removal, `/proc/<pid>/mem` writes with dd, services stopped or disabled,
   backdated systemd units and `userdel`.
 - **Windows (converted SigmaHQ):** credential access (ntdsutil, Rubeus, VaultCmd,
-  registry and GPP password searches), lateral movement (MMC20 over DCOM, RDP registry
-  changes, remote WMIC, PsExec, evil-winrm) and defense evasion (rundll32, regsvr32 from a
-  share, cmstp children, BITS downloads, msxsl, prefetch deletion).
+  registry and GPP password searches), lateral movement (RDP registry changes, remote
+  WMIC, PsExec, evil-winrm) and defense evasion (rundll32, regsvr32 from a share, BITS
+  downloads, msxsl, prefetch deletion). The SigmaHQ MMC20 and cmstp rules are left out for
+  now: their tags add a tactic ATT&CK does not file the technique under (see
+  [rules/sigma/NOTICE.md](../rules/sigma/NOTICE.md)).
 - **Left out on purpose:** the SigmaHQ macOS discovery rules for `netstat`, `arp`, `id`,
   `w`, `last`, `tcpdump` and similar (informational and very noisy), the SigmaHQ macOS
   binary-padding rule (it matches any `dd if=/dev/zero`) and its timestomp rule (it
