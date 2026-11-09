@@ -1,0 +1,8 @@
+title: neq
+id: c012
+logsource: {product: test}
+detection:
+    s:
+        EventID: 1
+        User|neq: SYSTEM
+    condition: s

@@ -1,0 +1,12 @@
+spec_ref: sigma-rules-specification.md#special-field-values; sigma-appendix-modifiers.md#time-modifiers; sigma-appendix-modifiers.md#specific-modifiers (fieldref)
+description: 'Evaluator interpretations where Sigma is silent (README items 16 to 20). `c030-null` also matches every event that has no `F` (interpretation 2). A field holding ["a", null] matches both `F: null` and `F: a`. `[]` and `{}` count as present (`exists: true`) but are not null. `fieldref` ignores null values, so null never equals null, while two equal strings match. `not` over a field that is absent is true (the filter does not hold), and false once the field holds the filtered value. An integer given to a time modifier is read as epoch seconds, or as milliseconds from 1e11 upwards (both integers below are 2026-11-07T03:15:00Z).'
+expected:
+  - [c030-a, c030-exists, c030-null]
+  - [c030-exists]
+  - [c030-exists]
+  - [c030-null]
+  - [c030-null, c030-ref]
+  - [c030-not, c030-null]
+  - [c030-null]
+  - [c030-hour, c030-null]
+  - [c030-hour, c030-null]

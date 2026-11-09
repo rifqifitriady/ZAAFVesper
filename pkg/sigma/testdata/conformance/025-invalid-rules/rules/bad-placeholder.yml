@@ -1,0 +1,7 @@
+title: bad-placeholder
+id: c025-ph
+logsource: {product: test}
+detection:
+    selection:
+        X|expand: '%Undefined%'
+    condition: selection

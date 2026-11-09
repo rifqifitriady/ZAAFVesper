@@ -1,0 +1,4 @@
+{"msg": "mimikatz event::clear done"}
+{"a": {"b": ["x", "Set-OabVirtualDirectory -ExternalUrl http://x"]}}
+{"a": "OabVirtualDirectory", "b": "x -ExternalUrl y"}
+{"a": "nothing"}

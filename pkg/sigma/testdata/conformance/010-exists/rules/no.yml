@@ -1,0 +1,7 @@
+title: not exists
+id: c010-no
+logsource: {product: test}
+detection:
+    s:
+        PasswordLastSet|exists: false
+    condition: s

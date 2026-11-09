@@ -1,0 +1,8 @@
+title: list of maps
+id: c002
+logsource: {product: test}
+detection:
+    selection:
+        - Image|endswith: '\example.exe'
+        - Description|contains: 'Test executable'
+    condition: selection

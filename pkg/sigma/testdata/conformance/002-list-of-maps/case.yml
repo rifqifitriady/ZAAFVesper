@@ -1,0 +1,6 @@
+spec_ref: sigma-rules-specification.md#lists
+description: A list of maps is an OR of the maps.
+expected:
+  - [c002]
+  - [c002]
+  - []

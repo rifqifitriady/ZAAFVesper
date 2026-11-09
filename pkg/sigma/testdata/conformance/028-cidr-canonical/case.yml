@@ -1,0 +1,10 @@
+spec_ref: sigma-appendix-modifiers.md#ip-internet-protocol-modifiers
+description: 'Interpretation 9: IPv4-mapped IPv6 event addresses are canonicalized to IPv4 (`::ffff:10.1.2.3` is in `10.0.0.0/8`), an IPv6 zone suffix (`%12`) is ignored, and a bare address in the rule is a /32 or /128 (`10.1.2.4` and `2001:db8::2` must not match the bare rules).'
+expected:
+  - [c028-bare, c028-v4net]
+  - [c028-bare, c028-v4net]
+  - [c028-v6net]
+  - []
+  - [c028-v4net]
+  - [c028-bare6]
+  - []

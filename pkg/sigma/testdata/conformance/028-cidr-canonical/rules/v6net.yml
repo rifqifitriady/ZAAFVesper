@@ -1,0 +1,7 @@
+title: cidr v6 link-local
+id: c028-v6net
+logsource: {product: test}
+detection:
+    s:
+        Ip|cidr: 'fe80::/10'
+    condition: s

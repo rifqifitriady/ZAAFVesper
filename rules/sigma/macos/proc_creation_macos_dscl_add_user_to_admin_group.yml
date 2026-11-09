@@ -1,0 +1,30 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: User Added To Admin Group Via Dscl
+id: b743623c-2776-40e0-87b1-682b975d0ca5
+version: 1.0.0
+platforms: [macos]
+description: |-
+  Detects attempts to create and add an account to the admin group via "dscl"
+
+  Converted from Sigma rule b743623c-2776-40e0-87b1-682b975d0ca5 by zaafvesper sigma convert. Sigma author: Sohan G (D4rkCiph3r).
+labels:
+  sigma.author: Sohan G (D4rkCiph3r)
+  sigma.id: b743623c-2776-40e0-87b1-682b975d0ca5
+  sigma.level: medium
+  sigma.source: rules/macos/process_creation/proc_creation_macos_dscl_add_user_to_admin_group.yml
+  sigma.status: test
+  sigma.tags: attack.persistence, attack.initial-access, attack.privilege-escalation, attack.stealth, attack.t1078.003
+  sigma.title: User Added To Admin Group Via Dscl
+  tactic.id: TA0001, TA0003, TA0004, TA0005
+  tactic.name: Initial Access, Persistence, Privilege Escalation, Stealth
+  technique.id: T1078.003
+references:
+  - https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1078.003/T1078.003.md#atomic-test-2---create-local-account-with-admin-privileges---macos
+  - https://ss64.com/osx/dscl.html
+condition: evt.name in ('CreateProcess') and (ps.exe iendswith '/dscl' and (ps.cmdline icontains ' -append ' and ps.cmdline icontains ' /Groups/admin ' and ps.cmdline icontains ' GroupMembership '))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Sohan G (D4rkCiph3r))'
+severity: medium
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Legitimate administration activities'

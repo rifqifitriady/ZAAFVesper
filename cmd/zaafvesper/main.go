@@ -37,6 +37,7 @@ usage:
                <file.rcap|events.jsonl|eslogger.jsonl>
   zaafvesper rules list|validate|test [--rules dir | dir] [--config file] [-v]
   zaafvesper coverage --navigator layer.json|- [--rules dir]
+  zaafvesper sigma convert <sigma dir|file> -o <rules dir> [--report report.json] [--force]
   zaafvesper version
 
 run needs root (eslogger). replay, rules and coverage do not. The supported live
@@ -51,7 +52,10 @@ an explicit --json file stops at the cap. Alerts over 64 KiB are truncated.
 Captures and JSONL alerts keep environment variable names but redact values
 (except DYLD_*) unless --keep-env is given.
 The kill response is off unless --enable-response is given; --dry-run-response
-only logs what would be killed and wins over --enable-response.`
+only logs what would be killed and wins over --enable-response.
+sigma convert turns Sigma rules (macos, windows, linux) into ZAAFVesper rules;
+rules it cannot convert exactly are skipped with a reason. It never follows
+symbolic links and never replaces an existing rule file unless --force is given.`
 
 func main() {
 	os.Exit(realMain(os.Args[1:], os.Stdout, os.Stderr))
@@ -72,6 +76,8 @@ func realMain(args []string, stdout, stderr io.Writer) int {
 		return cmdRules(args[1:], stdout, stderr)
 	case "coverage":
 		return cmdCoverage(args[1:], stdout, stderr)
+	case "sigma":
+		return cmdSigma(args[1:], stdout, stderr)
 	case "version", "--version", "-version":
 		return cmdVersion(stdout)
 	case "help", "-h", "--help":

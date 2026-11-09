@@ -1,0 +1,10 @@
+title: map AND, list OR
+id: c001
+logsource: {product: test}
+detection:
+    selection:
+        EventID:
+            - 4688
+            - 1
+        Image: 'C:\Windows\System32\cmd.exe'
+    condition: selection

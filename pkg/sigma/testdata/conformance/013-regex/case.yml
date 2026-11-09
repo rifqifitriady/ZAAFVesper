@@ -1,0 +1,5 @@
+spec_ref: sigma-appendix-modifiers.md#regular-expression
+description: Regular expressions are unanchored searches (interpretation 4); the `m` and `s` flags change `^`/`$` and `.` as in the specification.
+expected:
+  - [c013-a, c013-m]
+  - [c013-s]

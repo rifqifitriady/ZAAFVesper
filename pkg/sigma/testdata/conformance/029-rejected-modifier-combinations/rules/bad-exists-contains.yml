@@ -1,0 +1,7 @@
+title: bad-exists-contains
+id: c029-4
+logsource: {product: test}
+detection:
+    selection:
+        X|exists|contains: true
+    condition: selection

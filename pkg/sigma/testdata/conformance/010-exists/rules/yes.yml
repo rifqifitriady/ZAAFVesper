@@ -1,0 +1,7 @@
+title: exists
+id: c010-yes
+logsource: {product: test}
+detection:
+    s:
+        PasswordLastSet|exists: true
+    condition: s

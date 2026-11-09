@@ -1,7 +1,8 @@
 # ZAAFVesper built-in rules (macOS)
 
-41 behaviour rules, 5 YARA signatures and one shared macro file. Every rule maps to one
-MITRE ATT&CK technique, has a fixture file with at least one `match` and two `nomatch`
+41 hand-written behaviour rules, 12 rules converted from SigmaHQ (see
+[Sigma import](#sigma-import)), 5 YARA signatures and one shared macro file. Every
+hand-written rule maps to one MITRE ATT&CK technique, has a fixture file with at least one `match` and two `nomatch`
 scenarios (one of them a realistic benign lookalike), and, where Atomic Red Team ships a
 macOS test for the behaviour, lists that test's GUID in `tests.atomic`.
 
@@ -21,6 +22,135 @@ file: not revoked, name identical, tactic is one of the technique's tactics.
   - `replay` defaults to the host platform; `--platform windows|linux|macos|all` overrides it.
   - `rules validate` and `rules test` check every rule on every platform, so a Windows rule's fixtures run on a Mac.
 - **Events and fields.** The canonical event names and fields shared by all platforms are defined in `pkg/event`. The mapping from Sigma log sources and field names is in `pkg/sigmamap`. A field the source did not report resolves to nil, so a comparison on it is false.
+
+## Sigma import
+
+`zaafvesper sigma convert <sigma dir|file> -o <rules dir> [--report report.json] [--force]`
+converts Sigma rules (Sigma 2.1 rule format) into ZAAFVesper rules. A rule is converted only
+when ZAAFVesper can express it exactly; anything else is skipped with a reason. The one
+deliberate narrowing is keyword searches, which look in the category's mapped string
+fields rather than in every value of the raw event (see below).
+
+**What it reads.** Every `*.yml` and `*.yaml` under the input directory, recursively. Dot
+directories are skipped. Symbolic links are never followed; each one is reported as an
+error. Files over 1 MiB are refused.
+
+**What it writes.** One rule per converted Sigma file, named after the Sigma file (lower
+case, only `a-z 0-9 _ -`). An existing file is never replaced unless `--force` is given,
+and `--force` replaces only files the converter wrote itself (they start with its header
+comment): a hand-written rule or a symbolic link with the same name is refused as an
+error. An output directory that is a symbolic link is refused; the directory is then
+opened once and every file is created through that handle, so a directory swapped for a
+link while the command runs cannot redirect the writes. A converted rule whose id is
+already used by a rule file under the output directory is not written, and neither is a
+rule that would exceed the loader's 1 MiB file limit. Convert into a directory of its own,
+for example `rules/sigma/imported/`, and run `zaafvesper rules validate` on the whole
+rules tree before deploying: one bad or duplicate rule stops `run` from loading any rule. The summary goes to the terminal; `--report` also writes it as JSON
+(`converted`, `skipped` with `kind` and `reason`, `errors`). The exit code is 1 when a file
+could not be read or written, and 0 otherwise, even when rules were skipped.
+
+**How a Sigma rule maps.**
+
+| Sigma | ZAAFVesper |
+|---|---|
+| `logsource.product` macos, windows, linux | `platforms: [macos]`, `[windows]` or `[linux]` (always set) |
+| `logsource.category` | `evt.name in (...)` from `pkg/sigmamap` |
+| field names | `pkg/sigmamap` field map; special values such as `Initiated: 'true'` through its value map |
+| `id` | rule `id` when it is a UUID v4; otherwise a stable id derived from it. The original is kept in `labels.sigma.id` |
+| `title`, `description` | `name`, `description` |
+| `level` | `severity` (informational becomes info; a missing level becomes low and is reported) |
+| `tags` `attack.tNNNN` | `labels.technique.id`. T1562, T1562.001, T1562.003, T1562.004 and T1070.002 are rewritten to their current IDs (table at the top of this file) and get tactic TA0112 |
+| `tags` `attack.<tactic>` | `labels.tactic.id` and `labels.tactic.name` (defense-evasion is TA0005 Stealth) |
+| `author`, `references` | `labels.sigma.author`, `references`, and the author in the alert text (DRL 1.1) |
+| `falsepositives` | `notes` |
+| `status` deprecated or unsupported | skipped |
+
+**Bounds.** A Sigma file may be at most 1 MiB, nested at most 32 levels and hold at most
+20 000 YAML nodes; anchors, aliases, merge keys and duplicate keys are refused. A value or
+regular expression may be at most 4 KiB, and a condition at most 4 KiB, 1 000 tokens and
+64 levels deep. The generated condition may be at most 256 KiB; expansions (`windash`,
+`cidr`, keywords, a search used many times) are measured before they are built, so a
+small file that would expand past the limit is skipped at once.
+
+**Supported detection features.** Field maps (AND), lists of maps (OR), value lists (OR),
+keyword lists, `null` (field not reported), the empty string. Modifiers `contains`,
+`startswith`, `endswith`, `all`, `re` with `i`, `m`, `s` (RE2 syntax only), `cidr` (IPv4),
+`windash`, `exists`, `cased`, `neq` (single value). Sigma 2.1 wildcards `*` and `?` and
+escapes `\*`, `\?`, `\\`. Conditions `and`, `or`, `not`, parentheses, `1 of`, `any of`,
+`all of`, `them` (identifiers starting with `_` excluded), name patterns such as
+`selection_*`, and a list of conditions (OR).
+
+**Semantics, where they could differ.**
+
+- Strings compare case-insensitively unless `cased` is given; `re` is case-sensitive unless
+  `|i`. Regular expressions are unanchored.
+- A field the event does not report is nil in ZAAFVesper, so `Field: null` is true and any
+  comparison on it is false; `not` over it is true. ZAAFVesper has no JSON null, so a
+  field that is present but null cannot occur.
+- Some ZAAFVesper fields are always present when the process is known, as an empty string
+  if the source gave nothing (for example `ps.cmdline`). `null` and `exists: false` are
+  then false for them.
+- Keyword searches look, case-insensitively, in every string field the category maps
+  (for `process_creation`: image, command line, parent image and so on).
+- `cidr` is compiled to an anchored regular expression over the dotted-quad text of the
+  address, also accepted as `::ffff:a.b.c.d`. IPv6 ranges are skipped: ZAAFVesper has no
+  address-range operator yet.
+- A number compared with a numeric ZAAFVesper field (`ps.pid`, `net.dport`) is an integer
+  comparison; with a string field it is compared as text.
+
+**Skipped, with a reason.** Aggregations (`| count()` and others), `timeframe`,
+correlation and filter rules, rule collections (several YAML documents), `service`
+log sources, products and categories not in `pkg/sigmamap`, fields without a mapping,
+the modifiers `base64`, `base64offset`, `utf16*`, `wide`, `fieldref`, `expand`, `lt`,
+`lte`, `gt`, `gte` and the time modifiers, `2 of` and higher counts, regular expressions
+that are not RE2, and invalid Sigma (for example two of `contains`, `startswith`,
+`endswith`; a regex flag without `re`; `all` on a single value; `null` inside a list).
+
+**Conformance.** The converter is tested against ZAAFElegia's language-neutral Sigma
+conformance cases (vendored in `pkg/sigma/testdata/conformance/` with attribution): 20
+cases, 73 events, every supported feature. Rules the converter refuses on purpose are
+listed in the test with the reason. Events with JSON null, arrays or nested objects are
+not representable as ZAAFVesper events and are not checked.
+
+**Converted rules and `rules test`.** A converted rule is treated exactly like a
+hand-written one: `rules validate` warns that it has no fixture, and `rules test` fails
+for it ("missing fixture file") until you add `<rules dir>/testdata/<rule file name>.yml`
+with at least one `match` and two `nomatch` scenarios. The converter does not generate
+fixtures, because fixtures written from the rule itself would prove nothing. The fixture
+requirement is unchanged.
+
+**Shipped converted rules (`rules/sigma/macos/`).** 12 SigmaHQ macOS rules, chosen because
+they use only fields ZAAFVesper's eslogger source reports (image, command line, parent
+image) and their logic holds on real macOS argument shapes. Each has hand-written
+fixtures. Their originals are in `pkg/sigma/testdata/sigmahq/` and a test checks the
+shipped files are exactly the converter's output. License: DRL 1.1, see
+[`rules/sigma/NOTICE.md`](../rules/sigma/NOTICE.md). SigmaHQ macOS rules left out: ones
+the built-in rules already cover (emond, StartupItems, quarantine removal, security tool
+tampering), noisy discovery rules (`sw_vers`, `sysctl`, `ioreg`, and similar), the hidden
+account rule (its regex matches any digit), the firmware password rule (it also fires on
+the read-only `-check`), and the `sysadminctl -addUser ... -admin` rule (it misses
+`-admin` as the last argument). One known weakness is kept from SigmaHQ: "Root Account
+Enable Via Dsenableroot" excludes ` -d ` with surrounding spaces, so a bare
+`dsenableroot -d` (which disables root) still fires; its fixture shows this.
+
+| Rule (file) | Tactic | Technique | Severity | Sigma author |
+|---|---|---|---|---|
+| System Integrity Protection (SIP) Disabled<br>`proc_creation_macos_csrutil_disable.yml` | Discovery | T1518.001 | medium | Joseliyo Sanchez, @Joseliyo_Jstnk |
+| User Added To Admin Group Via Dscl<br>`proc_creation_macos_dscl_add_user_to_admin_group.yml` | Initial Access, Persistence, Privilege Escalation, Stealth | T1078.003 | medium | Sohan G (D4rkCiph3r) |
+| User Added To Admin Group Via DseditGroup<br>`proc_creation_macos_dseditgroup_add_to_admin_group.yml` | Initial Access, Persistence, Privilege Escalation, Stealth | T1078.003 | medium | Sohan G (D4rkCiph3r) |
+| Root Account Enable Via Dsenableroot<br>`proc_creation_macos_dsenableroot_enable_root_account.yml` | Initial Access, Persistence, Privilege Escalation, Stealth | T1078, T1078.001, T1078.003 | medium | Sohan G (D4rkCiph3r) |
+| JXA In-memory Execution Via OSAScript<br>`proc_creation_macos_jxa_in_memory_execution.yml` | Execution | T1059.002, T1059.007 | high | Sohan G (D4rkCiph3r) |
+| Suspicious Microsoft Office Child Process - MacOS<br>`proc_creation_macos_office_susp_child_processes.yml` | Execution, Persistence | T1059.002, T1137.002, T1204.002 | high | Sohan G (D4rkCiph3r) |
+| OSACompile Run-Only Execution<br>`proc_creation_macos_osacompile_runonly_execution.yml` | Execution | T1059.002 | high | Sohan G (D4rkCiph3r) |
+| Potential Persistence Via PlistBuddy<br>`proc_creation_macos_persistence_via_plistbuddy.yml` | Persistence, Privilege Escalation | T1543.001, T1543.004 | high | Sohan G (D4rkCiph3r) |
+| Guest Account Enabled Via Sysadminctl<br>`proc_creation_macos_sysadminctl_enable_guest_account.yml` | Initial Access, Persistence, Privilege Escalation, Stealth | T1078, T1078.001 | low | Sohan G (D4rkCiph3r) |
+| Potential Base64 Decoded From Images<br>`proc_creation_macos_tail_base64_decode_from_image.yml` | Stealth | T1140 | high | Joseliyo Sanchez, @Joseliyo_Jstnk |
+| Time Machine Backup Deletion Attempt Via Tmutil - MacOS<br>`proc_creation_macos_tmutil_delete_backup.yml` | Impact | T1490 | medium | Pratinav Chandra |
+| Time Machine Backup Disabled Via Tmutil - MacOS<br>`proc_creation_macos_tmutil_disable_backup.yml` | Impact | T1490 | medium | Pratinav Chandra |
+
+These rules keep SigmaHQ's ATT&CK tags. Unlike the hand-written rules, their technique
+and tactic IDs were not checked against the bundled `enterprise-attack.json` (only the
+revoked IDs listed above are rewritten), and no atomic test has been run against them.
 
 ## Rule table
 

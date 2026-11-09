@@ -1,0 +1,4 @@
+{"DestinationIp": "10.1.2.3"}
+{"DestinationIp": "fd12::1"}
+{"DestinationIp": "8.8.8.8"}
+{"DestinationIp": "not-an-ip"}

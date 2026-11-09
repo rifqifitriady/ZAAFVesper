@@ -1,0 +1,7 @@
+title: endswith
+id: c006-e
+logsource: {product: test}
+detection:
+    s:
+        CommandLine|endswith: '.ps1'
+    condition: s

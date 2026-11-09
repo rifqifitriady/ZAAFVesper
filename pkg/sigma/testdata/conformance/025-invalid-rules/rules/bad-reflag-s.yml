@@ -1,0 +1,7 @@
+title: bad-reflag-s
+id: c025-flags
+logsource: {product: test}
+detection:
+    selection:
+        X|s: a
+    condition: selection

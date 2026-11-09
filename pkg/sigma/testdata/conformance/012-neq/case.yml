@@ -1,0 +1,6 @@
+spec_ref: sigma-appendix-modifiers.md#generic-modifiers (neq)
+description: '`neq` negates the match, so an absent field satisfies it (interpretation 3).'
+expected:
+  - [c012]
+  - []
+  - [c012]

@@ -1,0 +1,7 @@
+title: question mark
+id: c004-q
+logsource: {product: test}
+detection:
+    s:
+        Name: 'prog?.exe'
+    condition: s

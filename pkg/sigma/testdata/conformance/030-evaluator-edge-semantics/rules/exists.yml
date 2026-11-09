@@ -1,0 +1,7 @@
+title: edge exists
+id: c030-exists
+logsource: {product: test}
+detection:
+    s:
+        F|exists: true
+    condition: s

@@ -1,0 +1,9 @@
+title: all
+id: c007
+logsource: {product: test}
+detection:
+    s:
+        CommandLine|contains|all:
+            - '-enc'
+            - 'bypass'
+    condition: s

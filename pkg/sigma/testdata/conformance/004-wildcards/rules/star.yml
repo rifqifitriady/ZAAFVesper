@@ -1,0 +1,7 @@
+title: star
+id: c004-star
+logsource: {product: test}
+detection:
+    s:
+        Image: 'C:\Tools\\*.exe'
+    condition: s

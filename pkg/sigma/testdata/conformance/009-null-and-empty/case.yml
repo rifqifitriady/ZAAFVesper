@@ -1,0 +1,7 @@
+spec_ref: sigma-rules-specification.md#special-field-values
+description: '`null` matches an absent field or a JSON null (interpretation 2); `''''` matches only the empty string.'
+expected:
+  - [c009-null]
+  - []
+  - []
+  - [c009-empty, c009-null]

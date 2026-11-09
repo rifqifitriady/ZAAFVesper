@@ -1,0 +1,30 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Potential Base64 Decoded From Images
+id: 09a910bf-f71f-4737-9c40-88880ba5913d
+version: 1.0.0
+platforms: [macos]
+description: |-
+  Detects the use of tail to extract bytes at an offset from an image and then decode the base64 value to create a new file with the decoded content. The detected execution is a bash one-liner.
+
+  Converted from Sigma rule 09a910bf-f71f-4737-9c40-88880ba5913d by zaafvesper sigma convert. Sigma author: Joseliyo Sanchez, @Joseliyo_Jstnk.
+labels:
+  sigma.author: Joseliyo Sanchez, @Joseliyo_Jstnk
+  sigma.id: 09a910bf-f71f-4737-9c40-88880ba5913d
+  sigma.level: high
+  sigma.source: rules/macos/process_creation/proc_creation_macos_tail_base64_decode_from_image.yml
+  sigma.status: test
+  sigma.tags: attack.stealth, attack.t1140
+  sigma.title: Potential Base64 Decoded From Images
+  tactic.id: TA0005
+  tactic.name: Stealth
+  technique.id: T1140
+references:
+  - https://www.virustotal.com/gui/file/16bafdf741e7a13137c489f3c8db1334f171c7cb13b62617d691b0a64783cc48/behavior
+  - https://www.virustotal.com/gui/file/483fafc64a2b84197e1ef6a3f51e443f84dc5742602e08b9e8ec6ad690b34ed0/behavior
+condition: evt.name in ('CreateProcess') and (ps.exe iendswith '/bash' and (ps.cmdline icontains 'tail' and ps.cmdline icontains '-c') and (ps.cmdline icontains 'base64' and ps.cmdline icontains '-d' and ps.cmdline icontains '>') and ps.cmdline icontains ('.avif', '.gif', '.jfif', '.jpeg', '.jpg', '.pjp', '.pjpeg', '.png', '.svg', '.webp'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Joseliyo Sanchez, @Joseliyo_Jstnk)'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'
