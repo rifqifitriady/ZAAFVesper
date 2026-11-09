@@ -2,6 +2,18 @@
   "platform": "linux",
   "tests": [
     {
+      "id": "canary-start",
+      "canary": true,
+      "inline": {
+        "executor": "bash",
+        "command": "rm -f /var/log/syslog.zaafvesper-canary"
+      },
+      "expect": [
+        "Syslog Clearing or Removal Via System Utilities"
+      ],
+      "note": "Canary: proves the sensor receives and evaluates events at this point of the run."
+    },
+    {
       "id": "art-T1053.003-078e69eb",
       "atomic": {
         "technique": "T1053.003",
@@ -63,13 +75,13 @@
       "id": "inline-bash-dev-tcp",
       "inline": {
         "executor": "bash",
-        "command": "IP=$(hostname -I | awk '{print $1}'); (timeout 6 nc -l \"$IP\" 4444 >/dev/null 2>&1 &); sleep 1; timeout 3 bash -c \"bash -i >& /dev/tcp/$IP/4444 0>&1\" </dev/null; true"
+        "command": "(timeout 6 nc -6 -l ::1 4444 >/dev/null 2>&1 &); sleep 1; timeout 3 bash -c 'bash -i >& /dev/tcp/::1/4444 0>&1' </dev/null; true"
       },
       "expect": [
         "Interactive shell redirected to a network socket",
         "Linux Reverse Shell Indicator"
       ],
-      "note": "The listener is on the runner's own address; nothing leaves the machine."
+      "note": "Loopback only (::1). The Sigma rule excludes 127.0.0.1 and 0.0.0.0 but not ::1, so an IPv6 loopback connection still exercises it; nothing leaves the machine."
     },
     {
       "id": "inline-netcat-e",
@@ -172,7 +184,20 @@
         "Linux Webshell Indicators"
       ],
       "note": "bash copied under the name nginx starts whoami, as a web server running a webshell would."
+    },
+    {
+      "id": "canary-end",
+      "canary": true,
+      "inline": {
+        "executor": "bash",
+        "command": "rm -f /var/log/syslog.zaafvesper-canary"
+      },
+      "expect": [
+        "Syslog Clearing or Removal Via System Utilities"
+      ],
+      "note": "Canary: proves the sensor receives and evaluates events at this point of the run."
     }
   ],
-  "untestable": []
+  "untestable": [],
+  "skipped_atomics": []
 }

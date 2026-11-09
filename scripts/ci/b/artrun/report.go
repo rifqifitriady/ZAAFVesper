@@ -74,6 +74,9 @@ func cmdReport(args []string) error {
 		return err
 	}
 	rows := buildRows(p, results, fired, firstOutput, alerts, rs, *platform)
+	if broken == "" {
+		broken = canaryProblem(p, results, alerts)
+	}
 	md := render(rows, p, results, *platform, *runURL, fired)
 	if broken != "" {
 		md = "> **INCOMPLETE RUN:** " + broken + ". The rows below are not a valid result.\n\n" + md
@@ -133,19 +136,45 @@ func readAlerts(dir string) (map[string]uint64, map[string]string, []alertLine, 
 	return fired, first, all, nil
 }
 
-// firedIn reports whether rule has an alert inside the test's time window.
-func firedIn(alerts []alertLine, rule string, r Result) bool {
+// firedIn returns the first alert of rule inside the test's time window.
+func firedIn(alerts []alertLine, rule string, r Result) (alertLine, bool) {
 	if r.Start.IsZero() {
-		return false
+		return alertLine{}, false
 	}
 	from, to := r.Start.Add(-windowBefore), r.End.Add(windowAfter)
 	for _, a := range alerts {
 		if a.RuleName == rule && !a.Time.Before(from) && !a.Time.After(to) {
-			return true
+			return a, true
 		}
 	}
-	return false
+	return alertLine{}, false
 }
+
+// canaryProblem reports a canary test that did not raise its alert: the
+// sensor was not receiving events at that point, so no result is valid.
+func canaryProblem(p *Plan, results []Result, alerts []alertLine) string {
+	res := map[string]Result{}
+	for _, r := range results {
+		res[r.ID] = r
+	}
+	for _, t := range p.Tests {
+		if !t.Canary {
+			continue
+		}
+		r, ok := res[t.ID]
+		if !ok || r.Start.IsZero() {
+			return "canary " + t.ID + " did not run"
+		}
+		for _, rule := range t.Expect {
+			if _, ok := firedIn(alerts, rule, r); !ok {
+				return "canary " + t.ID + " raised no alert (" + rule + "): the sensor was not receiving events"
+			}
+		}
+	}
+	return ""
+}
+
+func stamp(t time.Time) string { return t.UTC().Format("15:04:05.000") }
 
 func buildRows(p *Plan, results []Result, fired map[string]uint64, first map[string]string, alerts []alertLine, rs *rules.Ruleset, platform string) []Row {
 	byRule := map[string][]string{}
@@ -188,21 +217,27 @@ func buildRows(p *Plan, results []Result, fired map[string]uint64, first map[str
 				row.Tests = append(row.Tests, id+": not run")
 				notes = append(notes, id+": "+tr.Error)
 				notRun++
-			case firedIn(alerts, r.Name, tr):
-				row.Tests = append(row.Tests, id+": fired")
-				hit++
 			default:
-				row.Tests = append(row.Tests, id+": did not fire")
+				if a, ok := firedIn(alerts, r.Name, tr); ok {
+					row.Tests = append(row.Tests, fmt.Sprintf("%s: fired (alert %s, test %s–%s)", id, stamp(a.Time), stamp(tr.Start), stamp(tr.End)))
+					if row.Detail == "" {
+						row.Detail = a.Output
+					}
+					hit++
+					continue
+				}
+				row.Tests = append(row.Tests, fmt.Sprintf("%s: did not fire (test %s–%s)", id, stamp(tr.Start), stamp(tr.End)))
 				miss++
 			}
 		}
+		firstHit := row.Detail
 		switch {
 		case hit > 0 && miss == 0:
 			row.Status = "fired"
-			row.Detail = strings.Join(append(notes, first[r.Name]), "; ")
+			row.Detail = strings.Join(append(notes, firstHit), "; ")
 		case hit > 0:
 			row.Status = "fired for some tests"
-			row.Detail = strings.Join(append(notes, first[r.Name]), "; ")
+			row.Detail = strings.Join(append(notes, firstHit), "; ")
 		case miss > 0:
 			row.Status = "did not fire"
 			if fired[r.Name] > 0 {
@@ -281,6 +316,12 @@ func render(rows []Row, p *Plan, results []Result, platform, runURL string, fire
 			note = strings.TrimSpace(note + " Error: " + r.Error)
 		}
 		fmt.Fprintf(&b, "| %s %s | %s | %d | %s |\n", r.ID, cell(r.Name), r.Kind, r.ExitCode, cell(note))
+	}
+	if len(p.SkippedAtomics) > 0 {
+		b.WriteString("\n## Linked Atomic tests not run as they are\n\n| Atomic test | Why |\n|---|---|\n")
+		for _, sk := range p.SkippedAtomics {
+			fmt.Fprintf(&b, "| `%s` | %s |\n", sk.GUID, cell(sk.Reason))
+		}
 	}
 	expected := map[string]bool{}
 	for _, r := range rows {

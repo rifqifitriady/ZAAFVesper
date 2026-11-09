@@ -149,3 +149,61 @@ func TestReportRefusesIncompleteRun(t *testing.T) {
 		t.Fatalf("no banner:\n%s", md)
 	}
 }
+
+// Every Atomic test a Windows or Linux rule links (tests.atomic) is either
+// run by its plan or listed in skipped_atomics with a reason.
+func TestLinkedAtomicsAccountedFor(t *testing.T) {
+	rs, err := rules.LoadDir("../../../../rules")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, plat := range []string{"windows", "linux"} {
+		p, err := loadPlan("../" + plat + "-plan.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		known := map[string]bool{}
+		for _, tc := range p.Tests {
+			if tc.Atomic != nil {
+				known[strings.ToLower(tc.Atomic.GUID)] = true
+			}
+		}
+		for _, s := range p.SkippedAtomics {
+			if s.Reason == "" {
+				t.Errorf("%s: skipped %s without a reason", plat, s.GUID)
+			}
+			known[strings.ToLower(s.GUID)] = true
+		}
+		for _, r := range rs.Rules {
+			if len(r.Platforms) != 1 || r.Platforms[0] != plat {
+				continue
+			}
+			for _, g := range r.Tests.Atomic {
+				if !known[strings.ToLower(g)] {
+					t.Errorf("%s: %s links Atomic %s, which the plan neither runs nor skips", plat, r.Name, g)
+				}
+			}
+		}
+		canaries := 0
+		for _, tc := range p.Tests {
+			if tc.Canary {
+				canaries++
+			}
+		}
+		if canaries < 2 || !p.Tests[0].Canary || !p.Tests[len(p.Tests)-1].Canary {
+			t.Errorf("%s: the plan must start and end with a canary", plat)
+		}
+	}
+}
+
+func TestCanaryProblem(t *testing.T) {
+	p := &Plan{Tests: []Test{{ID: "c", Canary: true, Expect: []string{"R"}}}}
+	t0 := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
+	res := []Result{{ID: "c", Command: "x", Start: t0, End: t0.Add(time.Second)}}
+	if canaryProblem(p, res, []alertLine{{RuleName: "R", Time: t0.Add(500 * time.Millisecond)}}) != "" {
+		t.Fatal("canary that fired reported")
+	}
+	if got := canaryProblem(p, res, []alertLine{{RuleName: "R", Time: t0.Add(time.Hour)}}); !strings.Contains(got, "not receiving") {
+		t.Fatalf("silent canary: %q", got)
+	}
+}

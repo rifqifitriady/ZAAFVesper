@@ -92,12 +92,18 @@ func ReadStamp(pid int32) (sysmon.Stamp, error) {
 	return sysmon.Stamp{ID: st.StartTicks, Start: procfs.StartTime(bt, st.StartTicks), Precise: precise}, nil
 }
 
+// startedAt is the most precise start time of pid (FixThreadParent's guard).
+func startedAt(pid int32) (time.Time, error) {
+	st, err := ReadStamp(pid)
+	return st.Precise, err
+}
+
 // Run follows the journal until ctx ends. journalctl is restarted (resuming
 // after the last cursor read) when it exits, at most maxRestartsPerMinute
 // times a minute.
 func (s *Source) Run(ctx context.Context, events []string, out chan<- *event.Event) error {
 	feed := sysmon.NewFeeder(events, sysmon.NewBinder(ReadStamp, IdentityTolerance))
-	feed.Fix = func(e *event.Event) { FixThreadParent(e, procfs.Default.Tgid) }
+	feed.Fix = func(e *event.Event) { FixThreadParent(e, procfs.Default.Tgid, startedAt, IdentityTolerance) }
 	if s.pending != nil {
 		feed.OnDegraded(s.pending)
 	}

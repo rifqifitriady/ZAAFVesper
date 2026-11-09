@@ -2,6 +2,18 @@
   "platform": "windows",
   "tests": [
     {
+      "id": "canary-start",
+      "canary": true,
+      "inline": {
+        "executor": "command_prompt",
+        "command": "wevtutil.exe cl ZAAFVesper-Canary-NoSuchLog"
+      },
+      "expect": [
+        "Suspicious Eventlog Clearing or Configuration Change Activity"
+      ],
+      "note": "Canary: proves the sensor receives and evaluates events at this point of the run."
+    },
+    {
       "id": "art-T1547.001-e55be3fd",
       "atomic": {
         "technique": "T1547.001",
@@ -22,31 +34,31 @@
       ]
     },
     {
-      "id": "art-T1490-43819286",
-      "atomic": {
-        "technique": "T1490",
-        "guid": "43819286-91a9-4369-90ed-d31fb4da2c01"
+      "id": "inline-vssadmin-delete",
+      "inline": {
+        "executor": "command_prompt",
+        "command": "vssadmin.exe delete shadows /for=Q: /quiet"
       },
       "expect": [
         "Volume shadow copies deleted or recovery disabled",
         "Shadow Copies Deletion Using Operating Systems Utilities"
       ],
-      "note": "The runner has no shadow copies, so nothing is deleted."
+      "note": "Safe form of ART T1490 43819286: targets drive Q:, which does not exist, so no shadow copy can be deleted."
     },
     {
-      "id": "art-T1490-6a3ff8dd",
-      "atomic": {
-        "technique": "T1490",
-        "guid": "6a3ff8dd-f49c-4272-a658-11c2fe58bd88"
+      "id": "inline-wmic-shadowcopy-delete",
+      "requires": [
+        "wmic.exe"
+      ],
+      "inline": {
+        "executor": "command_prompt",
+        "command": "wmic.exe shadowcopy where \"ID='{00000000-0000-0000-0000-000000000000}'\" delete"
       },
       "expect": [
         "Volume shadow copies deleted or recovery disabled",
         "Shadow Copies Deletion Using Operating Systems Utilities"
       ],
-      "note": "Needs wmic.exe, which newer Windows images no longer ship.",
-      "requires": [
-        "wmic.exe"
-      ]
+      "note": "Safe form of ART T1490 6a3ff8dd: selects a shadow copy id that does not exist. Needs wmic.exe, which newer Windows images no longer ship."
     },
     {
       "id": "art-T1546.003-3c64f177",
@@ -194,6 +206,18 @@
         "Remote thread created in another process from a user-writable location"
       ],
       "note": "scripts/ci/b/remotethread, copied to the user's Temp folder, starts a ping.exe and creates one thread in it at kernel32!ExitThread; nothing else is injected."
+    },
+    {
+      "id": "canary-end",
+      "canary": true,
+      "inline": {
+        "executor": "command_prompt",
+        "command": "wevtutil.exe cl ZAAFVesper-Canary-NoSuchLog"
+      },
+      "expect": [
+        "Suspicious Eventlog Clearing or Configuration Change Activity"
+      ],
+      "note": "Canary: proves the sensor receives and evaluates events at this point of the run."
     }
   ],
   "untestable": [
@@ -212,6 +236,40 @@
     {
       "rule": "Driver Load From A Temporary Directory",
       "reason": "Needs loading a kernel driver from a Temp folder. Not run."
+    }
+  ],
+  "skipped_atomics": [
+    {
+      "guid": "86a43bad-12e3-4e85-b97c-4d5cf25b95c3",
+      "reason": "Needs the AtomicTestHarnesses module from the PowerShell Gallery (not pinned); replaced by inline-encoded-powershell."
+    },
+    {
+      "guid": "0d181431-ddf3-4826-8055-2dbf63ae848b",
+      "reason": "Needs the AtomicTestHarnesses module from the PowerShell Gallery (not pinned); replaced by inline-encoded-powershell."
+    },
+    {
+      "guid": "0be2230c-9ab3-4ac2-8826-3199b9a0ebf8",
+      "reason": "Dumps the runner's real LSASS with ProcDump (credentials, and a tool download). Not run."
+    },
+    {
+      "guid": "7cede33f-0acd-44ef-9774-15511300b24b",
+      "reason": "Dumps the runner's real LSASS with ProcDump (credentials, and a tool download). Not run."
+    },
+    {
+      "guid": "2536dee2-12fb-459a-8c37-971844fa73be",
+      "reason": "Dumps the runner's real LSASS with comsvcs.dll (credentials). Its command shape is covered by inline-comsvcs-minidump against a ping.exe."
+    },
+    {
+      "guid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+      "reason": "Deletes every shadow copy on the machine; replaced by inline-vssadmin-delete against a drive that does not exist."
+    },
+    {
+      "guid": "6a3ff8dd-f49c-4272-a658-11c2fe58bd88",
+      "reason": "Deletes every shadow copy on the machine; replaced by inline-wmic-shadowcopy-delete against an id that does not exist."
+    },
+    {
+      "guid": "263ba6cb-ea2b-41c9-9d4e-b652dadd002c",
+      "reason": "Deletes the machine's backup catalog (wbadmin delete catalog), which has no harmless target. Not run; the rule's vssadmin branch is tested."
     }
   ]
 }

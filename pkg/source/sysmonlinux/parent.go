@@ -2,6 +2,7 @@ package sysmonlinux
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
 )
@@ -24,7 +25,12 @@ const ArgParentThread = "parent_thread_id"
 // process (its incarnation unknown, so the table accepts its current entry),
 // and evt.arg[parent_thread_id] keeps the thread id. tgid fails when the
 // thread is gone; the event is then left as Sysmon reported it.
-func FixThreadParent(e *event.Event, tgid func(int32) (int32, error)) {
+//
+// The mapping is read some time after the fork (journald delay), so the
+// thread id could meanwhile belong to another process. started gives the
+// start time of the process found; when it started after the event (plus
+// tolerance), it cannot be the parent and the event is left unchanged.
+func FixThreadParent(e *event.Event, tgid func(int32) (int32, error), started func(int32) (time.Time, error), tolerance time.Duration) {
 	if e == nil || e.Name != event.CreateProcess || e.Proc == nil {
 		return
 	}
@@ -35,6 +41,9 @@ func FixThreadParent(e *event.Event, tgid func(int32) (int32, error)) {
 	}
 	g, err := tgid(par.PID)
 	if err != nil || g <= 0 || g == par.PID {
+		return
+	}
+	if st, err := started(g); err != nil || e.Time.IsZero() || st.After(e.Time.Add(tolerance)) {
 		return
 	}
 	if e.Args == nil {

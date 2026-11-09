@@ -18,6 +18,16 @@ type Plan struct {
 	Tests []Test `json:"tests"`
 	// Untestable lists rules that are deliberately not exercised, and why.
 	Untestable []Untestable `json:"untestable"`
+	// SkippedAtomics lists the Atomic tests the rules link (tests.atomic)
+	// that are not run as they are, and why (each is replaced by an inline
+	// equivalent or left out).
+	SkippedAtomics []SkippedAtomic `json:"skipped_atomics"`
+}
+
+// SkippedAtomic is a linked Atomic test that is not run as is.
+type SkippedAtomic struct {
+	GUID   string `json:"guid"`
+	Reason string `json:"reason"`
 }
 
 // Test is one Atomic Red Team test or one inline equivalent.
@@ -34,6 +44,10 @@ type Test struct {
 	// Requires names programs the test needs; when one is not on the
 	// runner image the test is recorded as not run (not as a miss).
 	Requires []string `json:"requires,omitempty"`
+	// Canary tests run first and last: if one does not raise its expected
+	// alert the sensor was not receiving events, and the whole run is
+	// invalid.
+	Canary bool `json:"canary,omitempty"`
 }
 
 // Atomic names one test in the atomics folder.

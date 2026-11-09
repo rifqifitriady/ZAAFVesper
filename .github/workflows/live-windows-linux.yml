@@ -27,8 +27,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Atomic Red Team: test definitions are fetched per file from this commit
-  # and checked against scripts/ci/b/atomics.sha256.
+  # Atomic Red Team master of 6 Nov 2026: test definitions are fetched per
+  # file from this commit and checked against scripts/ci/b/atomics.sha256.
+  # To update: see scripts/ci/b/README.md.
   ART_COMMIT: a0e3f9bc69fed2fd711bd1f1aa87a40c33482fe6
   RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
@@ -37,8 +38,17 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 40
     env:
+      # Sysmon 15.22 (Sysmon64.exe), from the unversioned Sysinternals URL:
+      # when Microsoft publishes a new build this hash stops the job; review
+      # the new build and update the hash (scripts/ci/b/README.md).
       SYSMON_ZIP_SHA256: 00ecf1b46aec99299d3ae0bca79dc621458bd014b20b509d7c5c8e8c8611aa54
-      # sysmon-modular release of commit a45dedb (MIT); hash from its SHA256SUMS.
+      # sysmon-modular (MIT) at commit a45dedb13a43c0d8ea1fc6b580a0ac396fa74457
+      # (14 Oct 2026). The generated config exists only as an asset of the
+      # release built from that commit: the setup checks that the release tag
+      # points to this full commit, then the file's hash (from the release's
+      # SHA256SUMS).
+      SYSMON_MODULAR_COMMIT: a45dedb13a43c0d8ea1fc6b580a0ac396fa74457
+      SYSMON_MODULAR_TAG: configs-a45dedb13a43
       SYSMON_CONFIG_URL: https://github.com/olafhartong/sysmon-modular/releases/download/configs-a45dedb13a43/sysmonconfig-excludes-only.xml
       SYSMON_CONFIG_SHA256: 4c7d27bc2847f7de816ddde90e7de37d5b9473461b27424882e9b93f00cd28a4
     steps:
@@ -82,11 +92,14 @@ jobs:
           $env:ZV_REMOTETHREAD = $rt
           .\build\artrun.exe run -plan scripts\ci\b\windows-plan.json -atomics atomics -out out\results.json
       - name: Collect
+        id: collect
         if: always()
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force out\alerts | Out-Null
           Start-Sleep 15
+          $alive = (Get-Service ZAAFVesper -ErrorAction SilentlyContinue).Status -eq 'Running'
+          wevtutil.exe qe Microsoft-Windows-Sysmon/Operational /f:xml /c:20000 > out\sysmon-events.xml
           sc.exe stop ZAAFVesper | Out-Host
           Start-Sleep 5
           Copy-Item -ErrorAction SilentlyContinue C:\ProgramData\ZAAFVesper\logs\* out\alerts\
@@ -94,6 +107,7 @@ jobs:
             Group-Object Id | Sort-Object Name | Format-Table Name, Count -AutoSize | Out-File out\sysmon-event-counts.txt
           Get-Content out\sysmon-event-counts.txt
           if (Test-Path out\alerts\service.log) { Get-Content out\alerts\service.log -Tail 60 }
+          if (-not $alive) { Write-Host 'the ZAAFVesper service was not running at the end of the tests'; exit 1 }
       - name: Report
         id: report
         if: always()
@@ -109,19 +123,24 @@ jobs:
           path: out
           retention-days: 30
       - name: Fail if the run was incomplete
-        if: always() && (steps.run.outcome != 'success' || steps.report.outcome != 'success')
+        if: always() && (steps.run.outcome != 'success' || steps.collect.outcome != 'success' || steps.report.outcome != 'success')
         shell: pwsh
         run: |
-          Write-Host "test run: ${env:RUN_OUTCOME}, report: ${env:REPORT_OUTCOME}"
+          Write-Host "test run: ${env:RUN_OUTCOME}, collect: ${env:COLLECT_OUTCOME}, report: ${env:REPORT_OUTCOME}"
           exit 1
         env:
           RUN_OUTCOME: ${{ steps.run.outcome }}
+          COLLECT_OUTCOME: ${{ steps.collect.outcome }}
           REPORT_OUTCOME: ${{ steps.report.outcome }}
 
   linux:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
+      # Microsoft's packages for Ubuntu 24.04 (packages.microsoft.com
+      # ubuntu/24.04/prod), hashes from that repository's Packages index.
+      # linux-setup.sh stops when ubuntu-latest is no longer 24.04: then
+      # pick the packages for the new release and update these pins.
       SYSMONFORLINUX_VERSION: 1.6.0
       SYSMONFORLINUX_SHA256: 95f634597f1558c9ff1554d0f04efbcbcb06badc54486945884b0aea1bfb2106
       SYSINTERNALSEBPF_VERSION: 2.3.0
@@ -156,10 +175,13 @@ jobs:
           # System folders first; java from the runner's JDK (JAVA_HOME).
           sudo env "PATH=/usr/sbin:/usr/bin:/sbin:/bin:$JAVA_HOME/bin" ./build/artrun run -plan scripts/ci/b/linux-plan.json -atomics atomics -out out/results.json
       - name: Collect
+        id: collect
         if: always()
         run: |
           mkdir -p out/alerts
           sleep 15
+          alive=no; systemctl is-active --quiet zaafvesper && alive=yes
+          sudo journalctl -u sysmon --no-pager -o cat > out/sysmon-events.xml || true
           sudo systemctl stop zaafvesper || true
           sudo sh -c 'cp /var/lib/zaafvesper/logs/alerts-*.jsonl "$1"' sh out/alerts/ || true
           sudo journalctl -u zaafvesper --no-pager > out/alerts/zaafvesper-journal.txt || true
@@ -167,6 +189,7 @@ jobs:
           sudo chown -R "$(id -u)" out
           cat out/sysmon-event-counts.txt
           tail -60 out/alerts/zaafvesper-journal.txt
+          if [ "$alive" != yes ]; then echo "zaafvesper was not running at the end of the tests"; exit 1; fi
       - name: Report
         id: report
         if: always()
@@ -181,10 +204,11 @@ jobs:
           path: out
           retention-days: 30
       - name: Fail if the run was incomplete
-        if: always() && (steps.run.outcome != 'success' || steps.report.outcome != 'success')
+        if: always() && (steps.run.outcome != 'success' || steps.collect.outcome != 'success' || steps.report.outcome != 'success')
         run: |
-          echo "test run: $RUN_OUTCOME, report: $REPORT_OUTCOME"
+          echo "test run: $RUN_OUTCOME, collect: $COLLECT_OUTCOME, report: $REPORT_OUTCOME"
           exit 1
         env:
           RUN_OUTCOME: ${{ steps.run.outcome }}
+          COLLECT_OUTCOME: ${{ steps.collect.outcome }}
           REPORT_OUTCOME: ${{ steps.report.outcome }}

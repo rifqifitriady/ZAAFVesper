@@ -24,7 +24,13 @@ if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Micr
 }
 Write-Host "Sysmon64.exe $((Get-Item "$work\sysmon\Sysmon64.exe").VersionInfo.FileVersion) signed by $($sig.SignerCertificate.Subject)"
 
-# 2. sysmon-modular configuration (release asset of a pinned commit).
+# 2. sysmon-modular configuration: an asset of the release built from the
+#    pinned commit. The tag must point to that full commit, then the file's
+#    hash must match.
+$ref = git ls-remote https://github.com/olafhartong/sysmon-modular.git "refs/tags/$env:SYSMON_MODULAR_TAG"
+if (-not $ref -or ($ref -split '\s+')[0] -ne $env:SYSMON_MODULAR_COMMIT) {
+  throw "sysmon-modular tag $env:SYSMON_MODULAR_TAG resolves to '$ref', pinned commit $env:SYSMON_MODULAR_COMMIT"
+}
 Get-Pinned $env:SYSMON_CONFIG_URL "$work\sysmonconfig.xml" $env:SYSMON_CONFIG_SHA256
 & "$work\sysmon\Sysmon64.exe" -accepteula -i "$work\sysmonconfig.xml" | Out-Host
 if ($LASTEXITCODE -ne 0) { throw "Sysmon64 -i exit $LASTEXITCODE" }

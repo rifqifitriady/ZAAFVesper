@@ -4,6 +4,13 @@
 # hash-checked downloads. Runs on a throw-away GitHub runner with sudo.
 set -euo pipefail
 
+# The pinned packages are Microsoft's builds for Ubuntu 24.04.
+. /etc/os-release
+if [ "${ID:-}" != ubuntu ] || [ "${VERSION_ID:-}" != 24.04 ]; then
+  echo "runner is ${PRETTY_NAME:-unknown}: the Sysmon for Linux pins are for Ubuntu 24.04; update them (scripts/ci/b/README.md)" >&2
+  exit 1
+fi
+
 work="$RUNNER_TEMP/zv"
 mkdir -p "$work"
 pinned() { # url out sha256
@@ -23,8 +30,9 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$work/sysinternalseb
 sudo install -D -m 0644 packaging/linux/sysmon-log-ratelimit.conf /etc/systemd/system/sysmon.service.d/zaafvesper.conf
 sudo /usr/bin/sysmon -accepteula -i scripts/ci/b/sysmon-linux.xml
 sudo systemctl daemon-reload
-sudo systemctl restart sysmon || true
-systemctl --no-pager status sysmon | head -20 || true
+sudo systemctl restart sysmon
+systemctl is-active --quiet sysmon
+systemctl --no-pager status sysmon | head -20
 
 # 2. ZAAFVesper, as in packaging/linux/README.md (step 4).
 sudo install -m 0755 build/zaafvesper /usr/local/sbin/zaafvesper
@@ -37,9 +45,11 @@ sudo chmod -R go-w /usr/local/etc/zaafvesper
 sudo install -m 0644 packaging/linux/zaafvesper.service /etc/systemd/system/zaafvesper.service
 sudo systemctl daemon-reload
 sudo systemctl start zaafvesper
+started=no
 for _ in $(seq 1 30); do
   sleep 2
-  if sudo journalctl -u zaafvesper --no-pager | grep -q 'events:'; then break; fi
+  if sudo journalctl -u zaafvesper --no-pager | grep -q 'events:'; then started=yes; break; fi
 done
 sudo journalctl -u zaafvesper --no-pager | tail -40
+if [ "$started" != yes ]; then echo "zaafvesper did not start (see its journal above)" >&2; exit 1; fi
 systemctl is-active zaafvesper
