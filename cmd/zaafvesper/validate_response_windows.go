@@ -15,6 +15,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -534,11 +535,13 @@ func (h *vHarness) taskCases() {
 	h.cleanup = append(h.cleanup, func() { _ = os.Remove(filepath.Join(tasks, vName)) })
 }
 
-// fwRules lists the remote addresses of ZAAFVesper's Windows Firewall rules.
+// fwRules lists the remote addresses of ZAAFVesper's Windows Firewall rules
+// (one rule per direction, the addresses comma-separated:
+// "RemoteIP: 1.1.1.1/32,192.0.2.10/32").
 func fwRules() map[string]bool {
 	out := stdout(response.NetshBin, "advfirewall", "firewall", "show", "rule", "name="+response.WinRuleName, "verbose")
 	m := map[string]bool{}
-	for _, f := range strings.Fields(out) {
+	for _, f := range strings.FieldsFunc(out, func(r rune) bool { return r == ',' || unicode.IsSpace(r) }) {
 		f = strings.TrimSuffix(strings.TrimSuffix(f, "/32"), "/128")
 		if a, err := netip.ParseAddr(f); err == nil && !a.IsUnspecified() {
 			m[a.Unmap().String()] = true
