@@ -220,41 +220,26 @@ func (s *Source) logf(format string, args ...any) {
 	}
 }
 
-// provenance checks who wrote an event (security review, finding 1): any
-// program can register an ETW provider under Sysmon's name, so an event is
-// accepted only when the event log recorded it as written by LocalSystem
-// (System/Security/@UserID) from the process of a running Sysmon service
-// (System/Execution/@ProcessID), as the Service Control Manager reports it.
-// Creating or reconfiguring a service needs an administrator.
+// provenance holds the Sysmon service pids for checkProvenance
+// (provenance.go), refreshed from the Service Control Manager at most every
+// provenanceRefresh when an unknown writer pid is seen.
 type provenance struct {
 	pids      map[uint32]bool
 	refreshed time.Time
 }
 
-// sysmonServices are the service names Sysmon installs under (64-bit,
-// 32-bit, ARM64). A renamed Sysmon (sysmon -i with another image name) is
-// not recognised: its events are then reported as untrusted.
-var sysmonServices = []string{"Sysmon64", "Sysmon", "Sysmon64a"}
-
 const provenanceRefresh = 5 * time.Second
 
 func (p *provenance) check(r *sysmon.Record) error {
-	if r.UserID != "S-1-5-18" {
-		return fmt.Errorf("written as %q, not LocalSystem", r.UserID)
-	}
-	if r.ExecPID == 0 {
-		return errors.New("no writer process id")
-	}
-	if p.pids[r.ExecPID] {
-		return nil
-	}
-	if time.Since(p.refreshed) >= provenanceRefresh {
-		p.pids, p.refreshed = sysmonServicePIDs(), time.Now()
-		if p.pids[r.ExecPID] {
-			return nil
+	return checkProvenance(r, func(pid uint32) bool {
+		if p.pids[pid] {
+			return true
 		}
-	}
-	return fmt.Errorf("written by pid %d, which is not a running Sysmon service", r.ExecPID)
+		if time.Since(p.refreshed) >= provenanceRefresh {
+			p.pids, p.refreshed = sysmonServicePIDs(), time.Now()
+		}
+		return p.pids[pid]
+	})
 }
 
 // sysmonServicePIDs asks the Service Control Manager for the process ids of

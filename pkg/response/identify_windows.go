@@ -33,6 +33,12 @@ import (
 // (System, Registry, Memory Compression, Secure System) cannot be opened,
 // which refuses them the same way.
 
+func init() {
+	// The base list of protected names is macOS's (launchd, eslogger, ...);
+	// matched by name on Windows it would only shield malware named that way.
+	ProtectedNames = nil
+}
+
 // folders returns the Windows folders protectedWinImage compares against.
 func folders() winFolders {
 	f := winFolders{ProgramData: os.Getenv("ProgramData"), ProgramFiles: os.Getenv("ProgramFiles")}

@@ -107,7 +107,8 @@ func (b *Binder) create(p *event.Proc, at time.Time) {
 		return
 	}
 	// Full (exits not reported, e.g. a Sysmon config without event 5):
-	// forget the oldest creates, not everything.
+	// forget the processes seen least recently, not everything; a process
+	// that keeps producing events stays.
 	for len(b.byPID) >= MaxBound {
 		b.forget(b.order.Front().Value.(*bound).pid)
 		b.resets.Add(1)
@@ -151,6 +152,7 @@ func (b *Binder) lookup(p *event.Proc) {
 	}
 	p.UniqueID, p.StartTime = bd.stamp.ID, bd.stamp.Start
 	b.matched.Add(1)
+	b.order.MoveToBack(el) // least recently seen is evicted first
 }
 
 // sameGUID compares two ProcessGuids ignoring case and braces.

@@ -48,6 +48,14 @@ output in `C:\ProgramData\ZAAFVesper\logs`.
    start otherwise: it checks the owner and the DACL of the binary, the
    configuration, the rules and every folder above them, and refuses symbolic
    links and junctions inside them.
+
+   What this check does **not** cover: administrators are trusted (as root is
+   on macOS and Linux), so their privileges such as SeBackupPrivilege,
+   SeRestorePrivilege or taking ownership are not a refusal; mandatory
+   integrity labels are not looked at; only a file's main data stream is read
+   (alternate data streams are ignored); and allow entries that only apply to
+   files created later (inherit-only) are skipped, because each file is checked
+   again when it is read.
 4. **Create the output folder** with an access list that only SYSTEM and
    Administrators can use (any user can create folders in `C:\ProgramData`, so
    create it before anyone else can, and check it):

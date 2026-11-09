@@ -92,6 +92,15 @@ func TestBinderEvictsOldest(t *testing.T) {
 	b := NewBinder(func(pid int32) (Stamp, error) { return Stamp{ID: uint64(pid), Start: t0, Precise: t0}, nil }, time.Millisecond)
 	for pid := int32(1); pid <= MaxBound+2; pid++ {
 		b.Bind(&event.Event{Name: event.CreateProcess, Time: t0, Proc: &event.Proc{PID: pid, GUID: "{g}"}})
+		if pid == MaxBound/2 {
+			// pid 2 (an implant) is seen again: it must survive a flood of creates.
+			b.Bind(&event.Event{Name: event.CreateFile, Time: t0, Proc: &event.Proc{PID: 2, GUID: "{g}"}})
+		}
+	}
+	implant := &event.Event{Name: event.CreateFile, Proc: &event.Proc{PID: 2, GUID: "{g}"}}
+	b.Bind(implant)
+	if implant.Proc.UniqueID == 0 {
+		t.Fatal("recently seen process evicted")
 	}
 	old := &event.Event{Name: event.CreateFile, Proc: &event.Proc{PID: 1, GUID: "{g}"}}
 	recent := &event.Event{Name: event.CreateFile, Proc: &event.Proc{PID: MaxBound + 2, GUID: "{g}"}}

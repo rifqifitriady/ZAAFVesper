@@ -29,6 +29,9 @@ import (
 // identity has ExeErr set and verify refuses them.
 
 func init() {
+	// The base list of protected names is macOS's (launchd, eslogger, ...);
+	// matched by name on Linux it would only shield malware named that way.
+	ProtectedNames = nil
 	ProtectedExePrefixes = append(ProtectedExePrefixes, "/usr/lib/systemd/", "/lib/systemd/", "/opt/sysmon/")
 	ProtectedExes = append(ProtectedExes, "/usr/bin/journalctl", "/bin/journalctl", "/sbin/init", "/usr/sbin/init")
 }

@@ -30,6 +30,9 @@ func TestWinACLProblem(t *testing.T) {
 		{"C: root: add subdirectory refused on target", sidTrustedInstaller, true, []winACE{{Type: 0, Mask: fileAppendData, SID: authUsers}}, false, "write-like"},
 		{"ancestor delete child refused", sidSystem, true, []winACE{{Type: 0, Mask: fileDeleteChild, SID: users}}, true, "write-like"},
 		{"read only users", sidSystem, true, []winACE{{Type: 0, Mask: 0x1200a9, SID: users}}, false, ""},
+		{"unknown ace type with write", sidSystem, true, []winACE{{Type: 0x42, Mask: fileWriteData, SID: users}}, false, "unknown type"},
+		{"unknown ace type read only", sidSystem, true, []winACE{{Type: 0x42, Mask: 0x1200a9, SID: users}}, false, ""},
+		{"mandatory label ignored", sidSystem, true, []winACE{{Type: 0x11, Mask: 0x1, SID: "S-1-16-12288"}}, false, ""},
 	}
 	for _, c := range cases {
 		got := winACLProblem(c.owner, c.hasDACL, c.aces, c.ancestor)

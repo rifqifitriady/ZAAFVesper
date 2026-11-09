@@ -9,7 +9,8 @@
 
 Sysmon for Linux (eBPF based, from Microsoft) writes each event as the same XML
 Windows Sysmon uses into syslog, which journald stores. ZAAFVesper runs
-`/usr/bin/journalctl` with a fixed command line and an empty environment, and
+`/usr/bin/journalctl` with a fixed command line and a fixed minimal environment
+(PATH, LANG, colours and pager off; nothing inherited), and
 accepts only journal records whose **trusted** fields say they came from root in
 `sysmon.service` (`_UID=0`, `_SYSTEMD_UNIT=sysmon.service`; journald sets these
 from the sender's credentials). A user who runs `logger -t sysmon '<Event>…'`
@@ -77,6 +78,11 @@ name: a program called `sysmon` in `/tmp` stays killable.
 
 ## Known limits
 
+- As root, ZAAFVesper refuses configuration, rules and binaries that are not
+  root-owned or are group/world writable. POSIX ACLs are not read separately:
+  a named-user or named-group entry can only grant write when the ACL mask
+  allows write, and the mask is what the group permission bits show, so such a
+  grant is refused by the mode check. (macOS extended ACLs are read separately.)
 - Sysmon for Linux reports command lines as argv joined by spaces, so `ps.args`
   cannot tell an argument that contained a space from two arguments; `ps.cmdline`
   is exact.
