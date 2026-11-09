@@ -33,7 +33,8 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 #define K_MODULE 7
 #define K_NET 8
 #define K_DNS 9
-#define K_MAX 10
+#define K_ARGS 10 /* argv continuation, sent before the K_EXEC it belongs to */
+#define K_MAX 11
 
 /* File operations (K_FILE). */
 #define F_OPEN 1
@@ -47,6 +48,7 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 #define FL_PATH_TRUNC 4    /* first path incomplete (too deep or too long) */
 #define FL_PATH2_TRUNC 8   /* second path (cwd, rename destination) incomplete */
 #define FL_TRUNCATED 16    /* K_FILE F_CREATE: existing file opened O_TRUNC */
+#define FL_PATH_DELETED 32 /* first path: the file is unlinked (d_path would add " (deleted)") */
 
 /* Process-access syscalls (K_PROCACC). */
 #define S_PTRACE 1
@@ -55,9 +57,10 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 #define PATH_MAX_LEN 4096 /* power of two */
 #define PATH_MASK (PATH_MAX_LEN - 1)
-#define MAX_PATH_DEPTH 64
+#define MAX_PATH_DEPTH 512
 #define NAME_MASK 255
-#define ARGS_MAX 4096
+#define ARG_CHUNK 4096       /* argv bytes in the K_EXEC record and in each K_ARGS record */
+#define ARGS_TOTAL_MAX 65536 /* argv bytes reported at most (as eslogger) */
 #define DNS_MAX 512
 #define MOD_PATH_MAX 512
 
@@ -94,7 +97,7 @@ struct hdr {
 	u32 ppid;  /* real_parent's thread-group id */
 	u32 uid;
 	u32 euid;
-	u32 pad;
+	u32 mntns; /* mount namespace inode number of the task */
 	u64 start_ns;  /* group leader start_boottime */
 	u64 pstart_ns; /* real_parent group leader start_boottime */
 	char comm[16];
@@ -108,7 +111,22 @@ struct exec_body {
 	u32 exe_len;
 	u32 args_len;
 	u32 cwd_len;
+	u32 arg_conts; /* number of K_ARGS records sent before this one */
+};
+
+/* K_ARGS: bytes [ARG_CHUNK*seq, ...) of the argv area of the process that
+ * the next K_EXEC record (same pid and start) describes. */
+struct args_body {
+	u32 seq; /* 1 .. */
+	u32 len;
+};
+
+/* K_FORK: the task that called clone/fork, which is not the child's
+ * real_parent for CLONE_PARENT; the child runs this task's image. */
+struct fork_body {
+	u32 forker_pid;
 	u32 pad;
+	u64 forker_start_ns;
 };
 
 struct exit_body {
@@ -164,6 +182,8 @@ struct net_body {
 _Static_assert(sizeof(struct hdr) == 72, "hdr");
 _Static_assert(sizeof(struct exec_body) == 40, "exec_body");
 _Static_assert(sizeof(struct exit_body) == 8, "exit_body");
+_Static_assert(sizeof(struct args_body) == 8, "args_body");
+_Static_assert(sizeof(struct fork_body) == 16, "fork_body");
 _Static_assert(sizeof(struct file_body) == 24, "file_body");
 _Static_assert(sizeof(struct setuid_body) == 16, "setuid_body");
 _Static_assert(sizeof(struct procacc_body) == 32, "procacc_body");
@@ -204,6 +224,19 @@ struct {
 	__type(value, struct pathbuf);
 } pathscratch SEC(".maps");
 
+/* Busy flag of the scratch buffers above, per CPU. The hooks are fentry
+ * programs: they run with migration disabled but can be preempted by another
+ * task on the same CPU, which would overwrite a half-built record. Each
+ * program takes the flag before it touches a scratch buffer and drops it
+ * when it returns (claim/unclaim); a program that finds it taken counts a
+ * drop and leaves. */
+struct {
+	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+	__uint(max_entries, 1);
+	__type(key, u32);
+	__type(value, u32);
+} busy SEC(".maps");
+
 /* Per-thread state carried from a syscall's entry to the hook that reports. */
 struct procacc_stash {
 	u32 syscall;
@@ -238,12 +271,47 @@ static __always_inline void count_drop(u32 kind)
 {
 	u64 *n = bpf_map_lookup_elem(&drops, &kind);
 	if (n)
-		*n += 1;
+		__sync_fetch_and_add(n, 1);
 }
 
-static __always_inline struct evbuf *evbuf(void)
+struct claim {
+	u32 held;
+};
+
+static __always_inline void unclaim(struct claim *c)
+{
+	if (c->held) {
+		u32 zero = 0;
+		u32 *f = bpf_map_lookup_elem(&busy, &zero);
+		if (f)
+			*f = 0;
+		c->held = 0;
+	}
+}
+
+/* CLAIM declares the guard: the flag is dropped on every way out of the
+ * scope, including early returns. */
+#define CLAIM struct claim cl __attribute__((cleanup(unclaim))) = {}
+
+static __always_inline bool take(u32 kind, struct claim *c)
 {
 	u32 zero = 0;
+	u32 *f = bpf_map_lookup_elem(&busy, &zero);
+	if (!f)
+		return false;
+	if (__sync_val_compare_and_swap(f, 0, 1) != 0) {
+		count_drop(kind);
+		return false;
+	}
+	c->held = 1;
+	return true;
+}
+
+static __always_inline struct evbuf *evbuf(u32 kind, struct claim *c)
+{
+	u32 zero = 0;
+	if (!take(kind, c))
+		return 0;
 	return bpf_map_lookup_elem(&evscratch, &zero);
 }
 
@@ -268,7 +336,7 @@ static __always_inline void fill_hdr(struct hdr *h, u32 kind, struct task_struct
 	h->ppid = BPF_CORE_READ(parent, tgid);
 	h->uid = BPF_CORE_READ(t, real_cred, uid.val);
 	h->euid = BPF_CORE_READ(t, real_cred, euid.val);
-	h->pad = 0;
+	h->mntns = BPF_CORE_READ(t, nsproxy, mnt_ns, ns.inum);
 	h->start_ns = leader_start(t);
 	h->pstart_ns = leader_start(parent);
 	BPF_CORE_READ_STR_INTO(&h->comm, t, comm);
@@ -317,7 +385,10 @@ static long walk_step(u32 i, void *data)
 		return 1;
 	struct dentry *mnt_root = BPF_CORE_READ(vfsmnt, mnt_root);
 	struct dentry *parent = BPF_CORE_READ(dentry, d_parent);
-	if (dentry == mnt_root || dentry == parent) {
+	/* A dentry that is its own parent but not the root of its mount is a
+	 * pseudo file (memfd, anon inode): d_path names it "/" + d_name. */
+	bool pseudo = dentry == parent && dentry != mnt_root;
+	if (!pseudo && (dentry == mnt_root || dentry == parent)) {
 		if (dentry == mnt_root && mnt != mnt_parent) {
 			/* Cross into the parent mount. */
 			w->dentry = BPF_CORE_READ(mnt, mnt_mountpoint);
@@ -340,11 +411,30 @@ static long walk_step(u32 i, void *data)
 	pb->data[off & PATH_MASK] = '/';
 	w->off = off;
 	w->dentry = parent;
+	if (pseudo) {
+		w->complete = 1;
+		return 1;
+	}
 	return 0;
 }
 
-static __always_inline u32 resolve(struct pathbuf *pb, struct dentry *dentry, struct vfsmount *vfsmnt, bool *complete)
+/* path_deleted: the file is unlinked, as d_path decides (an unhashed dentry
+ * that is not a root) or its inode has no links left. Pseudo files (memfd)
+ * are not "deleted". */
+static __always_inline bool path_deleted(struct dentry *dentry)
 {
+	if (!dentry || dentry == BPF_CORE_READ(dentry, d_parent))
+		return false;
+	if (BPF_CORE_READ(dentry, d_hash.pprev) == 0)
+		return true;
+	struct inode *ino = BPF_CORE_READ(dentry, d_inode);
+	return ino && BPF_CORE_READ(ino, i_nlink) == 0;
+}
+
+static __always_inline u32 resolve_ex(struct pathbuf *pb, struct dentry *dentry, struct vfsmount *vfsmnt, bool *complete,
+				      bool *deleted)
+{
+	*deleted = path_deleted(dentry);
 	/* container_of with the offset relocated for the running kernel. */
 	struct mount *mnt = (struct mount *)((void *)vfsmnt - bpf_core_field_offset(struct mount, mnt));
 	struct walk w = {
@@ -367,6 +457,12 @@ static __always_inline u32 resolve(struct pathbuf *pb, struct dentry *dentry, st
 	return off & PATH_MASK;
 }
 
+static __always_inline u32 resolve(struct pathbuf *pb, struct dentry *dentry, struct vfsmount *vfsmnt, bool *complete)
+{
+	bool deleted;
+	return resolve_ex(pb, dentry, vfsmnt, complete, &deleted);
+}
+
 /* put_path copies a resolved path (without its NUL) to eb at pos. */
 static __always_inline u32 put_path(struct evbuf *eb, u32 pos, struct pathbuf *pb, u32 off)
 {
@@ -378,12 +474,14 @@ static __always_inline u32 put_path(struct evbuf *eb, u32 pos, struct pathbuf *p
 static __always_inline u32 put_file_path(struct evbuf *eb, u32 pos, struct file *f, u32 slot, u32 *flags, u32 trunc_flag)
 {
 	struct pathbuf *pb = pathbuf(slot);
-	bool complete;
+	bool complete, deleted;
 	if (!pb || !f)
 		return 0;
-	u32 off = resolve(pb, BPF_CORE_READ(f, f_path.dentry), BPF_CORE_READ(f, f_path.mnt), &complete);
+	u32 off = resolve_ex(pb, BPF_CORE_READ(f, f_path.dentry), BPF_CORE_READ(f, f_path.mnt), &complete, &deleted);
 	if (!complete)
 		*flags |= trunc_flag;
+	if (deleted)
+		*flags |= FL_PATH_DELETED;
 	return put_path(eb, pos, pb, off);
 }
 
@@ -406,16 +504,75 @@ static __always_inline s64 inode_ctime_ns(struct inode *ino)
 
 /* ---- process lifecycle ---- */
 
+/* argv beyond the first ARG_CHUNK bytes goes out in K_ARGS records, one per
+ * chunk, before the K_EXEC record; the record count is in the K_EXEC. */
+struct argsloop {
+	struct evbuf *eb;
+	unsigned long start;
+	u32 remaining;
+	u32 emitted;
+	u32 failed;
+};
+
+static long args_step(u32 i, void *data)
+{
+	struct argsloop *a = data;
+	struct evbuf *eb = a->eb;
+	if (!eb || a->remaining == 0)
+		return 1;
+	u32 n = a->remaining;
+	if (n > ARG_CHUNK)
+		n = ARG_CHUNK;
+	n &= 8191;
+	struct args_body *b = (struct args_body *)(eb->data + sizeof(struct hdr));
+	u32 pos = sizeof(struct hdr) + sizeof(struct args_body);
+	if (bpf_probe_read_user(&eb->data[pos & EV_MASK], n, (void *)a->start) != 0) {
+		a->failed = 1;
+		return 1;
+	}
+	b->seq = a->emitted + 1;
+	b->len = n;
+	a->start += n;
+	a->remaining -= n;
+	a->emitted += 1;
+	submit(eb, K_ARGS, pos + n);
+	return 0;
+}
+
 SEC("tp_btf/sched_process_exec")
 int BPF_PROG(on_exec, struct task_struct *p)
 {
-	struct evbuf *eb = evbuf();
+	CLAIM;
+	struct evbuf *eb = evbuf(K_EXEC, &cl);
 	if (!eb)
 		return 0;
 	struct hdr *h = (struct hdr *)eb->data;
 	struct exec_body *b = (struct exec_body *)(eb->data + sizeof(struct hdr));
+
+	unsigned long as = BPF_CORE_READ(p, mm, arg_start);
+	unsigned long ae = BPF_CORE_READ(p, mm, arg_end);
+	u32 eflags = 0, total = 0, conts = 0;
+	if (ae > as) {
+		unsigned long n = ae - as;
+		if (n > ARGS_TOTAL_MAX) {
+			n = ARGS_TOTAL_MAX;
+			eflags |= FL_ARGS_TRUNC;
+		}
+		total = n;
+	}
+	if (total > ARG_CHUNK) {
+		struct argsloop a = {.eb = eb, .start = as + ARG_CHUNK, .remaining = total - ARG_CHUNK};
+		fill_hdr(h, K_ARGS, p);
+		bpf_loop(ARGS_TOTAL_MAX / ARG_CHUNK, args_step, &a, 0);
+		conts = a.emitted;
+		if (a.failed)
+			eflags |= FL_ARGS_ERR;
+	}
+
 	fill_hdr(h, K_EXEC, p);
 	__builtin_memset(b, 0, sizeof(*b));
+	b->eflags = eflags;
+	b->arg_conts = conts;
 
 	u32 pos = sizeof(struct hdr) + sizeof(struct exec_body);
 	struct file *exe = BPF_CORE_READ(p, mm, exe_file);
@@ -428,15 +585,9 @@ int BPF_PROG(on_exec, struct task_struct *p)
 		pos += b->exe_len;
 	}
 
-	unsigned long as = BPF_CORE_READ(p, mm, arg_start);
-	unsigned long ae = BPF_CORE_READ(p, mm, arg_end);
-	if (ae > as) {
-		u32 n = ae - as;
-		if (n > ARGS_MAX - 1) {
-			n = ARGS_MAX - 1;
-			b->eflags |= FL_ARGS_TRUNC;
-		}
-		n &= (ARGS_MAX - 1);
+	if (total > 0) {
+		u32 n = total > ARG_CHUNK ? ARG_CHUNK : total;
+		n &= 8191;
 		if (bpf_probe_read_user(&eb->data[pos & EV_MASK], n, (void *)as) == 0) {
 			b->args_len = n;
 			pos += n;
@@ -466,7 +617,8 @@ int BPF_PROG(on_exit, struct task_struct *p)
 		return 0;
 	if (BPF_CORE_READ(p, flags) & PF_KTHREAD)
 		return 0;
-	struct evbuf *eb = evbuf();
+	CLAIM;
+	struct evbuf *eb = evbuf(K_EXIT, &cl);
 	if (!eb)
 		return 0;
 	struct hdr *h = (struct hdr *)eb->data;
@@ -486,11 +638,19 @@ int BPF_PROG(on_fork, struct task_struct *parent, struct task_struct *child)
 		return 0;
 	if (BPF_CORE_READ(child, flags) & PF_KTHREAD)
 		return 0;
-	struct evbuf *eb = evbuf();
+	CLAIM;
+	struct evbuf *eb = evbuf(K_FORK, &cl);
 	if (!eb)
 		return 0;
+	/* The header describes the child, whose real_parent is not the task
+	 * that forked it under CLONE_PARENT; the child runs the image of
+	 * "parent", the forking task (current). */
+	struct fork_body *b = (struct fork_body *)(eb->data + sizeof(struct hdr));
 	fill_hdr((struct hdr *)eb->data, K_FORK, child);
-	submit(eb, K_FORK, sizeof(struct hdr));
+	b->forker_pid = BPF_CORE_READ(parent, tgid);
+	b->pad = 0;
+	b->forker_start_ns = leader_start(parent);
+	submit(eb, K_FORK, sizeof(struct hdr) + sizeof(struct fork_body));
 	return 0;
 }
 
@@ -522,7 +682,8 @@ int BPF_PROG(on_file_open, struct file *f)
 		return 0;
 	if (self())
 		return 0;
-	struct evbuf *eb = evbuf();
+	CLAIM;
+	struct evbuf *eb = evbuf(K_FILE, &cl);
 	if (!eb)
 		return 0;
 	struct task_struct *t = (struct task_struct *)bpf_get_current_task_btf();
@@ -544,7 +705,8 @@ int BPF_PROG(on_unlink, const struct path *dir, struct dentry *dentry)
 {
 	if (self())
 		return 0;
-	struct evbuf *eb = evbuf();
+	CLAIM;
+	struct evbuf *eb = evbuf(K_FILE, &cl);
 	struct pathbuf *pb = pathbuf(0);
 	if (!eb || !pb)
 		return 0;
@@ -569,7 +731,8 @@ int BPF_PROG(on_rename, const struct path *old_dir, struct dentry *old_dentry, c
 {
 	if (self())
 		return 0;
-	struct evbuf *eb = evbuf();
+	CLAIM;
+	struct evbuf *eb = evbuf(K_FILE, &cl);
 	struct pathbuf *pb = pathbuf(0);
 	struct pathbuf *pb2 = pathbuf(1);
 	if (!eb || !pb || !pb2)
@@ -606,7 +769,8 @@ int BPF_PROG(on_commit_creds, const struct cred *new)
 	u32 new_euid = BPF_CORE_READ(new, euid.val);
 	if (old_uid == new_uid && old_euid == new_euid)
 		return 0;
-	struct evbuf *eb = evbuf();
+	CLAIM;
+	struct evbuf *eb = evbuf(K_SETUID, &cl);
 	if (!eb)
 		return 0;
 	struct setuid_body *b = (struct setuid_body *)(eb->data + sizeof(struct hdr));
@@ -692,7 +856,8 @@ int BPF_PROG(on_ptrace_check, struct task_struct *child, unsigned int mode)
 	struct procacc_stash *s = bpf_map_lookup_elem(&procacc, &tid);
 	if (!s)
 		return 0;
-	struct evbuf *eb = evbuf();
+	CLAIM;
+	struct evbuf *eb = evbuf(K_PROCACC, &cl);
 	if (!eb)
 		return 0;
 	struct task_struct *t = (struct task_struct *)bpf_get_current_task_btf();
@@ -771,6 +936,9 @@ int BPF_PROG(on_kernel_read_file, struct file *f, enum kernel_read_file_id id)
 	if (!m)
 		return 0;
 	m->source = 1; /* before the path: a missing path never hides the source */
+	CLAIM;
+	if (!take(K_MODULE, &cl))
+		return 0;
 	struct pathbuf *pb = pathbuf(0);
 	if (!pb)
 		return 0;
@@ -808,7 +976,8 @@ int BPF_PROG(on_kernel_load_data, enum kernel_load_data_id id)
 SEC("tp_btf/module_load")
 int BPF_PROG(on_module_load, struct module *mod)
 {
-	struct evbuf *eb = evbuf();
+	CLAIM;
+	struct evbuf *eb = evbuf(K_MODULE, &cl);
 	if (!eb)
 		return 0;
 	struct task_struct *t = (struct task_struct *)bpf_get_current_task_btf();
@@ -859,7 +1028,8 @@ static __always_inline void net_from_sock(struct net_body *n, struct sock *sk)
 
 static __always_inline int report_tcp(struct sock *sk, u8 dir)
 {
-	struct evbuf *eb = evbuf();
+	CLAIM;
+	struct evbuf *eb = evbuf(K_NET, &cl);
 	if (!eb || !sk)
 		return 0;
 	struct task_struct *t = (struct task_struct *)bpf_get_current_task_btf();
@@ -921,7 +1091,7 @@ static __always_inline int report_dns(struct sock *sk, struct msghdr *msg, bool 
 			if (bpf_probe_read_kernel(&a, sizeof(a), name) != 0)
 				return 0;
 			if (a.sin6_family != AF_INET6)
-				return 0;
+				return 0; /* AF_UNSPEC and the like: the port is not known to be 53 */
 			tmp.dport = bpf_ntohs(a.sin6_port);
 			__builtin_memcpy(tmp.daddr, a.sin6_addr.in6_u.u6_addr8, 16);
 		} else {
@@ -945,6 +1115,9 @@ static __always_inline int report_dns(struct sock *sk, struct msghdr *msg, bool 
 	if (v6 && v4mapped(tmp.daddr))
 		return 0; /* udpv6_sendmsg hands it to udp_sendmsg */
 
+	/* From here the datagram is DNS traffic: whatever stops it from being
+	 * reported is counted as a loss (K_DNS in "drops"). */
+
 	/* Locate the payload: a single user buffer (ITER_UBUF, 6.0+) or the
 	 * first element of a user iovec array. Kernel-internal sends are not
 	 * read. */
@@ -965,20 +1138,29 @@ static __always_inline int report_dns(struct sock *sk, struct msghdr *msg, bool 
 			struct iov_iter___pre64 *old = (void *)it;
 			iov = BPF_CORE_READ(old, iov);
 		}
-		if (!iov)
+		if (!iov) {
+			count_drop(K_DNS);
 			return 0;
+		}
 		base = BPF_CORE_READ(iov, iov_base);
 		avail = BPF_CORE_READ(iov, iov_len);
-		if (ioff > avail)
+		if (ioff > avail) {
+			count_drop(K_DNS);
 			return 0;
+		}
 		avail -= ioff;
 	} else {
+		count_drop(K_DNS); /* kernel-internal send or an iterator we do not read */
 		return 0;
 	}
-	if (!base || avail < 12)
+	if (!base || avail < 12) {
+		if (avail != 0)
+			count_drop(K_DNS); /* e.g. a header-only first iovec */
 		return 0;
+	}
 
-	struct evbuf *eb = evbuf();
+	CLAIM;
+	struct evbuf *eb = evbuf(K_DNS, &cl);
 	if (!eb)
 		return 0;
 	struct task_struct *t = (struct task_struct *)bpf_get_current_task_btf();
@@ -993,8 +1175,10 @@ static __always_inline int report_dns(struct sock *sk, struct msghdr *msg, bool 
 	if (len > DNS_MAX)
 		len = DNS_MAX;
 	u32 pos = sizeof(struct hdr) + sizeof(struct net_body);
-	if (bpf_probe_read_user(&eb->data[pos & EV_MASK], len, base + ioff) != 0)
+	if (bpf_probe_read_user(&eb->data[pos & EV_MASK], len, base + ioff) != 0) {
+		count_drop(K_DNS); /* page not resident */
 		return 0;
+	}
 	n->payload_len = len;
 	submit(eb, K_DNS, pos + len);
 	return 0;

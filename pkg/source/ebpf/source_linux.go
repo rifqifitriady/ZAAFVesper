@@ -51,6 +51,7 @@ type Source struct {
 	// buffer; seqGaps counts the polls (one a second) in which that rose.
 	// The names match the other sources' lost-event counters.
 	eventsMissed, seqGaps atomic.Uint64
+	recursionMisses       atomic.Uint64 // programs the kernel skipped (their sum, last poll)
 	openSeen              atomic.Uint64 // OpenFile records, before the subscription filter
 	m                     atomic.Pointer[mapper]
 }
@@ -75,11 +76,14 @@ func (s *Source) Stats() map[string]uint64 {
 		"received": s.received.Load(), "decoded": s.decoded.Load(), "decode_errors": s.decodeErrors.Load(),
 		"filtered": s.filtered.Load(), "sent": s.sent.Load(),
 		"events_missed": s.eventsMissed.Load(), "seq_gaps": s.seqGaps.Load(),
+		"recursion_misses": s.recursionMisses.Load(),
 	}
 	if m := s.m.Load(); m != nil {
 		st["image_cache_evicted"] = m.evicted.Load()
 		st["proc_lookups"] = m.lookups.Load()
 		st["proc_lookup_misses"] = m.lookupMisses.Load()
+		st["dns_unparsed"] = m.dnsUnparsed.Load()
+		st["args_incomplete"] = m.argsIncomplete.Load()
 	}
 	return st
 }
@@ -291,6 +295,20 @@ func systemClock() (clock, error) {
 	return clock{bootWallNs: rt.Nano() - bt.Nano(), btime: btime}, nil
 }
 
+// ownMntNS returns the inode number of the sensor's own mount namespace
+// ("mnt:[4026531841]" in /proc/self/ns/mnt), 0 when it cannot be read.
+func ownMntNS() uint32 {
+	l, err := os.Readlink("/proc/self/ns/mnt")
+	if err != nil {
+		return 0
+	}
+	n, err := strconv.ParseUint(strings.TrimSuffix(strings.TrimPrefix(l, "mnt:["), "]"), 10, 32)
+	if err != nil {
+		return 0
+	}
+	return uint32(n)
+}
+
 // procImage reads a running process's executable from /proc, only if the
 // process at pid has the given start ticks before and after the read (so a
 // recycled pid is never described with another process's image).
@@ -334,6 +352,7 @@ func (s *Source) Run(ctx context.Context, events []string, out chan<- *event.Eve
 		return fmt.Errorf("eBPF ring buffer: %w", err)
 	}
 	m := newMapper(clk, procImage)
+	m.hostMntNS = ownMntNS()
 	s.m.Store(m)
 	if s.cfg.OnReady != nil {
 		s.cfg.OnReady()
@@ -358,7 +377,7 @@ func (s *Source) Run(ctx context.Context, events []string, out chan<- *event.Eve
 	}()
 	go func() {
 		defer wg.Done()
-		s.pollDrops(runCtx, l.coll.Maps["drops"])
+		s.pollDrops(runCtx, l.coll.Maps["drops"], l.coll.Programs)
 	}()
 	defer wg.Wait()
 	defer cancel()
@@ -415,7 +434,7 @@ func (s *Source) handle(ctx context.Context, m *mapper, raw []byte, wanted map[s
 }
 
 // pollDrops reads the kernel's per-CPU drop counters once a second.
-func (s *Source) pollDrops(ctx context.Context, drops *ebpf.Map) {
+func (s *Source) pollDrops(ctx context.Context, drops *ebpf.Map, progs map[string]*ebpf.Program) {
 	var tr dropTracker
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
@@ -425,7 +444,7 @@ func (s *Source) pollDrops(ctx context.Context, drops *ebpf.Map) {
 			return
 		case <-tick.C:
 		}
-		var now [kindMax]uint64
+		var now [nSlots]uint64
 		for k := uint32(1); k < kindMax; k++ {
 			var perCPU []uint64
 			if err := drops.Lookup(k, &perCPU); err != nil {
@@ -435,6 +454,15 @@ func (s *Source) pollDrops(ctx context.Context, drops *ebpf.Map) {
 				now[k] += v
 			}
 		}
+		// Programs the kernel did not run because another BPF program was
+		// already running on the CPU leave no record and no drop count of
+		// their own; the kernel keeps a counter per program.
+		for _, p := range progs {
+			if st, err := p.Stats(); err == nil {
+				now[slotMisses] += st.RecursionMisses
+			}
+		}
+		s.recursionMisses.Store(now[slotMisses])
 		if n, detail := tr.update(now); n > 0 {
 			s.eventsMissed.Add(n)
 			s.seqGaps.Add(1)

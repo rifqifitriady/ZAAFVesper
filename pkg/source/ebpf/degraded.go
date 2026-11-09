@@ -8,9 +8,12 @@ import (
 
 // SensorDegraded conditions reported by this source (OnDegraded).
 const (
-	// CondEventsDropped: the kernel could not put records into the ring
-	// buffer because it was full (ZAAFVesper read too slowly). Counted per
-	// CPU and per kind in the kernel, read every second.
+	// CondEventsDropped: the kernel side could not report events: the ring
+	// buffer was full (ZAAFVesper read too slowly), a program found the
+	// scratch buffers of its CPU in use, the kernel skipped a program
+	// because another one was running there (recursion misses), or a
+	// port-53 datagram could not be read. Counted per CPU and per kind in
+	// the kernel, read every second.
 	CondEventsDropped = "ebpf_events_dropped"
 	// CondEventsUnreadable: a record could not be decoded and was not
 	// evaluated.
@@ -65,16 +68,16 @@ func (r *reporter) report(condition, detail string) {
 // dropTracker turns the kernel's cumulative per-kind drop counters into
 // reports of what was lost since the last poll.
 type dropTracker struct {
-	last  [kindMax]uint64
+	last  [nSlots]uint64
 	total uint64
 }
 
 // update takes the current per-kind totals (summed over CPUs) and returns
 // the number lost since the previous call and a description, or 0.
-func (d *dropTracker) update(now [kindMax]uint64) (uint64, string) {
+func (d *dropTracker) update(now [nSlots]uint64) (uint64, string) {
 	var delta uint64
 	detail := ""
-	for k := 1; k < kindMax; k++ {
+	for k := 1; k < nSlots; k++ {
 		if now[k] < d.last[k] { // counters never go back; treat as a reset
 			d.last[k] = 0
 		}
@@ -91,5 +94,5 @@ func (d *dropTracker) update(now [kindMax]uint64) (uint64, string) {
 		return 0, ""
 	}
 	d.total += delta
-	return delta, fmt.Sprintf("the kernel ring buffer was full: lost %d events (%s); %d lost in total", delta, detail, d.total)
+	return delta, fmt.Sprintf("the kernel side lost %d events (ring buffer full, or programs skipped while another one used the CPU: %s); %d lost in total", delta, detail, d.total)
 }

@@ -19,11 +19,20 @@ const (
 	kindModule  = 7
 	kindNet     = 8
 	kindDNS     = 9
-	kindMax     = 10
+	kindArgs    = 10 // argv continuation, sent before its exec record
+	kindMax     = 11
+
+	// slotMisses is the drop-counter slot of programs the kernel skipped
+	// because another BPF program was running on the CPU (recursion
+	// misses); it follows the kinds in the arrays of counters.
+	slotMisses = kindMax
+	nSlots     = kindMax + 1
 
 	hdrSize     = 72
 	execSize    = 40
 	exitSize    = 8
+	forkSize    = 16
+	argsSize    = 8
 	fileSize    = 24
 	setuidSize  = 16
 	procAccSize = 32
@@ -46,6 +55,7 @@ const (
 	flPathTrunc  = 4
 	flPath2Trunc = 8
 	flTruncated  = 16
+	flDeleted    = 32 // first path: the file is unlinked
 )
 
 // Process-access syscalls (S_*).
@@ -58,7 +68,7 @@ const (
 	ptraceSeize  = 0x4206
 )
 
-var kindNames = [kindMax]string{"", "exec", "exit", "fork", "file", "setuid", "procacc", "module", "net", "dns"}
+var kindNames = [nSlots]string{"", "exec", "exit", "fork", "file", "setuid", "procacc", "module", "net", "dns", "args", "skipped (program recursion)"}
 
 // errRecord is wrapped by every decode error: a malformed record from the
 // ring buffer (which the kernel side should never produce) is counted and
@@ -75,6 +85,7 @@ type header struct {
 	PPID     uint32 // real_parent's thread-group id
 	UID      uint32
 	EUID     uint32
+	MntNS    uint32 // inode number of the task's mount namespace
 	StartNs  uint64 // group leader's start_boottime
 	PStartNs uint64 // real_parent group leader's start_boottime
 	Comm     string
@@ -114,7 +125,7 @@ func parseRecord(raw []byte) (*record, error) {
 	r := &record{header: header{
 		Kind: le32(raw, 0), Size: le32(raw, 4), KTime: le64(raw, 8),
 		PID: le32(raw, 16), TID: le32(raw, 20), PPID: le32(raw, 24),
-		UID: le32(raw, 28), EUID: le32(raw, 32),
+		UID: le32(raw, 28), EUID: le32(raw, 32), MntNS: le32(raw, 36),
 		StartNs: le64(raw, 40), PStartNs: le64(raw, 48), Comm: cstr(raw[56:72]),
 	}}
 	if int(r.Size) != len(raw) {
@@ -139,6 +150,10 @@ func bodySize(kind uint32) int {
 		return execSize
 	case kindExit:
 		return exitSize
+	case kindFork:
+		return forkSize
+	case kindArgs:
+		return argsSize
 	case kindFile:
 		return fileSize
 	case kindSetUID:

@@ -44,6 +44,7 @@ type zaafProcaccStash struct {
 //
 // Used for safe lookups in a Collection or CollectionSpec.
 const (
+	zaafMapBusy                = "busy"
 	zaafMapDrops               = "drops"
 	zaafMapEvents              = "events"
 	zaafMapEvscratch           = "evscratch"
@@ -150,6 +151,7 @@ type zaafProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type zaafMapSpecs struct {
+	Busy        *ebpf.MapSpec `ebpf:"busy"`
 	Drops       *ebpf.MapSpec `ebpf:"drops"`
 	Events      *ebpf.MapSpec `ebpf:"events"`
 	Evscratch   *ebpf.MapSpec `ebpf:"evscratch"`
@@ -186,6 +188,7 @@ func (o *zaafObjects) Close() error {
 //
 // It can be passed to loadZaafObjects or ebpf.CollectionSpec.LoadAndAssign.
 type zaafMaps struct {
+	Busy        *ebpf.Map `ebpf:"busy"`
 	Drops       *ebpf.Map `ebpf:"drops"`
 	Events      *ebpf.Map `ebpf:"events"`
 	Evscratch   *ebpf.Map `ebpf:"evscratch"`
@@ -196,6 +199,7 @@ type zaafMaps struct {
 
 func (m *zaafMaps) Close() error {
 	return _ZaafClose(
+		m.Busy,
 		m.Drops,
 		m.Events,
 		m.Evscratch,

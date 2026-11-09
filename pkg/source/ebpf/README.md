@@ -42,7 +42,15 @@ works for multi-threaded parents such as Java and Go servers.
 executable. The source remembers each live process's executable (copied to a
 child at fork, forgotten at exit) and puts it on the process's later events;
 a process that started before ZAAFVesper is looked up once in `/proc`, checked
-against its start time.
+against its start time. A child gets the image of the task that forked it
+(not of its real parent, which differs under `clone(CLONE_PARENT)`).
+
+**Paths and arguments.** Paths are resolved in the process's own mount
+namespace; an event from another namespace has `evt.arg[mnt_ns]`. A pseudo file
+is named as `d_path` does (`/memfd:name`), an unlinked one has
+`evt.arg[path_deleted]`, and a path cut after 512 components starts with
+`<truncated>`. Up to 64 KiB of argv are reported: the first 4 KiB in the exec
+record, the rest in `K_ARGS` records that precede it.
 
 ## Lost and bad records
 
@@ -50,7 +58,11 @@ The kernel side writes into one ring buffer (8 MiB). When ZAAFVesper reads too
 slowly and the buffer is full, the kernel counts each record it could not add,
 per kind; every second ZAAFVesper reads the counters, and any increase raises a
 `SensorDegraded` event `ebpf_events_dropped` (at most once a minute, with the
-counts). A record that cannot be decoded raises `ebpf_events_unreadable`.
+counts). The same condition covers a program that found its CPU's scratch
+buffers in use, a program the kernel skipped because another was running there
+(`recursion_misses`), and a port-53 datagram the kernel side could not read. A
+datagram that was read but is not a parseable query counts in `dns_unparsed`. A
+record that cannot be decoded raises `ebpf_events_unreadable`.
 `zaafvesper run` prints the counters in its statistics: `events_missed` (records
 lost in the kernel), `seq_gaps` (seconds in which some were lost) and
 `decode_errors`, the same names the other sources use.

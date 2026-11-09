@@ -22,6 +22,7 @@ const (
 
 type hdrIn struct {
 	pid, tid, ppid, uid, euid uint32
+	mntns                     uint32
 	startNs, pstartNs, ktime  uint64
 	comm                      string
 }
@@ -51,7 +52,7 @@ func build(kind uint32, h hdrIn, body []byte, strs ...string) []byte {
 	var b []byte
 	b = append(b, le32b(kind, 0)...)
 	b = append(b, le64b(h.ktime)...)
-	b = append(b, le32b(h.pid, h.tid, h.ppid, h.uid, h.euid, 0)...)
+	b = append(b, le32b(h.pid, h.tid, h.ppid, h.uid, h.euid, h.mntns)...)
 	b = append(b, le64b(h.startNs, h.pstartNs)...)
 	comm := make([]byte, 16)
 	copy(comm, h.comm)
@@ -65,10 +66,27 @@ func build(kind uint32, h hdrIn, body []byte, strs ...string) []byte {
 }
 
 func execRec(h hdrIn, exe, args, cwd string, eflags uint32) []byte {
+	return execRecN(h, exe, args, cwd, eflags, 0)
+}
+
+// execRecN is an exec record that says conts K_ARGS records precede it.
+func execRecN(h hdrIn, exe, args, cwd string, eflags, conts uint32) []byte {
 	body := le32b(0x00800001, eflags) // s_dev: major 8, minor 1
 	body = append(body, le64b(77, uint64(1_600_000_000_123_456_789))...)
-	body = append(body, le32b(uint32(len(exe)), uint32(len(args)), uint32(len(cwd)), 0)...)
+	body = append(body, le32b(uint32(len(exe)), uint32(len(args)), uint32(len(cwd)), conts)...)
 	return build(kindExec, h, body, exe, args, cwd)
+}
+
+func argsRec(h hdrIn, seq uint32, chunk string) []byte {
+	return build(kindArgs, h, le32b(seq, uint32(len(chunk))), chunk)
+}
+
+// forkRec is a fork record: h describes the child, forker the task that
+// called clone (not necessarily the child's real parent).
+func forkRec(h hdrIn, forkerPid uint32, forkerStartNs uint64) []byte {
+	body := le32b(forkerPid, 0)
+	body = append(body, le64b(forkerStartNs)...)
+	return build(kindFork, h, body)
 }
 
 func fileRec(h hdrIn, op, fflags uint32, path, dest string) []byte {
@@ -177,7 +195,7 @@ func TestImageCache(t *testing.T) {
 	}
 	child := h
 	child.pid, child.tid, child.ppid, child.startNs, child.pstartNs = 4300, 4300, 4242, 13_000_000_000, h.startNs
-	fk := decodeOK(t, m, build(kindFork, child, nil))
+	fk := decodeOK(t, m, forkRec(child, h.pid, h.startNs))
 	if fk.Name != event.Fork || fk.Proc.Exe != "/usr/bin/bash" || fk.Proc.Parent.PID != 4242 || fk.Proc.Parent.PIDVersion != 1235 {
 		t.Errorf("fork %+v parent %+v", fk.Proc, fk.Proc.Parent)
 	}
@@ -243,7 +261,7 @@ func TestDecodeFiles(t *testing.T) {
 		{fileRec(h, fileCreate, 0, "/etc/sudoers.d/x", ""), event.CreateFile, "/etc/sudoers.d/x", "", nil},
 		{fileRec(h, fileCreate, flTruncated, "/etc/crontab", ""), event.CreateFile, "/etc/crontab", "", map[string]string{argTruncated: "true"}},
 		{fileRec(h, fileUnlink, 0, "/root/.bash_history", ""), event.DeleteFile, "/root/.bash_history", "", nil},
-		{fileRec(h, fileRename, flPath2Trunc, "/tmp/a", "/etc/b"), event.RenameFile, "/tmp/a", "/etc/b", map[string]string{argPathIncomplete: "true"}},
+		{fileRec(h, fileRename, flPath2Trunc, "/tmp/a", "/etc/b"), event.RenameFile, "/tmp/a", truncMarker + "/etc/b", map[string]string{argPathIncomplete: "true"}},
 	}
 	for _, c := range cases {
 		e := decodeOK(t, m, c.raw)
@@ -444,13 +462,13 @@ func TestParseDNSQuery(t *testing.T) {
 }
 
 func TestParseRecordRejects(t *testing.T) {
-	good := build(kindFork, defHdr(), nil)
+	good := forkRec(defHdr(), 1, 1)
 	cases := map[string][]byte{
 		"short":        good[:hdrSize-1],
 		"size field":   func() []byte { b := append([]byte(nil), good...); b[4]++; return b }(),
 		"kind 0":       build(0, defHdr(), nil),
 		"kind too big": build(kindMax, defHdr(), nil),
-		"pid 0":        build(kindFork, hdrIn{startNs: 1}, nil),
+		"pid 0":        forkRec(hdrIn{startNs: 1}, 1, 1),
 		"short body":   build(kindExit, defHdr(), le32b(1)),
 		"too big":      append(make([]byte, maxRecord), 0),
 	}
@@ -538,13 +556,13 @@ func TestReporterRateLimit(t *testing.T) {
 
 func TestDropTracker(t *testing.T) {
 	var d dropTracker
-	var now [kindMax]uint64
+	var now [nSlots]uint64
 	if n, _ := d.update(now); n != 0 {
 		t.Fatal("drops from zero counters")
 	}
 	now[kindExec], now[kindFile] = 3, 7
 	n, detail := d.update(now)
-	if n != 10 || detail != "the kernel ring buffer was full: lost 10 events (3 exec, 7 file); 10 lost in total" {
+	if n != 10 || detail != "the kernel side lost 10 events (ring buffer full, or programs skipped while another one used the CPU: 3 exec, 7 file); 10 lost in total" {
 		t.Errorf("%d %q", n, detail)
 	}
 	now[kindFile] = 9
@@ -553,5 +571,146 @@ func TestDropTracker(t *testing.T) {
 	}
 	if n, _ := d.update(now); n != 0 {
 		t.Errorf("no change reported %d", n)
+	}
+}
+
+// F1: under clone(CLONE_PARENT) the child's real parent is the forker's
+// parent, but it runs the image of the task that forked it.
+func TestForkImageFromForkerNotParent(t *testing.T) {
+	m := newTestMapper()
+	grand := hdrIn{pid: 100, tid: 100, ppid: 1, uid: 0, euid: 0, startNs: 5_000_000_000, pstartNs: 1_000_000_000, ktime: 1, comm: "init"}
+	forker := hdrIn{pid: 200, tid: 200, ppid: 100, uid: 1000, euid: 1000, startNs: 6_000_000_000, pstartNs: grand.startNs, ktime: 2, comm: "mal"}
+	decodeOK(t, m, execRec(grand, "/usr/sbin/sshd", "sshd\x00", "/", 0))
+	decodeOK(t, m, execRec(forker, "/tmp/mal", "mal\x00", "/tmp", 0))
+	// The child: real_parent is the grandparent (100), forker is 200.
+	child := hdrIn{pid: 300, tid: 300, ppid: 100, uid: 1000, euid: 1000, startNs: 7_000_000_000, pstartNs: grand.startNs, ktime: 3, comm: "mal"}
+	e := decodeOK(t, m, forkRec(child, forker.pid, forker.startNs))
+	if e.Name != event.Fork || e.Proc.Exe != "/tmp/mal" || e.Proc.Name != "mal" {
+		t.Fatalf("child image %q (%q), want the forker's /tmp/mal", e.Proc.Exe, e.Proc.Name)
+	}
+	if e.Proc.PPID != 100 || e.Proc.Parent == nil || e.Proc.Parent.PID != 100 {
+		t.Errorf("real parent lost: %+v", e.Proc)
+	}
+	// Later events of the child carry the forker's image too.
+	if f := decodeOK(t, m, fileRec(child, fileCreate, 0, "/tmp/x", "")); f.Proc.Exe != "/tmp/mal" {
+		t.Errorf("file event by child: exe %q", f.Proc.Exe)
+	}
+}
+
+// F2/F6: pseudo files keep their name, deleted files and truncated paths
+// are marked.
+func TestDecodePathMarkers(t *testing.T) {
+	m := newTestMapper()
+	h := defHdr()
+	e := decodeOK(t, m, execRec(h, "/memfd:payload", "x\x00", "/", flDeleted))
+	if e.Proc.Exe != "/memfd:payload" || e.Proc.Name != "memfd:payload" || e.Args[argPathDeleted] != "true" {
+		t.Errorf("exe %q name %q args %v", e.Proc.Exe, e.Proc.Name, e.Args)
+	}
+	e = decodeOK(t, m, execRec(h, "/deep/er/bin/x", "x\x00", "/a/b", flPathTrunc|flPath2Trunc))
+	if e.Proc.Exe != truncMarker+"/deep/er/bin/x" || e.Proc.Cwd != truncMarker+"/a/b" || e.Args[argPathIncomplete] != "true" {
+		t.Errorf("exe %q cwd %q args %v", e.Proc.Exe, e.Proc.Cwd, e.Args)
+	}
+	if strings.HasPrefix(e.Proc.Exe, "/") {
+		t.Errorf("a truncated path looks absolute: %q", e.Proc.Exe)
+	}
+	f := decodeOK(t, m, fileRec(h, fileRename, flPathTrunc|flPath2Trunc|flDeleted, "/p/q", "/r/s"))
+	if f.File.Path != truncMarker+"/p/q" || f.File.Dest != truncMarker+"/r/s" || f.Args[argPathDeleted] != "true" {
+		t.Errorf("file %+v args %v", f.File, f.Args)
+	}
+	f = decodeOK(t, m, fileRec(h, fileOpen, 0, "/whole", ""))
+	if f.File.Path != "/whole" {
+		t.Errorf("complete path changed: %q", f.File.Path)
+	}
+}
+
+// F3: argv longer than one record arrives in K_ARGS records before the
+// exec; the tail survives, a lost chunk is flagged.
+func TestDecodeArgsContinuation(t *testing.T) {
+	m := newTestMapper()
+	h := defHdr()
+	first := "sh\x00-c\x00" + strings.Repeat("A", 4090)
+	second := strings.Repeat("B", 4096)
+	third := strings.Repeat("C", 100) + "TAILMARKER\x00"
+	if e := decodeOK(t, m, argsRec(h, 1, second)); e != nil {
+		t.Fatalf("a continuation produced %+v", e)
+	}
+	decodeOK(t, m, argsRec(h, 2, third))
+	e := decodeOK(t, m, execRecN(h, "/bin/sh", first, "/", 0, 2))
+	args := e.Proc.Args
+	if len(args) != 3 || !strings.HasSuffix(args[2], "TAILMARKER") || len(args[2]) != 4090+4096+100+10 {
+		t.Fatalf("args: %d, last %d bytes", len(args), len(args[len(args)-1]))
+	}
+	if e.Args[argArgsTruncated] != "" || len(m.pending) != 0 {
+		t.Errorf("flagged or leaked: %v, %d pending", e.Args, len(m.pending))
+	}
+	// A lost chunk: the exec says 2 but only chunk 1 came.
+	decodeOK(t, m, argsRec(h, 1, second))
+	e = decodeOK(t, m, execRecN(h, "/bin/sh", first, "/", 0, 2))
+	if e.Args[argArgsTruncated] != "true" || m.argsIncomplete.Load() != 1 || len(m.pending) != 0 {
+		t.Errorf("lost chunk: %v incomplete %d pending %d", e.Args, m.argsIncomplete.Load(), len(m.pending))
+	}
+	// Chunks of other processes stay apart and are bounded.
+	for i := uint32(0); i < 3*maxPendingArgs; i++ {
+		x := h
+		x.pid = 10_000 + i
+		decodeOK(t, m, argsRec(x, 1, "x"))
+	}
+	if len(m.pending) > maxPendingArgs {
+		t.Errorf("%d pending", len(m.pending))
+	}
+	// A continuation with a length that overruns is rejected.
+	bad := argsRec(h, 1, "abc")
+	binary.LittleEndian.PutUint32(bad[hdrSize+4:], 99)
+	if _, err := m.mapRecord(mustParse(t, bad)); !errors.Is(err, errRecord) {
+		t.Errorf("overrun: %v", err)
+	}
+}
+
+// F5: an event from another mount namespace says so.
+func TestDecodeMountNamespace(t *testing.T) {
+	m := newTestMapper()
+	m.hostMntNS = 4026531841
+	h := defHdr()
+	h.mntns = 4026531841
+	if e := decodeOK(t, m, fileRec(h, fileOpen, 0, "/a", "")); e.Args[argMntNS] != "" {
+		t.Errorf("host namespace flagged: %v", e.Args)
+	}
+	h.mntns = 4026532600
+	if e := decodeOK(t, m, fileRec(h, fileOpen, 0, "/usr/bin/true", "")); e.Args[argMntNS] != "4026532600" {
+		t.Errorf("foreign namespace: %v", e.Args)
+	}
+	m.hostMntNS = 0 // unknown: nothing claimed
+	if e := decodeOK(t, m, fileRec(h, fileOpen, 0, "/a", "")); e.Args[argMntNS] != "" {
+		t.Errorf("unknown host: %v", e.Args)
+	}
+}
+
+// F7: port-53 datagrams the parser cannot read are counted, responses are not.
+func TestDNSUnparsedCounted(t *testing.T) {
+	m := newTestMapper()
+	h := defHdr()
+	srv := []byte{127, 0, 0, 53}
+	hdrOnly := dnsQueryBytes("a.b", 1)[:12]
+	if e := decodeOK(t, m, netRec(kindDNS, h, 2, 17, 1, 0, 53, nil, srv, hdrOnly)); e != nil {
+		t.Fatalf("header-only produced %+v", e)
+	}
+	bad := dnsQueryBytes("a.b", 1)
+	bad[12+1] = 0x07 // a byte outside 0x21-0x7e in the first label
+	decodeOK(t, m, netRec(kindDNS, h, 2, 17, 1, 0, 53, nil, srv, bad))
+	resp := dnsQueryBytes("a.b", 1)
+	resp[2] |= 0x80
+	decodeOK(t, m, netRec(kindDNS, h, 2, 17, 1, 0, 53, nil, srv, resp))
+	if n := m.dnsUnparsed.Load(); n != 2 {
+		t.Errorf("unparsed %d, want 2 (the response is not counted)", n)
+	}
+}
+
+func TestDropTrackerCountsSkippedPrograms(t *testing.T) {
+	var d dropTracker
+	var now [nSlots]uint64
+	now[slotMisses] = 4
+	n, detail := d.update(now)
+	if n != 4 || !strings.Contains(detail, "4 skipped (program recursion)") {
+		t.Errorf("%d %q", n, detail)
 	}
 }

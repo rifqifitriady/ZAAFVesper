@@ -82,6 +82,7 @@ struct super_block {
 /* i_ctime moved twice: __i_ctime (6.6) then i_ctime_sec/nsec (6.11). */
 struct inode {
 	umode_t i_mode;
+	unsigned int i_nlink; /* in a union with __i_nlink; CO-RE matches anonymous members */
 	unsigned long i_ino;
 	struct super_block *i_sb;
 	time64_t i_ctime_sec;
@@ -93,7 +94,12 @@ struct inode___pre66 {
 	struct timespec64 i_ctime;
 } __attribute__((preserve_access_index));
 
+struct hlist_bl_node {
+	struct hlist_bl_node *next, **pprev;
+} __attribute__((preserve_access_index));
+
 struct dentry {
+	struct hlist_bl_node d_hash; /* pprev == NULL: unhashed (d_unhashed) */
 	struct dentry *d_parent;
 	struct qstr d_name;
 	struct inode *d_inode;
@@ -141,6 +147,18 @@ struct signal_struct {
 	atomic_t live;
 } __attribute__((preserve_access_index));
 
+struct ns_common {
+	unsigned int inum;
+} __attribute__((preserve_access_index));
+
+struct mnt_namespace {
+	struct ns_common ns;
+} __attribute__((preserve_access_index));
+
+struct nsproxy {
+	struct mnt_namespace *mnt_ns;
+} __attribute__((preserve_access_index));
+
 struct task_struct {
 	unsigned int flags;
 	pid_t pid;
@@ -154,6 +172,7 @@ struct task_struct {
 	struct mm_struct *mm;
 	struct fs_struct *fs;
 	struct signal_struct *signal;
+	struct nsproxy *nsproxy;
 	char comm[16];
 } __attribute__((preserve_access_index));
 

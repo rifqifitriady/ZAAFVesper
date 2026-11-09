@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -513,7 +514,7 @@ func TestLiveDropsAreCounted(t *testing.T) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if len(c.degr) == 0 || !strings.HasPrefix(c.degr[0], CondEventsDropped+": the kernel ring buffer was full") {
+	if len(c.degr) == 0 || !strings.HasPrefix(c.degr[0], CondEventsDropped+": the kernel side lost") {
 		t.Fatalf("SensorDegraded reports %q", c.degr)
 	}
 }
@@ -534,5 +535,265 @@ func TestProcImageChecksStartTime(t *testing.T) {
 	}
 	if _, ok := procImage(pid, st.StartTicks+1); ok {
 		t.Error("image returned for a different start time")
+	}
+}
+
+// cloneParent forks the calling process with CLONE_PARENT: the child's
+// real parent is this process's parent, and the child exits at once. It
+// returns the child's pid.
+func cloneParent() (int, error) {
+	const cloneParentFlag = 0x8000
+	r, _, errno := syscall.RawSyscall6(syscall.SYS_CLONE, cloneParentFlag|uintptr(syscall.SIGCHLD), 0, 0, 0, 0, 0)
+	if errno != 0 {
+		return 0, errno
+	}
+	if r == 0 { // the child: nothing of the Go runtime may run here
+		for {
+			syscall.RawSyscall(syscall.SYS_EXIT_GROUP, 0, 0, 0)
+		}
+	}
+	return int(r), nil
+}
+
+// F1: a child made with CLONE_PARENT runs the image of the process that
+// forked it, not of its real parent (the grandparent).
+func TestLiveCloneParentImage(t *testing.T) {
+	needLive(t)
+	c := startSource(t, Config{}, nil, 1<<16)
+	self, err := os.Readlink("/proc/self/exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ppid := os.Getppid()
+	parentExe, _ := os.Readlink("/proc/" + strconv.Itoa(ppid) + "/exe")
+	if parentExe == self {
+		t.Skip("the test's parent runs the same image; the case cannot be told apart")
+	}
+	pid, err := cloneParent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := c.waitFor(t, "Fork", func(e *event.Event) bool { return e.Name == event.Fork && e.Proc.PID == int32(pid) })
+	if f.Proc.PPID != int32(ppid) {
+		t.Errorf("ppid %d, want the grandparent %d", f.Proc.PPID, ppid)
+	}
+	if f.Proc.Exe != self {
+		t.Errorf("fork: exe %q, want the forker's %q (not the grandparent's %q)", f.Proc.Exe, self, parentExe)
+	}
+	x := c.waitFor(t, "TerminateProcess", func(e *event.Event) bool {
+		return e.Name == event.TerminateProcess && e.Proc.PID == int32(pid)
+	})
+	if x.Proc.Exe != self {
+		t.Errorf("exit: exe %q, want %q", x.Proc.Exe, self)
+	}
+}
+
+// F2: an executable that is a memfd keeps its name, one that was unlinked
+// before the exec is flagged.
+func TestLiveFilelessExec(t *testing.T) {
+	needLive(t)
+	c := startSource(t, Config{}, []string{event.CreateProcess}, 1<<16)
+	tr := lookPath(t, "true")
+	data, err := os.ReadFile(tr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := func(f *os.File) int {
+		cmd := exec.Command("/proc/self/fd/3")
+		cmd.ExtraFiles = []*os.File{f}
+		if err := cmd.Start(); err != nil {
+			t.Skipf("exec of a descriptor is not possible here: %v", err)
+		}
+		pid := cmd.Process.Pid
+		_ = cmd.Wait()
+		return pid
+	}
+
+	fd, err := unix.MemfdCreate("zaafmem", 0)
+	if err != nil {
+		t.Skipf("memfd_create: %v", err)
+	}
+	mf := os.NewFile(uintptr(fd), "memfd")
+	defer mf.Close()
+	if _, err := mf.Write(data); err != nil {
+		t.Fatal(err)
+	}
+	mpid := run(mf)
+	e := c.waitFor(t, "CreateProcess (memfd)", func(e *event.Event) bool {
+		return e.Name == event.CreateProcess && e.Proc.PID == int32(mpid)
+	})
+	if !strings.HasPrefix(e.Proc.Exe, "/memfd:zaafmem") {
+		t.Errorf("memfd exe %q, want /memfd:zaafmem...", e.Proc.Exe)
+	}
+
+	path := filepath.Join(t.TempDir(), "gone")
+	if err := os.WriteFile(path, data, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	df, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer df.Close()
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	dpid := run(df)
+	d := c.waitFor(t, "CreateProcess (deleted)", func(e *event.Event) bool {
+		return e.Name == event.CreateProcess && e.Proc.PID == int32(dpid)
+	})
+	if d.Proc.Exe != path || d.Args[argPathDeleted] != "true" {
+		t.Errorf("deleted exe %q args %v, want %q with path_deleted", d.Proc.Exe, d.Args, path)
+	}
+	// An ordinary exec is not flagged.
+	opid := func() int {
+		cmd := exec.Command(tr)
+		_ = cmd.Run()
+		return cmd.Process.Pid
+	}()
+	o := c.waitFor(t, "CreateProcess (plain)", func(e *event.Event) bool {
+		return e.Name == event.CreateProcess && e.Proc.PID == int32(opid)
+	})
+	if o.Args[argPathDeleted] != "" || o.Proc.Exe != tr {
+		t.Errorf("plain exec: exe %q args %v", o.Proc.Exe, o.Args)
+	}
+}
+
+// F3: argv beyond one record is delivered whole up to 64 KiB, with its tail.
+func TestLiveLongArgv(t *testing.T) {
+	needLive(t)
+	c := startSource(t, Config{}, []string{event.CreateProcess}, 1<<16)
+	tr := lookPath(t, "true")
+	cmd := exec.Command(tr, strings.Repeat("A", 5000), strings.Repeat("B", 9000), "TAILMARKER")
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+	e := c.waitFor(t, "CreateProcess", func(e *event.Event) bool {
+		return e.Name == event.CreateProcess && e.Proc.PID == int32(cmd.Process.Pid)
+	})
+	a := e.Proc.Args
+	if len(a) != 4 || a[3] != "TAILMARKER" || len(a[1]) != 5000 || len(a[2]) != 9000 || e.Args[argArgsTruncated] != "" {
+		t.Errorf("argv: %d entries, last %q, lengths %d/%d, args %v", len(a), a[len(a)-1], len(a[1]), len(a[2]), e.Args)
+	}
+
+	big := make([]string, 0, 20)
+	for i := 0; i < 20; i++ {
+		big = append(big, strings.Repeat("x", 8000))
+	}
+	cmd = exec.Command(tr, big...)
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+	e = c.waitFor(t, "CreateProcess (huge)", func(e *event.Event) bool {
+		return e.Name == event.CreateProcess && e.Proc.PID == int32(cmd.Process.Pid)
+	})
+	if e.Args[argArgsTruncated] != "true" || len(e.Proc.Cmdline) < 60000 || len(e.Proc.Cmdline) > 65536 {
+		t.Errorf("huge argv: cmdline %d bytes, args %v", len(e.Proc.Cmdline), e.Args)
+	}
+}
+
+// F6: paths up to 512 components are whole; beyond that the value starts
+// with the marker and cannot be taken for an absolute path.
+func TestLiveDeepPath(t *testing.T) {
+	needLive(t)
+	c := startSource(t, Config{}, []string{event.CreateFile}, 1<<16)
+	touch := lookPath(t, "touch")
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	mk := func(depth int) string {
+		dir := base + strings.Repeat("/d", depth)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Skipf("mkdir depth %d: %v", depth, err)
+		}
+		f := dir + "/f"
+		if out, err := exec.Command(touch, f).CombinedOutput(); err != nil {
+			t.Fatalf("touch: %v %s", err, out)
+		}
+		return f
+	}
+	deep := mk(300)
+	e := c.waitFor(t, "CreateFile (300 deep)", func(e *event.Event) bool {
+		return e.Name == event.CreateFile && strings.HasSuffix(e.File.Path, "/d/f") && strings.Contains(e.File.Path, "/d/d/d") && len(e.File.Path) > 300
+	})
+	if e.File.Path != deep || e.Args[argPathIncomplete] != "" {
+		t.Errorf("300 deep: %q (%d bytes), args %v", e.File.Path, len(e.File.Path), e.Args)
+	}
+	deeper := mk(700)
+	x := c.waitFor(t, "CreateFile (700 deep)", func(e *event.Event) bool {
+		return e.Name == event.CreateFile && strings.HasPrefix(e.File.Path, truncMarker) && strings.HasSuffix(e.File.Path, "/d/f")
+	})
+	if !strings.HasSuffix(deeper, strings.TrimPrefix(x.File.Path, truncMarker)) || x.Args[argPathIncomplete] != "true" {
+		t.Errorf("700 deep: %q args %v", x.File.Path, x.Args)
+	}
+}
+
+// F5: an event from another mount namespace carries its number.
+func TestLiveMountNamespace(t *testing.T) {
+	needLive(t)
+	c := startSource(t, Config{}, []string{event.CreateProcess}, 1<<16)
+	unshare := lookPath(t, "unshare")
+	tr := lookPath(t, "true")
+	cmd := exec.Command(unshare, "-m", tr)
+	if err := cmd.Run(); err != nil {
+		t.Skipf("unshare -m: %v", err)
+	}
+	pid := cmd.Process.Pid
+	e := c.waitFor(t, "CreateProcess in a new mount namespace", func(e *event.Event) bool {
+		return e.Name == event.CreateProcess && e.Proc.PID == int32(pid) && e.Args[argMntNS] != ""
+	})
+	own, _ := os.Readlink("/proc/self/ns/mnt")
+	if strings.Contains(own, e.Args[argMntNS]) {
+		t.Errorf("mnt_ns %s is the sensor's own %s", e.Args[argMntNS], own)
+	}
+	// The sensor's own namespace is not flagged.
+	cmd = exec.Command(tr)
+	_ = cmd.Run()
+	h := c.waitFor(t, "CreateProcess in the host namespace", func(e *event.Event) bool {
+		return e.Name == event.CreateProcess && e.Proc.PID == int32(cmd.Process.Pid)
+	})
+	if h.Args[argMntNS] != "" {
+		t.Errorf("host namespace flagged: %v", h.Args)
+	}
+}
+
+// F4: events made concurrently on every CPU stay whole: no record mixes
+// the bytes of two programs (every one decodes and carries its own path).
+func TestLiveConcurrentRecordsStayWhole(t *testing.T) {
+	needLive(t)
+	c := startSource(t, Config{}, []string{event.CreateFile}, 1<<18)
+	sh := lookPath(t, "sh")
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := "seq 1 600 | xargs -P 32 -I{} touch " + dir + "/file_with_a_longish_name_{}"
+	if out, err := exec.Command(sh, "-c", script).CombinedOutput(); err != nil {
+		t.Skipf("xargs/touch: %v %s", err, out)
+	}
+	time.Sleep(time.Second)
+	c.mu.Lock()
+	seen := 0
+	for _, e := range c.evs {
+		if e.Name == event.CreateFile && strings.HasPrefix(e.File.Path, dir+"/") {
+			seen++
+			if !strings.HasPrefix(e.File.Path, dir+"/file_with_a_longish_name_") || strings.ContainsAny(e.File.Path[len(dir):], "\x00\n") {
+				t.Errorf("mixed record: %q", e.File.Path)
+			}
+		}
+	}
+	c.mu.Unlock()
+	st := c.src.Stats()
+	if st["decode_errors"] != 0 {
+		t.Errorf("decode errors: %v", st)
+	}
+	if seen == 0 {
+		t.Fatalf("no events seen; stats %v", st)
+	}
+	// Whatever was not reported was counted.
+	t.Logf("seen %d of 600 creations; stats %v", seen, st)
+	if missing := 600 - seen; missing > 0 && st["events_missed"] == 0 {
+		t.Errorf("%d creations missing and none counted: %v", missing, st)
 	}
 }

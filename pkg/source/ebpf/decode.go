@@ -24,6 +24,9 @@ const (
 	argArgsTruncated  = "args_truncated"
 	argPathIncomplete = "path_incomplete"
 	argTruncated      = "truncated"
+	argPathDeleted    = "path_deleted"
+	argTargetDeleted  = "target_exe_deleted"
+	argMntNS          = "mnt_ns"
 	argSyscall        = "syscall"
 	argModuleName     = "module_name"
 	argModuleSource   = "module_source"
@@ -79,11 +82,38 @@ type mapper struct {
 	// start ticks given. Nil: no fallback (tests).
 	lookup func(pid int32, ticks uint64) (image, bool)
 
+	// pending holds K_ARGS chunks (by sequence number) that arrived before
+	// the K_EXEC record they belong to.
+	pending map[procKey]map[uint32]string
+	// hostMntNS is the mount namespace of the sensor itself (0: unknown).
+	// Paths in a record are relative to the process's own mount namespace;
+	// an event from another one carries evt.arg[mnt_ns].
+	hostMntNS uint32
+
 	evicted, lookups, lookupMisses atomic.Uint64 // read by Stats
+	dnsUnparsed, argsIncomplete    atomic.Uint64
+}
+
+// maxPendingArgs bounds the processes with argv chunks waiting for their
+// exec record; when full the waiting chunks are dropped (their exec is then
+// reported with args_truncated).
+const maxPendingArgs = 256
+
+// truncMarker prefixes a path whose beginning is missing. A real absolute
+// path starts with "/", so a rule or a protected-path check can never take
+// the remaining tail for a complete path.
+const truncMarker = "<truncated>"
+
+func markPath(p string, incomplete bool) string {
+	if incomplete && p != "" {
+		return truncMarker + p
+	}
+	return p
 }
 
 func newMapper(clk clock, lookup func(int32, uint64) (image, bool)) *mapper {
-	return &mapper{clk: clk, images: map[procKey]image{}, maxImages: defaultMaxImages, lookup: lookup}
+	return &mapper{clk: clk, images: map[procKey]image{}, maxImages: defaultMaxImages, lookup: lookup,
+		pending: map[procKey]map[uint32]string{}}
 }
 
 // ticksOf converts nanoseconds since boot to the clock ticks of
@@ -199,19 +229,34 @@ func (m *mapper) mapRecord(r *record) (*event.Event, error) {
 		if err != nil {
 			return nil, err
 		}
-		img := image{exe: s[0], dev: userDev(le32(b, 0)), ino: le64(b, 8), ctimeNs: int64(le64(b, 16))}
+		img := image{exe: markPath(s[0], eflags&flPathTrunc != 0), dev: userDev(le32(b, 0)), ino: le64(b, 8), ctimeNs: int64(le64(b, 16))}
 		m.remember(key, img)
 		applyImage(p, img)
 		e.Name = event.CreateProcess
-		p.Args = splitArgs(s[1])
+		argv, whole := m.joinArgs(key, s[1], le32(b, 36))
+		if !whole {
+			eflags |= flArgsTrunc
+		}
+		p.Args = splitArgs(argv)
 		p.Cmdline = strings.Join(p.Args, " ")
-		p.Cwd = s[2]
+		p.Cwd = markPath(s[2], eflags&flPath2Trunc != 0)
 		if eflags&(flArgsTrunc|flArgsErr) != 0 {
 			setArg(e, argArgsTruncated, "true")
 		}
 		if eflags&(flPathTrunc|flPath2Trunc) != 0 {
 			setArg(e, argPathIncomplete, "true")
 		}
+		if eflags&flDeleted != 0 {
+			setArg(e, argPathDeleted, "true")
+		}
+
+	case kindArgs:
+		s, err := r.strings(argsSize, le32(b, 4))
+		if err != nil {
+			return nil, err
+		}
+		m.holdArgs(key, le32(b, 0), s[0])
+		return nil, nil
 
 	case kindExit:
 		if img, ok := m.image(key); ok {
@@ -225,11 +270,12 @@ func (m *mapper) mapRecord(r *record) (*event.Event, error) {
 		}
 
 	case kindFork:
-		if _, err := r.strings(0); err != nil {
+		if _, err := r.strings(forkSize); err != nil {
 			return nil, err
 		}
-		// The child runs its parent's image until it execs.
-		if img, ok := m.image(procKey{int32(r.PPID), ticksOf(r.PStartNs)}); ok {
+		// The child runs the image of the task that forked it, which is
+		// not its real_parent under clone(CLONE_PARENT).
+		if img, ok := m.image(procKey{int32(le32(b, 0)), ticksOf(le64(b, 8))}); ok {
 			m.remember(key, img)
 			applyImage(p, img)
 		}
@@ -242,7 +288,10 @@ func (m *mapper) mapRecord(r *record) (*event.Event, error) {
 			return nil, err
 		}
 		m.fill(p, key)
-		e.File = &event.File{Path: s[0]}
+		e.File = &event.File{Path: markPath(s[0], fflags&flPathTrunc != 0)}
+		if fflags&flDeleted != 0 {
+			setArg(e, argPathDeleted, "true")
+		}
 		switch op {
 		case fileOpen:
 			e.Name = event.OpenFile
@@ -255,7 +304,7 @@ func (m *mapper) mapRecord(r *record) (*event.Event, error) {
 			e.Name = event.DeleteFile
 		case fileRename:
 			e.Name = event.RenameFile
-			e.File.Dest = s[1]
+			e.File.Dest = markPath(s[1], fflags&flPath2Trunc != 0)
 		default:
 			return nil, fmt.Errorf("%w: file operation %d", errRecord, op)
 		}
@@ -285,7 +334,7 @@ func (m *mapper) mapRecord(r *record) (*event.Event, error) {
 		t := &event.Proc{PID: int32(le32(b, 8)), UniqueID: tticks, PIDVersion: pidVersion(tticks),
 			StartTime: m.startTime(tticks), UID: -1, EUID: -1}
 		if s[0] != "" {
-			applyImage(t, image{exe: s[0]})
+			applyImage(t, image{exe: markPath(s[0], tflags&flPathTrunc != 0)})
 		} else if img, ok := m.image(procKey{t.PID, tticks}); ok {
 			applyImage(t, img)
 		}
@@ -308,6 +357,9 @@ func (m *mapper) mapRecord(r *record) (*event.Event, error) {
 		}
 		if tflags&flPathTrunc != 0 {
 			setArg(e, argPathIncomplete, "true")
+		}
+		if tflags&flDeleted != 0 {
+			setArg(e, argTargetDeleted, "true")
 		}
 
 	case kindModule:
@@ -346,7 +398,13 @@ func (m *mapper) mapRecord(r *record) (*event.Event, error) {
 		}
 		name, qtype, err := parseDNSQuery(payload)
 		if err != nil {
-			return nil, nil // not a query: nothing to report
+			// Not a query, or one the parser cannot read (truncated at
+			// DNS_MAX, odd labels, a header-only first iovec): counted,
+			// because an attacker can shape a datagram to land here.
+			if len(payload) < 3 || payload[2]&0x80 == 0 { // a response is not an anomaly
+				m.dnsUnparsed.Add(1)
+			}
+			return nil, nil
 		}
 		e.Name = event.DNSQuery
 		e.Net = n
@@ -355,7 +413,41 @@ func (m *mapper) mapRecord(r *record) (*event.Event, error) {
 	default:
 		return nil, fmt.Errorf("%w: kind %d", errRecord, r.Kind)
 	}
+	if m.hostMntNS != 0 && r.MntNS != 0 && r.MntNS != m.hostMntNS {
+		setArg(e, argMntNS, strconv.FormatUint(uint64(r.MntNS), 10))
+	}
 	return e, nil
+}
+
+// holdArgs keeps one K_ARGS chunk until the exec record of its process.
+func (m *mapper) holdArgs(key procKey, seq uint32, chunk string) {
+	c, ok := m.pending[key]
+	if !ok {
+		if len(m.pending) >= maxPendingArgs {
+			clear(m.pending)
+		}
+		c = map[uint32]string{}
+		m.pending[key] = c
+	}
+	c[seq] = chunk
+}
+
+// joinArgs appends the chunks 1..conts held for key to first. whole is
+// false when one of them is missing (its record was lost; the kernel
+// counted that), so the argv ends early.
+func (m *mapper) joinArgs(key procKey, first string, conts uint32) (argv string, whole bool) {
+	chunks := m.pending[key]
+	delete(m.pending, key)
+	argv, whole = first, true
+	for i := uint32(1); i <= conts; i++ {
+		c, ok := chunks[i]
+		if !ok {
+			m.argsIncomplete.Add(1)
+			return argv, false
+		}
+		argv += c
+	}
+	return argv, true
 }
 
 // fill puts the process's remembered image on p.
