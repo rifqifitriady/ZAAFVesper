@@ -43,7 +43,15 @@ func (r *Responder) persist(e *event.Event, rule string, budget func() *result) 
 	if why != "" {
 		return refused(OutcomeFileCheck, ErrFileCheck, "%s", why)
 	}
-	kind, unit, why := linuxPersistKind(path)
+	logical := path
+	if r.launchRoot != "" { // tests only: a fake file system root
+		rel, ok := strings.CutPrefix(path, r.launchRoot+"/")
+		if !ok {
+			return refused(OutcomeProtectedPath, ErrProtectedPath, "outside the test root")
+		}
+		logical = "/" + rel
+	}
+	kind, unit, why := linuxPersistKind(logical)
 	if why != "" {
 		return refused(OutcomeProtectedPath, ErrProtectedPath, "%s", why)
 	}

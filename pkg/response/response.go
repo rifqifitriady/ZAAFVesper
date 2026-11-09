@@ -252,8 +252,8 @@ type Responder struct {
 	// the never-block set (isolate.go recheckNeverBlock).
 	lastNeverCheck time.Time
 
-	// launchRoot, set only by tests, is a fake root for the launch item
-	// directories of remove_persistence.
+	// launchRoot, set only by tests, is a fake root for the persistence
+	// directories of remove_persistence (launch items, systemd, cron, rc).
 	launchRoot string
 
 	netMu sync.Mutex
