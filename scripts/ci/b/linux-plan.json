@@ -1,0 +1,223 @@
+{
+  "platform": "linux",
+  "tests": [
+    {
+      "id": "canary-start",
+      "canary": true,
+      "inline": {
+        "executor": "bash",
+        "command": "mkdir -p /tmp/zaafvesper/canary && install -m 0755 /usr/bin/bash /tmp/zaafvesper/canary/nuclei && /tmp/zaafvesper/canary/nuclei -c true",
+        "cleanup": "rm -rf /tmp/zaafvesper/canary"
+      },
+      "expect": [
+        "Linux HackTool Execution"
+      ],
+      "note": "Canary: a bash copy named nuclei. It proves the sensor receives and evaluates events at this point of the run, independent of which coreutils the image ships."
+    },
+    {
+      "id": "art-T1053.003-078e69eb",
+      "atomic": {
+        "technique": "T1053.003",
+        "guid": "078e69eb-d9fb-450e-b9d0-2e118217c846"
+      },
+      "expect": [
+        "Cron job file created"
+      ]
+    },
+    {
+      "id": "art-T1053.003-2d943c18",
+      "atomic": {
+        "technique": "T1053.003",
+        "guid": "2d943c18-e74a-44bf-936f-25ade6cccab4"
+      },
+      "expect": [
+        "Cron job file created"
+      ]
+    },
+    {
+      "id": "art-T1543.002-d9e4f24f",
+      "atomic": {
+        "technique": "T1543.002",
+        "guid": "d9e4f24f-aa67-4c6e-bcbf-85622b697a7c"
+      },
+      "expect": [
+        "Systemd unit file created outside the package manager"
+      ]
+    },
+    {
+      "id": "art-T1070.003-a934276e",
+      "atomic": {
+        "technique": "T1070.003",
+        "guid": "a934276e-2be5-4a36-93fd-98adbb5bd4fc"
+      },
+      "setup": {
+        "executor": "sh",
+        "command": "if [ -e ~/.bash_history ]; then mv ~/.bash_history ~/.bash_history.zaafvesper-saved; fi; touch ~/.bash_history"
+      },
+      "expect": [
+        "Shell history file deleted",
+        "History File Deletion"
+      ],
+      "note": "The setup moves any existing history file aside and creates an empty one, so the test deletes only that; the teardown puts the original back.",
+      "teardown": {
+        "executor": "sh",
+        "command": "if [ -e ~/.bash_history.zaafvesper-saved ]; then mv ~/.bash_history.zaafvesper-saved ~/.bash_history; fi"
+      }
+    },
+    {
+      "id": "inline-sudoers-dropin",
+      "inline": {
+        "executor": "bash",
+        "command": "printf '# zaafvesper validation\\n' | tee /etc/sudoers.d/zaafvesper-validation >/dev/null",
+        "cleanup": "rm -f /etc/sudoers.d/zaafvesper-validation"
+      },
+      "expect": [
+        "Sudoers file created outside visudo"
+      ],
+      "note": "A comment-only drop-in, removed right after."
+    },
+    {
+      "id": "inline-bash-dev-tcp",
+      "inline": {
+        "executor": "bash",
+        "command": "(timeout 6 nc -6 -l ::1 4444 >/dev/null 2>&1 &); sleep 1; timeout 3 bash -c 'bash -i >& /dev/tcp/::1/4444 0>&1' </dev/null; true"
+      },
+      "expect": [
+        "Interactive shell redirected to a network socket",
+        "Linux Reverse Shell Indicator"
+      ],
+      "note": "Loopback only (::1). The Sigma rule excludes 127.0.0.1 and 0.0.0.0 but not ::1, so an IPv6 loopback connection still exercises it; nothing leaves the machine."
+    },
+    {
+      "id": "inline-netcat-e",
+      "inline": {
+        "executor": "bash",
+        "command": "timeout 3 nc -e /bin/sh 127.0.0.1 4444 </dev/null; true"
+      },
+      "expect": [
+        "Potential Netcat Reverse Shell Execution"
+      ],
+      "note": "The runner's nc (OpenBSD) refuses -e; the command line is what the rule checks."
+    },
+    {
+      "id": "inline-perl-socket",
+      "inline": {
+        "executor": "bash",
+        "command": "timeout 3 perl -e 'use Socket;$i=\"127.0.0.1\";$p=4445;socket(S,PF_INET,SOCK_STREAM,getprotobyname(\"tcp\"));if(connect(S,sockaddr_in($p,inet_aton($i)))){open(STDIN,\">&S\");open(STDOUT,\">&S\");exec(\"/bin/sh -i\");};' </dev/null; true"
+      },
+      "expect": [
+        "Potential Perl Reverse Shell Execution"
+      ],
+      "note": "Closed local port: the connection fails."
+    },
+    {
+      "id": "inline-python-pty",
+      "inline": {
+        "executor": "bash",
+        "command": "timeout 3 python3 -c 'import socket,os,pty;s=socket.socket();s.connect((\"127.0.0.1\",4446));[os.dup2(s.fileno(),f) for f in (0,1,2)];pty.spawn(\"/bin/sh\")' </dev/null; true"
+      },
+      "expect": [
+        "Python Reverse Shell Execution Via PTY And Socket Modules"
+      ],
+      "note": "Closed local port: the connection fails."
+    },
+    {
+      "id": "inline-php-fsockopen",
+      "inline": {
+        "executor": "bash",
+        "command": "if command -v php >/dev/null; then timeout 3 php -r '$sock=fsockopen(\"127.0.0.1\",4447);exec(\"/bin/sh -i <&3 >&3 2>&3\");' </dev/null; else echo 'php not installed'; exit 3; fi; true"
+      },
+      "expect": [
+        "Potential PHP Reverse Shell"
+      ],
+      "note": "Closed local port. Needs php on the runner image."
+    },
+    {
+      "id": "inline-syslog-rm",
+      "inline": {
+        "executor": "bash",
+        "command": "rm -f /var/log/syslog.zaafvesper-validation"
+      },
+      "expect": [
+        "Syslog Clearing or Removal Via System Utilities"
+      ],
+      "note": "Removes a file that does not exist; the command line is what the rule checks."
+    },
+    {
+      "id": "inline-cp-passwd-tmp",
+      "inline": {
+        "executor": "bash",
+        "command": "cp /etc/passwd /tmp/zaafvesper-passwd",
+        "cleanup": "rm -f /tmp/zaafvesper-passwd"
+      },
+      "expect": [
+        "Copy Passwd Or Shadow From TMP Path"
+      ]
+    },
+    {
+      "id": "inline-hacktool-name",
+      "inline": {
+        "executor": "bash",
+        "command": "mkdir -p /tmp/zaafvesper && install -m 0755 /bin/true /tmp/zaafvesper/nuclei && /tmp/zaafvesper/nuclei",
+        "cleanup": "rm -f /tmp/zaafvesper/nuclei"
+      },
+      "expect": [
+        "Linux HackTool Execution"
+      ],
+      "note": "/bin/true copied under a scanner's name."
+    },
+    {
+      "id": "inline-java-child",
+      "inline": {
+        "executor": "bash",
+        "command": "mkdir -p /tmp/zaafvesper && printf 'public class Z { public static void main(String[] a) throws Exception { new ProcessBuilder(\"/bin/sh\",\"-c\",\"id\").inheritIO().start().waitFor(); Thread.sleep(3000); } }\\n' > /tmp/zaafvesper/Z.java && java /tmp/zaafvesper/Z.java",
+        "cleanup": "rm -f /tmp/zaafvesper/Z.java"
+      },
+      "expect": [
+        "Suspicious Java Children Processes"
+      ],
+      "note": "Needs a JDK on the runner image (single-file source launch). The JVM stays up 3 s after its child, as a server would: Sysmon for Linux reports the forking thread as the parent, and the sensor maps it to the JVM through /proc only while that thread exists."
+    },
+    {
+      "id": "inline-webshell-parent",
+      "inline": {
+        "executor": "bash",
+        "command": "mkdir -p /tmp/zaafvesper && install -m 0755 /bin/bash /tmp/zaafvesper/nginx && /tmp/zaafvesper/nginx -c 'sleep 1; /usr/bin/whoami; true'",
+        "cleanup": "rm -f /tmp/zaafvesper/nginx"
+      },
+      "expect": [
+        "Linux Webshell Indicators"
+      ],
+      "note": "bash copied under the name nginx starts whoami a second after it starts, as a running web server with a webshell would. (Without the pause, Sysmon for Linux can report the child before the parent's exec, so the parent still looks like bash.)"
+    },
+    {
+      "id": "canary-end",
+      "canary": true,
+      "inline": {
+        "executor": "bash",
+        "command": "mkdir -p /tmp/zaafvesper/canary && install -m 0755 /usr/bin/bash /tmp/zaafvesper/canary/nuclei && /tmp/zaafvesper/canary/nuclei -c true",
+        "cleanup": "rm -rf /tmp/zaafvesper/canary"
+      },
+      "expect": [
+        "Linux HackTool Execution"
+      ],
+      "note": "Canary: a bash copy named nuclei. It proves the sensor receives and evaluates events at this point of the run, independent of which coreutils the image ships."
+    }
+  ],
+  "untestable": [],
+  "skipped_atomics": [],
+  "rule_notes": [
+    {
+      "rule": "Syslog Clearing or Removal Via System Utilities",
+      "reason": "on Ubuntu 26.04 rm runs as /usr/bin/gnurm (the Rust coreutils switch keeps GNU rm under that name); the SigmaHQ rule matches only images ending in /rm."
+    },
+    {
+      "rule": "History File Deletion",
+      "reason": "on Ubuntu 26.04 rm runs as /usr/bin/gnurm; the SigmaHQ rule matches only images ending in /rm, /unlink or /shred. The hand-written rule 'Shell history file deleted' (file event) still fires."
+    },
+    {
+      "rule": "Copy Passwd Or Shadow From TMP Path",
+      "reason": "on Ubuntu 26.04 cp runs as /usr/bin/gnucp; the SigmaHQ rule matches only images ending in /cp."
+    }
+  ]
+}

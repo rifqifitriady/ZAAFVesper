@@ -1,0 +1,22 @@
+<!-- Sysmon for Linux configuration for the live validation (v0.3 workstream B):
+     every event of the five kinds ZAAFVesper's Linux rules use. Same shape as
+     Microsoft's MSTIC-Sysmon linux/configs/collect-all.xml. -->
+<Sysmon schemaversion="4.81">
+  <EventFiltering>
+    <RuleGroup name="" groupRelation="or">
+      <ProcessCreate onmatch="exclude"/>
+    </RuleGroup>
+    <RuleGroup name="" groupRelation="or">
+      <NetworkConnect onmatch="exclude"/>
+    </RuleGroup>
+    <RuleGroup name="" groupRelation="or">
+      <ProcessTerminate onmatch="exclude"/>
+    </RuleGroup>
+    <RuleGroup name="" groupRelation="or">
+      <FileCreate onmatch="exclude"/>
+    </RuleGroup>
+    <RuleGroup name="" groupRelation="or">
+      <FileDelete onmatch="exclude"/>
+    </RuleGroup>
+  </EventFiltering>
+</Sysmon>

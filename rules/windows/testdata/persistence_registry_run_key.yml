@@ -11,6 +11,12 @@ match:
         platform: windows
         proc: {pid: 6229, exe: 'C:\Users\alice\AppData\Local\Temp\drop.exe', name: drop.exe, uid: -1, euid: -1}
         registry: {key: 'HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\RunOnce\x', value: x, data: 'C:\ProgramData\x.exe'}
+  - desc: RunOnceEx dependency added (ART T1547.001 Reg Key RunOnce; shape seen live on a Windows runner)
+    events:
+      - name: RegistrySetValue
+        platform: windows
+        proc: {pid: 6230, exe: 'C:\Windows\system32\reg.exe', name: reg.exe, uid: -1, euid: -1}
+        registry: {key: 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnceEx\0001\Depend\1', value: '1', data: 'C:\Path\AtomicRedTeam.dll'}
 nomatch:
   - desc: benign lookalike - an application stores a value named Run in its own key
     events:
