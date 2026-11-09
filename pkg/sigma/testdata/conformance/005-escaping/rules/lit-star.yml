@@ -1,0 +1,7 @@
+title: escaped star
+id: c005-lit-star
+logsource: {product: test}
+detection:
+    s:
+        Value: 'a\*b'
+    condition: s

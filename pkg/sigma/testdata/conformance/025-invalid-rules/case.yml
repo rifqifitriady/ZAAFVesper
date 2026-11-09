@@ -1,0 +1,5 @@
+spec_ref: sigma-rules-specification.md; sigma-appendix-modifiers.md
+description: Invalid rules (including a regex flag `i`/`m`/`s` used without `re`, interpretation 15) are rejected one error each, and do not stop valid rules from running.
+compile_errors: 9
+expected:
+  - [c025-good]

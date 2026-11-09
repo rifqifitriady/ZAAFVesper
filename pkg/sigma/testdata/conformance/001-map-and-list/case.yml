@@ -1,0 +1,7 @@
+spec_ref: 'sigma-rules-specification.md#maps, #lists'
+description: Map entries are AND-ed, list values are OR-ed; integers match their text form; matching is case-insensitive.
+expected:
+  - [c001]
+  - [c001]
+  - []
+  - []

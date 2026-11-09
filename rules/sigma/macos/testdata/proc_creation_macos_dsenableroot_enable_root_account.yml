@@ -1,0 +1,14 @@
+match:
+  - desc: "dsenableroot enables the root account"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4701, "ppid": 4000, "exe": "/usr/sbin/dsenableroot", "name": "dsenableroot", "args": ["dsenableroot", "-u", "admin", "-p", "x", "-r", "y"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.dsenableroot", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+  - desc: "known weakness kept from SigmaHQ: a bare dsenableroot -d (disable root) also fires, because the filter needs a space after -d"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4702, "ppid": 4000, "exe": "/usr/sbin/dsenableroot", "name": "dsenableroot", "args": ["dsenableroot", "-d"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.dsenableroot", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+nomatch:
+  - desc: "benign lookalike - dsenableroot -d disables the root account"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4711, "ppid": 4000, "exe": "/usr/sbin/dsenableroot", "name": "dsenableroot", "args": ["dsenableroot", "-d", "-u", "admin"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.dsenableroot", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+  - desc: "dscl unrelated"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4712, "ppid": 4000, "exe": "/usr/bin/dscl", "name": "dscl", "args": ["dscl", ".", "-read", "/Users/root"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.dscl", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}

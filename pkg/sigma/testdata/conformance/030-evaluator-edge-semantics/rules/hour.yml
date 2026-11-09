@@ -1,0 +1,7 @@
+title: edge hour
+id: c030-hour
+logsource: {product: test}
+detection:
+    s:
+        T|hour: 3
+    condition: s

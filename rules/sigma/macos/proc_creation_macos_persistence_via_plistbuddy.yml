@@ -1,0 +1,30 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Potential Persistence Via PlistBuddy
+id: 65d506d3-fcfe-4071-b4b2-bcefe721bbbb
+version: 1.0.0
+platforms: [macos]
+description: |-
+  Detects potential persistence activity using LaunchAgents or LaunchDaemons via the PlistBuddy utility
+
+  Converted from Sigma rule 65d506d3-fcfe-4071-b4b2-bcefe721bbbb by zaafvesper sigma convert. Sigma author: Sohan G (D4rkCiph3r).
+labels:
+  sigma.author: Sohan G (D4rkCiph3r)
+  sigma.id: 65d506d3-fcfe-4071-b4b2-bcefe721bbbb
+  sigma.level: high
+  sigma.source: rules/macos/process_creation/proc_creation_macos_persistence_via_plistbuddy.yml
+  sigma.status: test
+  sigma.tags: attack.privilege-escalation, attack.persistence, attack.t1543.001, attack.t1543.004
+  sigma.title: Potential Persistence Via PlistBuddy
+  tactic.id: TA0003, TA0004
+  tactic.name: Persistence, Privilege Escalation
+  technique.id: T1543.001, T1543.004
+references:
+  - https://redcanary.com/blog/clipping-silver-sparrows-wings/
+  - https://www.manpagez.com/man/8/PlistBuddy/
+condition: evt.name in ('CreateProcess') and (ps.exe iendswith '/PlistBuddy' and (ps.cmdline icontains 'RunAtLoad' and ps.cmdline icontains 'true') and ps.cmdline icontains ('LaunchAgents', 'LaunchDaemons'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Sohan G (D4rkCiph3r))'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

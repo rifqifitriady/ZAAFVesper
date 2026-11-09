@@ -1,0 +1,8 @@
+title: keywords
+id: c008-kw
+logsource: {product: test}
+detection:
+    keywords:
+        - 'event::clear'
+        - 'event::drop'
+    condition: keywords

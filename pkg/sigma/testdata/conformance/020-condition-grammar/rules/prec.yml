@@ -1,0 +1,13 @@
+title: grammar
+id: c020-prec
+logsource: {product: test}
+detection:
+    sel_a:
+        A: 1
+    sel_b:
+        B: 1
+    filter_c:
+        C: 1
+    _hidden:
+        H: 1
+    condition: sel_a or sel_b and not filter_c

@@ -1,0 +1,30 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: OSACompile Run-Only Execution
+id: b9d9b652-d8ed-4697-89a2-a1186ee680ac
+version: 1.0.0
+platforms: [macos]
+description: |-
+  Detects potential suspicious run-only executions compiled using OSACompile
+
+  Converted from Sigma rule b9d9b652-d8ed-4697-89a2-a1186ee680ac by zaafvesper sigma convert. Sigma author: Sohan G (D4rkCiph3r).
+labels:
+  sigma.author: Sohan G (D4rkCiph3r)
+  sigma.id: b9d9b652-d8ed-4697-89a2-a1186ee680ac
+  sigma.level: high
+  sigma.source: rules/macos/process_creation/proc_creation_macos_osacompile_runonly_execution.yml
+  sigma.status: test
+  sigma.tags: attack.t1059.002, attack.execution
+  sigma.title: OSACompile Run-Only Execution
+  tactic.id: TA0002
+  tactic.name: Execution
+  technique.id: T1059.002
+references:
+  - https://redcanary.com/blog/applescript/
+  - https://ss64.com/osx/osacompile.html
+condition: evt.name in ('CreateProcess') and (ps.cmdline icontains 'osacompile' and ps.cmdline icontains ' -x ' and ps.cmdline icontains ' -e ')
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Sohan G (D4rkCiph3r))'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

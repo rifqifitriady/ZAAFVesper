@@ -1,0 +1,7 @@
+title: startswith
+id: c006-s
+logsource: {product: test}
+detection:
+    s:
+        CommandLine|startswith: powershell
+    condition: s

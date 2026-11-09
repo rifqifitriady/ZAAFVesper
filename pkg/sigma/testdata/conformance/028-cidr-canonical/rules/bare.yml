@@ -1,0 +1,7 @@
+title: cidr bare address
+id: c028-bare
+logsource: {product: test}
+detection:
+    s:
+        Ip|cidr: 10.1.2.3
+    condition: s

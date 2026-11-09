@@ -1,0 +1,7 @@
+title: re multiline
+id: c013-m
+logsource: {product: test}
+detection:
+    s:
+        Text|re|m: '^evil$'
+    condition: s

@@ -1,0 +1,6 @@
+{"Value": "a*b"}
+{"Value": "axb"}
+{"Value": "a\\anything"}
+{"Value": "a\\*"}
+{"Value": "a\\\\b"}
+{"Value": "a\\b"}

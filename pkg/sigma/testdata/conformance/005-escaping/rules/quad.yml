@@ -1,0 +1,7 @@
+title: four backslashes
+id: c005-quad
+logsource: {product: test}
+detection:
+    s:
+        Value: 'a\\\\b'
+    condition: s

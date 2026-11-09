@@ -1,0 +1,11 @@
+match:
+  - desc: "bash carves a payload out of an image and base64-decodes it (DMG installer trick)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5201, "ppid": 4000, "exe": "/bin/bash", "name": "bash", "args": ["/bin/bash", "-c", "tail -c +21453 '/Volumes/Installer/Installer.app/Contents/Resources/workout-logo.jpeg' | base64 --decode > /tmp/54A0A2CD.zip"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.bash", "parent": {"pid": 4000, "exe": "/Volumes/Installer/Installer.app/Contents/MacOS/Installer", "name": "Installer"}}}
+nomatch:
+  - desc: "benign lookalike - bash tails a log file"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5211, "ppid": 4000, "exe": "/bin/bash", "name": "bash", "args": ["/bin/bash", "-c", "tail -c 2000 /var/log/install.log > /tmp/last.log"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.bash", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+  - desc: "zsh decodes base64 from a PNG (rule expects bash)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5212, "ppid": 4000, "exe": "/bin/zsh", "name": "zsh", "args": ["/bin/zsh", "-c", "tail -c +100 a.png | base64 -d > out.bin"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.zsh", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}

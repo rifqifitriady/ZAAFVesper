@@ -1,0 +1,10 @@
+spec_ref: sigma-appendix-modifiers.md#generic-modifiers (all), #string-modifiers (windash), #encoding (base64offset)
+description: 'With `all` and an expanding modifier (`windash`, `base64offset`) the original values are AND-ed and each value''s expansion variants are OR-ed (pySigma semantics, interpretation 7). Windash events: ` -a` may appear as ` /a` or with an en dash, but both values must be present. Base64offset events: both `ping` and `whoami` must be found, each in any of its three offset variants (the third event mixes offsets).'
+expected:
+  - [c026]
+  - []
+  - [c026]
+  - [c026-b64]
+  - []
+  - [c026-b64]
+  - []

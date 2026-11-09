@@ -1,0 +1,9 @@
+title: all with base64offset
+id: c026-b64
+logsource: {product: test}
+detection:
+    s:
+        P|base64offset|contains|all:
+            - ping
+            - whoami
+    condition: s

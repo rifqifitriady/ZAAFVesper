@@ -1,0 +1,7 @@
+title: windash
+id: c015
+logsource: {product: test}
+detection:
+    s:
+        CommandLine|contains|windash: ' -s '
+    condition: s

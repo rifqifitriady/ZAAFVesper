@@ -1,0 +1,6 @@
+spec_ref: sigma-appendix-modifiers.md#generic-modifiers
+description: contains / startswith / endswith, case-insensitive.
+expected:
+  - [c006-c, c006-e, c006-s]
+  - []
+  - []

@@ -1,0 +1,7 @@
+title: bad-agg
+id: c025-agg
+logsource: {product: test}
+detection:
+    selection:
+        X: a
+    condition: selection | count() > 5

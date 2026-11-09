@@ -1,0 +1,7 @@
+title: cased
+id: c003-cased
+logsource: {product: test}
+detection:
+    s:
+        User|cased: Admin
+    condition: s

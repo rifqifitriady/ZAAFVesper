@@ -1,0 +1,9 @@
+title: edge not-missing
+id: c030-not
+logsource: {product: test}
+detection:
+    sel:
+        X: 1
+    filter:
+        M: a
+    condition: sel and not filter

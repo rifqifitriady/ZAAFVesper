@@ -1,0 +1,7 @@
+title: bad-contains-gt
+id: c029-7
+logsource: {product: test}
+detection:
+    selection:
+        G|contains|gt: 1
+    condition: selection

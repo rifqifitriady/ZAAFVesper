@@ -1,0 +1,7 @@
+title: re basic
+id: c013-a
+logsource: {product: test}
+detection:
+    s:
+        Image|re: '\\(cmd|powershell)\.exe$'
+    condition: s

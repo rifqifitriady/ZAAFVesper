@@ -1,0 +1,7 @@
+title: good
+id: c029-good
+logsource: {product: test}
+detection:
+    selection:
+        C: a
+    condition: selection

@@ -1,0 +1,31 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Time Machine Backup Disabled Via Tmutil - MacOS
+id: 2c95fa8a-8b8d-4787-afce-7117ceb8e3da
+version: 1.0.0
+platforms: [macos]
+description: |-
+  Detects disabling of Time Machine (Apple's automated backup utility software) via the native macOS backup utility "tmutil".
+  An attacker can use this to prevent backups from occurring.
+
+  Converted from Sigma rule 2c95fa8a-8b8d-4787-afce-7117ceb8e3da by zaafvesper sigma convert. Sigma author: Pratinav Chandra.
+labels:
+  sigma.author: Pratinav Chandra
+  sigma.id: 2c95fa8a-8b8d-4787-afce-7117ceb8e3da
+  sigma.level: medium
+  sigma.source: rules/macos/process_creation/proc_creation_macos_tmutil_disable_backup.yml
+  sigma.status: test
+  sigma.tags: attack.impact, attack.t1490
+  sigma.title: Time Machine Backup Disabled Via Tmutil - MacOS
+  tactic.id: TA0040
+  tactic.name: Impact
+  technique.id: T1490
+references:
+  - https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1490/T1490.md#atomic-test-12---disable-time-machine
+  - https://www.loobins.io/binaries/tmutil/
+condition: evt.name in ('CreateProcess') and ((ps.exe iendswith '/tmutil' or ps.cmdline icontains 'tmutil') and ps.cmdline icontains 'disable')
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Pratinav Chandra)'
+severity: medium
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Legitimate administrator activity'

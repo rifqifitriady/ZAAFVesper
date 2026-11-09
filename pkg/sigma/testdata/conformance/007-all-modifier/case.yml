@@ -1,0 +1,5 @@
+spec_ref: sigma-appendix-modifiers.md#generic-modifiers (all)
+description: '`all` turns the OR between values into AND.'
+expected:
+  - [c007]
+  - []

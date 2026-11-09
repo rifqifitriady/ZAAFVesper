@@ -1,0 +1,9 @@
+title: not null
+id: c009-null
+logsource: {product: test}
+detection:
+    selection:
+        EventID: 4738
+    filter:
+        PasswordLastSet: null
+    condition: selection and not filter

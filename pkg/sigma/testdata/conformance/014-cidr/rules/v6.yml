@@ -1,0 +1,7 @@
+title: cidr v6
+id: c014-v6
+logsource: {product: test}
+detection:
+    s:
+        DestinationIp|cidr: 'fd00::/8'
+    condition: s

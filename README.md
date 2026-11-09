@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-0A0D26?style=for-the-badge&logo=apple&logoColor=white)](#requirements) [![Go](https://img.shields.io/badge/Go-1.27-1FE5C3?style=for-the-badge&logo=go&logoColor=0A0D26)](go.mod) [![License](https://img.shields.io/badge/license-Apache--2.0-9D6BFF?style=for-the-badge)](LICENSE) [![Status](https://img.shields.io/badge/status-pre--release-FF3EC8?style=for-the-badge)](#project-status)
 
-[![Rules](https://img.shields.io/badge/detection%20rules-41-3B8EFF?style=flat-square)](docs/rules.md) [![Fixtures](https://img.shields.io/badge/rule%20fixtures-263%20passing-1FE5C3?style=flat-square)](rules/testdata) [![ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-32%20techniques-FF3EC8?style=flat-square)](#detection-coverage) [![Atomic](https://img.shields.io/badge/Atomic%20Red%20Team-28%20rules%20linked-9D6BFF?style=flat-square)](https://github.com/redcanaryco/atomic-red-team)
+[![Rules](https://img.shields.io/badge/detection%20rules-53-3B8EFF?style=flat-square)](docs/rules.md) [![Fixtures](https://img.shields.io/badge/rule%20fixtures-302%20passing-1FE5C3?style=flat-square)](rules/testdata) [![ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-32%20techniques-FF3EC8?style=flat-square)](#detection-coverage) [![Atomic](https://img.shields.io/badge/Atomic%20Red%20Team-28%20rules%20linked-9D6BFF?style=flat-square)](https://github.com/redcanaryco/atomic-red-team)
 
 **[Quick start](#quick-start)** · **[How it works](#how-it-works)** · **[Coverage](#detection-coverage)** · **[Writing rules](#writing-rules)** · **[Security](#security-model)** · **[Operations guide](docs/operations.md)**
 
@@ -30,7 +30,7 @@ ZAAFVesper watches what processes on a Mac actually **do**: what they spawn, whi
 <td width="50%" valign="top">
 
 **Behaviour rules, not signatures**<br>
-41 rules over process, file, persistence, credential and defence-impairment activity. Single-event rules and `sequence` rules correlate steps such as *download → write → execute* by path or process.
+41 rules over process, file, persistence, credential and defence-impairment activity. Single-event rules and `sequence` rules correlate steps such as *download → write → execute* by path or process. Twelve more come from SigmaHQ, converted with `zaafvesper sigma convert`.
 
 </td>
 <td width="50%" valign="top">
@@ -97,6 +97,7 @@ make build                                   # pure Go, YARA disabled
 cat testdata/eslogger/*.jsonl > demo.jsonl
 ./bin/zaafvesper replay --rules rules demo.jsonl
 ./bin/zaafvesper coverage --rules rules --navigator -   # ATT&CK Navigator layer
+./bin/zaafvesper sigma convert ~/sigma/rules/macos -o my-rules --report report.json
 ```
 
 ### Requirements
@@ -129,7 +130,7 @@ The [operations guide](docs/operations.md) covers the rest: the verify-then-inst
 | Command and Control | 1 | Download followed by a stdin-fed shell |
 | Collection | 1 | Non-interactive screen capture |
 
-The full list, with false-positive notes and trust policy, is in [docs/rules.md](docs/rules.md). `zaafvesper coverage --navigator` exports an ATT&CK Navigator layer.
+The table counts the 41 hand-written rules. The 12 converted SigmaHQ macOS rules in `rules/sigma/macos/` add account changes (admin group, root and guest accounts), SIP and Time Machine tampering, Office child processes and JXA or run-only AppleScript. The full list, with false-positive notes and trust policy, is in [docs/rules.md](docs/rules.md). `zaafvesper coverage --navigator` exports an ATT&CK Navigator layer.
 
 ## Writing rules
 
@@ -164,6 +165,7 @@ condition: >
 - **Reuse:** shared macros and lists live in `rules/macros/macros.yml`.
 - **Missing fields:** a comparison on an absent field is always false, so write trust as a positive check and untrust with `not`.
 - **Workflow:** `rules validate`, then `rules test`, before shipping.
+- **Sigma:** `zaafvesper sigma convert <dir> -o <rules dir>` converts Sigma rules for macOS, Windows and Linux. Rules it cannot convert exactly (aggregations, unmapped fields, IPv6 `cidr`, `base64` and others) are skipped with a reason. Converted rules need fixtures like any other rule before `rules test` passes. Details in [docs/rules.md](docs/rules.md#sigma-import).
 - **Reference:** the language is specified in [docs/plans/2026-11-07-zaafvesper-mvp.md](docs/plans/2026-11-07-zaafvesper-mvp.md).
 
 ## Security model
@@ -180,15 +182,17 @@ The status of every finding, with the tests that back it, is in **[docs/security
 ## Project layout
 
 ```
-cmd/zaafvesper/        CLI: run, replay, rules, coverage
+cmd/zaafvesper/        CLI: run, replay, rules, coverage, sigma
 pkg/event/             platform-neutral event model and field registry
 pkg/source/eslogger/   eslogger decoder and supervisor
 pkg/ps/                process tree, ancestry and identity
 pkg/filter/ql/         rule language: lexer, parser, compiler
 pkg/rules/             rule loading, engine, sequences, fixtures
+pkg/sigma/             Sigma parser and converter
 pkg/yara/              YARA scanner bound to file identity
 pkg/alert/, response/  alert sinks and caps, kill guard rails
 rules/                 41 rules, macros, fixtures, YARA signatures
+rules/sigma/macos/     12 converted SigmaHQ rules (DRL 1.1)
 packaging/             LaunchDaemon plist, newsyslog config
 ```
 
@@ -198,15 +202,17 @@ packaging/             LaunchDaemon plist, newsyslog config
 - Network telemetry through NetworkExtension.
 - Native Endpoint Security client with AUTH events (blocking, not just notify).
 - Signed and notarized package built in CI.
-- SIEM and webhook outputs; Sigma rule import.
+- SIEM and webhook outputs.
 
 ## Acknowledgements
 
 - [rabbitstack/fibratus](https://github.com/rabbitstack/fibratus): the rule language and the overall model.
 - [redcanaryco/atomic-red-team](https://github.com/redcanaryco/atomic-red-team): the tests that rules are linked to.
+- [SigmaHQ/sigma](https://github.com/SigmaHQ/sigma): the converted rules in `rules/sigma/macos/`, under the [Detection Rule License 1.1](https://github.com/SigmaHQ/Detection-Rule-License) (see [rules/sigma/NOTICE.md](rules/sigma/NOTICE.md)).
+- [ZAAFElegia](https://github.com/rifqifitriady/ZAAFElegia): the Sigma conformance cases the converter is tested against.
 - [olafhartong/sysmon-modular](https://github.com/olafhartong/sysmon-modular): the modular approach to telemetry noise.
 - [A-poc/RedTeam-Tools](https://github.com/A-poc/RedTeam-Tools) and [mukul975/Anthropic-Cybersecurity-Skills](https://github.com/mukul975/Anthropic-Cybersecurity-Skills): attacker tradecraft and detection practice.
 
 ## License
 
-[Apache-2.0](LICENSE)
+[Apache-2.0](LICENSE). The converted SigmaHQ rules in `rules/sigma/` are under the Detection Rule License 1.1.

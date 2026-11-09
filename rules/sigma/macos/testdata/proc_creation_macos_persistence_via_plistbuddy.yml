@@ -1,0 +1,11 @@
+match:
+  - desc: "PlistBuddy sets RunAtLoad true on a LaunchAgent"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5001, "ppid": 4000, "exe": "/usr/libexec/PlistBuddy", "name": "PlistBuddy", "args": ["/usr/libexec/PlistBuddy", "-c", "Add :RunAtLoad bool true", "/Users/rifqi/Library/LaunchAgents/com.update.agent.plist"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.PlistBuddy", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+nomatch:
+  - desc: "benign lookalike - PlistBuddy reads a LaunchAgent"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5011, "ppid": 4000, "exe": "/usr/libexec/PlistBuddy", "name": "PlistBuddy", "args": ["/usr/libexec/PlistBuddy", "-c", "Print :RunAtLoad", "/Users/rifqi/Library/LaunchAgents/com.example.helper.plist"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.PlistBuddy", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+  - desc: "PlistBuddy edits an app preference"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5012, "ppid": 4000, "exe": "/usr/libexec/PlistBuddy", "name": "PlistBuddy", "args": ["/usr/libexec/PlistBuddy", "-c", "Set :AutoUpdate true", "/Users/rifqi/Library/Preferences/com.example.app.plist"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.PlistBuddy", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}

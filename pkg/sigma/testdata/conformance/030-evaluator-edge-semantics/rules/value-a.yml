@@ -1,0 +1,7 @@
+title: edge value-a
+id: c030-a
+logsource: {product: test}
+detection:
+    s:
+        F: a
+    condition: s

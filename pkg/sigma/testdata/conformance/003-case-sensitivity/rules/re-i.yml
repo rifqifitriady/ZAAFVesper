@@ -1,0 +1,7 @@
+title: re i
+id: c003-re-i
+logsource: {product: test}
+detection:
+    s:
+        User|re|i: '^admin$'
+    condition: s

