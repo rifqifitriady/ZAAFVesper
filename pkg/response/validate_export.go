@@ -2,6 +2,8 @@
 
 package response
 
+import "net/netip"
+
 // KernelIdentity reads pid's identity from the kernel exactly as the
 // responder does right before it acts (kernel unique id or start stamp,
 // start time, executable, code-signing flags). It exists for the live
@@ -12,3 +14,9 @@ func KernelIdentity(pid int32) (Identity, error) { return identify(pid) }
 // PlatformBinary reports whether the identity's code-signing flags carry
 // CS_PLATFORM_BINARY (macOS; always false elsewhere).
 func (id Identity) PlatformBinary() bool { return id.CSKnown && id.CSFlags&csPlatformBinary != 0 }
+
+// DefaultGateways and DefaultResolvers are the never-block lookups the
+// responder uses by default, so that the harness offers exactly those
+// addresses as peers.
+func DefaultGateways() ([]netip.Addr, error) { return defaultGateways(RunPinned)() }
+func DefaultResolvers() []netip.Addr         { return defaultResolvers() }

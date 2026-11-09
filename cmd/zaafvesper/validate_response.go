@@ -35,6 +35,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -97,6 +98,7 @@ type vHarness struct {
 	cleanup []func()
 	// pfWasEnabled: pf's state before the run (macOS).
 	pfWasEnabled bool
+	beats        int // heartbeat files handed out (Windows)
 	closeOnce    sync.Once
 	stdout       io.Writer
 }
@@ -189,8 +191,25 @@ func validateSleeper(args []string, stderr io.Writer) int {
 	fs.SetOutput(io.Discard)
 	d := fs.Duration("for", 2*time.Minute, "")
 	after := fs.Duration("exec-sleep-after", -1, "")
+	beat := fs.String("beat", "", "")
 	if err := fs.Parse(args); err != nil {
 		return 2
+	}
+	if *beat != "" {
+		// A heartbeat file next to the sleeper's own executable (named
+		// beat-*), rewritten every 100 ms: the harness sees a suspended
+		// process stop beating (Windows has no process state to read).
+		self, err := os.Executable()
+		if err != nil || filepath.Dir(*beat) != filepath.Dir(self) || !strings.HasPrefix(filepath.Base(*beat), "beat-") {
+			say(stderr, "sleeper: --beat must name a beat-* file next to the sleeper")
+			return 2
+		}
+		go func() {
+			for i := 0; ; i++ {
+				_ = os.WriteFile(*beat, []byte(strconv.Itoa(i)), 0o600)
+				time.Sleep(100 * time.Millisecond)
+			}
+		}()
 	}
 	if *d > maxSleeper {
 		*d = maxSleeper
@@ -273,8 +292,21 @@ func (h *vHarness) doClose() {
 // until the kernel reports its identity.
 func (h *vHarness) spawn(extra ...string) (*vSubject, error) {
 	args := append([]string{"validate-response", "sleeper", "--for", "3m"}, extra...)
-	return h.spawnCmd(exec.Command(h.subject, args...))
+	beat := ""
+	if runtime.GOOS == "windows" {
+		h.beats++
+		beat = filepath.Join(h.dir, fmt.Sprintf("beat-%d", h.beats))
+		args = append(args, "--beat", beat)
+	}
+	s, err := h.spawnCmd(exec.Command(h.subject, args...))
+	if err == nil && beat != "" {
+		beatFiles.Store(s.pid, beat)
+	}
+	return s, err
 }
+
+// beatFiles maps a Windows test process to its heartbeat file (waitState).
+var beatFiles sync.Map
 
 func (h *vHarness) spawnCmd(c *exec.Cmd) (*vSubject, error) {
 	c.Stdout, c.Stderr = io.Discard, io.Discard
@@ -407,10 +439,6 @@ func (h *vHarness) runCommon() {
 		fmt.Sprintf("pid %d still present after the decision=%v", pid, alive))
 
 	say(h.stdout, "--- suspend")
-	if runtime.GOOS == "windows" {
-		h.untestable("suspend", "all cases", "Windows has no SIGSTOP; the suspend action is refused before the responder (run_windows.go supportedActions)")
-		return
-	}
 	if s, err := h.spawn(); err != nil {
 		h.untestable("suspend", "subject process", err.Error())
 	} else if p, err := procOf(s.pid); err != nil {
@@ -419,7 +447,7 @@ func (h *vHarness) runCommon() {
 		h.reset()
 		err := h.r.SuspendEvent(&event.Event{Source: vSource(), Proc: p}, "validate-suspend", "validation: suspend")
 		stopped := waitState(s.pid, true, 3*time.Second)
-		h.record("suspend", "SIGSTOP of the test process", expectAct, err == nil && stopped && h.decision().Outcome == response.OutcomeSuspended,
+		h.record("suspend", "suspend of the test process (SIGSTOP; NtSuspendProcess on Windows)", expectAct, err == nil && stopped && h.decision().Outcome == response.OutcomeSuspended,
 			fmt.Sprintf("stopped=%v", stopped))
 		time.Sleep(3500 * time.Millisecond)
 		h.reset()

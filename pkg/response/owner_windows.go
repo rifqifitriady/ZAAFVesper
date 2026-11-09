@@ -14,11 +14,16 @@ import (
 
 // ownerOK reports whether the file belongs to the user of the event's
 // process: the file's owner SID is the SID of the event's user name
-// (Sysmon's User, DOMAIN\name). A file an elevated process created is
-// owned by Administrators, not by the user, and is refused here.
+// (Sysmon's User, DOMAIN\name), or Administrators when the process ran
+// elevated (Sysmon IntegrityLevel High or System): Windows makes the
+// Administrators group the owner of what an elevated administrator
+// creates.
 func ownerOK(fi fileInfo, e *event.Event) bool {
 	if e == nil || e.Proc == nil || e.Proc.Username == "" || fi.Owner == "" {
 		return false
+	}
+	if fi.Owner == SIDAdministrators && (e.Proc.Integrity == "High" || e.Proc.Integrity == "System") {
+		return true
 	}
 	sid, _, _, err := windows.LookupSID("", e.Proc.Username)
 	return err == nil && strings.EqualFold(sid.String(), fi.Owner)
