@@ -47,8 +47,8 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
           CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/bin/zaafvesper" ./cmd/zaafvesper
-          go build -o "$RUNNER_TEMP/bin/receiver" ./scripts/ci/live-macos/receiver
-          go build -o "$RUNNER_TEMP/bin/dropped" ./scripts/ci/live-macos/dropped
+          go build -o "$RUNNER_TEMP/bin/receiver" ./scripts/ci/c/receiver
+          go build -o "$RUNNER_TEMP/bin/dropped" ./scripts/ci/c/dropped
       - name: Build zaaf (ZAAFElegia) at the pinned commit
         run: |
           src="$RUNNER_TEMP/zaafelegia"
@@ -64,7 +64,7 @@ jobs:
         env:
           BIN: ${{ runner.temp }}/bin
           ART: ${{ runner.temp }}/live-macos-results
-        run: scripts/ci/live-macos/run.sh
+        run: scripts/ci/c/run.sh
       - name: Check results
         if: always()
         env:
@@ -72,7 +72,7 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set +e
-          python3 scripts/ci/live-macos/check.py "$ART" "$GITHUB_WORKSPACE" "$RUN_URL"
+          python3 scripts/ci/c/check.py "$ART" "$GITHUB_WORKSPACE" "$RUN_URL"
           rc=$?
           [ -f "$ART/results.md" ] && cat "$ART/results.md" >> "$GITHUB_STEP_SUMMARY"
           exit $rc

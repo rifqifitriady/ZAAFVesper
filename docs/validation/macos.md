@@ -1,6 +1,6 @@
 # Live validation on a GitHub macOS runner
 
-Workflow: [`.github/workflows/live-macos.yml`](../../.github/workflows/live-macos.yml), harness in [`scripts/ci/live-macos/`](../../scripts/ci/live-macos/). It runs on `workflow_dispatch` and on pushes to `validate/**`.
+Workflow: [`.github/workflows/live-macos.yml`](../../.github/workflows/live-macos.yml), harness in [`scripts/ci/c/`](../../scripts/ci/c/). It runs on `workflow_dispatch` and on pushes to `validate/**`.
 
 > **Validated on a GitHub runner is not validated on your Mac.** The runner is a throw-away macOS virtual machine with **SIP disabled**, Full Disk Access granted to `/bin/bash` in its TCC database, and a GitHub/Anka process tree around the job. A Mac with SIP on, the installer package, the LaunchDaemon and Full Disk Access on the ZAAFVesper binary itself are still not validated here.
 
@@ -96,7 +96,7 @@ Splunk HEC mode was not run live (it uses the same HTTPS path; unit tests cover 
 | same: shell with an outbound connection | pass |
 | same: `chflags hidden` | pass |
 
-The three Sigma rules are in `scripts/ci/live-macos/sigma/`.
+The three Sigma rules are in `scripts/ci/c/sigma/`.
 
 ## Bugs found and fixed
 
