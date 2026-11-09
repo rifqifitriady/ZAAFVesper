@@ -1,6 +1,6 @@
 # ZAAFVesper built-in rules (macOS)
 
-41 behaviour rules, 5 YARA signatures and one shared macro file. Every rule maps to one
+43 behaviour rules, 5 YARA signatures and one shared macro file. Every rule maps to one
 MITRE ATT&CK technique, has a fixture file with at least one `match` and two `nomatch`
 scenarios (one of them a realistic benign lookalike), and, where Atomic Red Team ships a
 macOS test for the behaviour, lists that test's GUID in `tests.atomic`.
@@ -55,7 +55,7 @@ Seq = sequence rule. Action = response taken only when ZAAFVesper runs with `--e
 | 25 | Keychain secrets dumped with security CLI<br>`rules/credential_access_keychain_dump_via_security.yml` | TA0006 Credential Access | T1555.001 Keychain | high |  |  | `88e1fa00-bf63-4e5b-a3e1-e2ea51c8cca6` |
 | 26 | Keychain database read by file tool or untrusted binary<br>`rules/credential_access_keychain_file_read.yml` | TA0006 Credential Access | T1555.001 Keychain | high |  |  | `5c32102a-c508-49d3-978f-288f8a9f6617` |
 | 27 | Fake password prompt via osascript<br>`rules/credential_access_osascript_password_prompt.yml` | TA0006 Credential Access | T1056.002 GUI Input Capture | high |  |  | `76628574-0bc1-4646-8fe2-8f4427b47d15`<br>`b7037b89-947a-427a-ba29-e7e9f09bc045` |
-| 28 | Fake password prompt via osascript from untrusted origin<br>`rules/credential_access_osascript_password_prompt_untrusted_origin.yml` | TA0006 Credential Access | T1056.002 GUI Input Capture | critical |  | kill (parent) | (none indexed for this technique) |
+| 28 | Fake password prompt via osascript from untrusted origin<br>`rules/credential_access_osascript_password_prompt_untrusted_origin.yml` | TA0006 Credential Access | T1056.002 GUI Input Capture | critical |  | suspend, kill (parent) | (none indexed for this technique) |
 | 29 | SSH or GnuPG private key read by unusual process<br>`rules/credential_access_ssh_private_key_read.yml` | TA0006 Credential Access | T1552.004 Private Keys | high |  |  | `46959285-906d-40fa-9437-5a439accd878`<br>`864bb0b2-6bb5-489a-b43b-a77b3a16d68a`<br>`2a5a0601-f5fb-4e2e-aa09-73282ae6afca` |
 | 30 | Non-interactive screen capture from script or untrusted parent<br>`rules/collection_noninteractive_screencapture.yml` | TA0009 Collection | T1113 Screen Capture | medium |  |  | `0f47ceb1-720f-4275-96b8-21f0562217ac`<br>`deb7d358-5fbd-4dc4-aecc-ee0054d2d9a4` |
 | 31 | Security software enumeration<br>`rules/discovery_security_software_enumeration.yml` | TA0007 Discovery | T1518.001 Security Software Discovery | low |  |  | `ba62ce11-e820-485f-9c17-6f3c857cd840` |
@@ -63,14 +63,16 @@ Seq = sequence rule. Action = response taken only when ZAAFVesper runs with `--e
 | 33 | launchctl submits a job or loads a plist from a temp folder<br>`rules/execution_launchctl_submit_or_load_from_temp.yml` | TA0002 Execution | T1569.001 Launchctl | medium |  |  | `6fb61988-724e-4755-a595-07743749d4e2` |
 | 34 | Downloaded or decoded script piped into a shell<br>`rules/execution_remote_script_piped_to_shell.yml` | TA0002 Execution | T1059.004 Unix Shell | high |  |  | `d0c88567-803d-4dca-99b4-7ce65e7b257c` |
 | 35 | Suspicious AppleScript or JXA execution<br>`rules/execution_suspicious_osascript.yml` | TA0002 Execution | T1059.002 AppleScript | medium |  |  | `3600d97d-81b9-4171-ab96-e4386506e2c2` |
-| 36 | Binary dropped in a temp or shared folder and executed without developer identity<br>`rules/execution_untrusted_binary_dropped_and_run_from_temp.yml` | TA0002 Execution | T1204.002 Malicious File | high | yes |  | (none indexed for this technique) |
+| 36 | Binary dropped in a temp or shared folder and executed without developer identity<br>`rules/execution_untrusted_binary_dropped_and_run_from_temp.yml` | TA0002 Execution | T1204.002 Malicious File | high | yes | quarantine_file (process) | (none indexed for this technique) |
 | 37 | XProtect malware detection<br>`rules/threat_xprotect_malware_detection.yml` | TA0002 Execution | T1204.002 Malicious File | critical |  |  | (none indexed for this technique) |
 | 38 | YARA signature match<br>`rules/threat_yara_signature_match.yml` | TA0002 Execution | T1204.002 Malicious File | high |  |  | (none indexed for this technique) |
 | 39 | Download followed by stdin-fed shell<br>`rules/command_and_control_download_then_stdin_shell.yml` | TA0011 Command and Control | T1105 Ingress Tool Transfer | high | yes |  | (none indexed for this technique) |
 | 40 | ZAAFVesper sensor degraded<br>`rules/defense_impairment_sensor_degraded.yml` | TA0112 Defense Impairment | T1685 Disable or Modify Tools | medium |  |  | (none; synthetic event) |
 | 41 | Executable replaced right after exec (YARA scan evasion)<br>`rules/defense_impairment_sensor_exec_replaced.yml` | TA0112 Defense Impairment | T1685 Disable or Modify Tools | high |  |  | (none; synthetic event) |
+| 42 | Quarantine attribute removed by an untrusted process<br>`rules/defense_impairment_quarantine_attribute_removed_by_untrusted_process.yml` | TA0112 Defense Impairment | T1553.001 Gatekeeper Bypass | high |  | requarantine | (none indexed for this technique) |
+| 43 | Launch Agent or Daemon written by an untrusted process<br>`rules/persistence_launch_item_plist_by_untrusted_process.yml` | TA0003 Persistence | T1543.001 Launch Agent, T1543.004 Launch Daemon | high |  | remove_persistence | (none indexed for this technique) |
 
-Totals: 41 rules, 4 sequence rules, 28 rules with at least one macOS atomic indexed under the rule's own technique (59 GUIDs), 1 rule with a kill action (target: the untrusted parent).
+Totals: 43 rules, 4 sequence rules, 28 rules with at least one macOS atomic indexed under the rule's own technique (59 GUIDs), 4 rules with response actions (see [operations.md](operations.md#response)). Every action needs `--enable-response` and happens after the event: none of them prevents anything.
 
 `tests.atomic` lists only GUIDs that `atomics/Indexes/Indexes-CSV/macos-index.csv` files
 under the rule's own technique (or its parent). Atomics filed under another technique that
@@ -301,17 +303,21 @@ process snapshot), `yara.meta[attack]` and `yara.meta[description]` (output only
 - **Browser Team IDs**: only Google (checked with codesign here), Mozilla, Microsoft and
   Brave are listed. Opera, Vivaldi and Arc reading their own stores alert until their IDs
   are read from a real install; a wrong ID would allow-list another developer.
-- **Kill action**: only "Fake password prompt via osascript from untrusted origin" kills,
-  and only with `--enable-response`. Since round 2 it declares
-  `action: [{name: kill, target: parent}]`: it kills the untrusted parent that launched the
-  prompt, because osascript is an Apple platform binary and the response layer always
-  refuses to kill those (so the old `kill` of osascript never fired). Kill is reactive (ES
-  NOTIFY): the dialog may already be on screen. Limits: when the payload ran the prompt
-  through `system()`/`popen()`, the parent is a platform `/bin/sh` and is refused, so
-  nothing is killed; when the parent is unknown there is nothing to kill. Killing the
-  first untrusted *ancestor* would need a new target kind in the response layer. On
+- **Response actions** (only with `--enable-response`; reactive, after the event):
+  "Fake password prompt via osascript from untrusted origin" suspends and then kills the
+  untrusted parent that launched the prompt (osascript is an Apple platform binary and is
+  always refused); "Binary dropped in a temp or shared folder and executed without
+  developer identity" quarantines the executable (the running process keeps running);
+  "Quarantine attribute removed by an untrusted process" re-adds the attribute; "Launch
+  Agent or Daemon written by an untrusted process" boots the job out (only when launchd
+  loaded that label from this plist) and quarantines the plist. Limits: when the payload
+  ran the prompt through `system()`/`popen()`, the parent is a platform `/bin/sh` and is
+  refused, so nothing is suspended or killed; when the parent is unknown there is nothing
+  to act on. Acting on the first untrusted *ancestor* would need a new target kind. On
   macOS without a reported signing category a Developer ID parent counts as untrusted
-  and can be killed (see "Fails closed" above).
+  and can be killed (see "Fails closed" above). A plist named `homebrew.mxcl.*` is never
+  acted on (it stays on the alert-only plist rules), so malware using that name still
+  alerts but keeps its plist.
 - **Password prompt, incomplete ancestor chain**: the chain is bounded at 16 entries, so a
   prompt from a chain deeper than 16 processes, or from a process whose ancestor exited
   and was dropped from the table, is treated as untrusted (critical). Replaying a capture
@@ -359,10 +365,10 @@ process snapshot), `yara.meta[attack]` and `yara.meta[description]` (output only
 
 ## How the fixtures were checked
 
-- `zaafvesper rules validate --rules rules`: 41 rules, 4 sequences, 68 macros/lists, 0 warnings
-  (round 5, 8 Nov 2026).
-- `zaafvesper rules test --rules rules`: 263 scenarios, 263 passed, 0 failed (194 before
-  round 2, 250 after round 2, 253 after round 3, 261 after round 4). Includes the security reviewer's SEC-R3
+- `zaafvesper rules validate --rules rules`: 43 rules, 4 sequences, 70 macros/lists, 0 warnings
+  (v0.2 active response, 9 Nov 2026).
+- `zaafvesper rules test --rules rules`: 281 scenarios, 281 passed, 0 failed (194 before
+  round 2, 250 after round 2, 253 after round 3, 261 after round 4, 263 after round 5). Includes the security reviewer's SEC-R3
   (double fork, script(1)+vim) and three SEC-R4 (untrusted ancestor) fixtures.
 - Every `technique.id`/`tactic.id` re-checked against `enterprise-attack.json`; every
   `tests.atomic` GUID is indexed under the rule's technique (or its parent).
@@ -431,3 +437,19 @@ reported) is critical and alert-only (the kill target, launchd, is always refuse
 Fixtures: the two launchd-parented prompts that were high matches / critical nomatches
 moved to critical match / high nomatch, plus a new JXA LaunchAgent pair. The Terminal ->
 login -> zsh -> osascript prompt stays high (match there, nomatch on the critical rule).
+
+## v0.2 active response (9 Nov 2026)
+
+Bumped: `execution_untrusted_binary_dropped_and_run_from_temp` 1.2.0 (`quarantine_file`,
+target process); `credential_access_osascript_password_prompt_untrusted_origin` 1.5.0
+(`suspend` then `kill`, both on the parent); `defense_impairment_quarantine_attribute_removed`
+1.1.0 and `persistence_launch_agent_plist` / `persistence_launch_daemon_plist` 1.2.0
+(they now exclude the untrusted cases, which moved to the new companion rules). New rules 42
+and 43 with macros `untrusted_quarantine_remover` (the remover has no verified identity, or
+is an Apple tool whose direct parent has none; seeded terminal apps make
+`ps.ancestors_untrusted` unsuitable here) and `untrusted_launch_item_writer` (no verified
+identity, Homebrew service plists excepted). Fixtures moved with the cases: the ad-hoc
+loader and the unknown-parent `xattr` are companion matches; a user's `xattr -d` under a
+platform zsh stays on the medium rule; forged and unreported Team IDs and unsigned writers
+of launch plists are companion matches; `cp`, Developer ID vendors and
+`homebrew.mxcl.redis.plist` are companion nomatches.

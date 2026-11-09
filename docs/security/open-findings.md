@@ -1,4 +1,4 @@
-# Security findings ledger (as of 8 Nov 2026)
+# Security findings ledger (as of 9 Nov 2026)
 
 Threat model: malware running as the owner's normal account (uid 501) that controls event content and every user-writable file. Sources:
 - security re-review round 2 (H1, H2, M1–M7, Low);
@@ -49,9 +49,41 @@ Status values:
 | New-5 attacker-chosen signing identifier length | **Closed (code)** | Capped at 256 B in the decoder and the encoder (`TestIdentityCapped`, `TestEncodeCapsSigningFields`) |
 | AppleDouble `._*` entries in the package payload | Accepted | `com.apple.provenance` cannot be removed by the user. Every loader skips dotfiles (`TestDotfilesSkipped`). |
 
+## v0.2 active response (W1, 9 Nov 2026)
+
+Independent security review of the new actions (quarantine_file, requarantine, remove_persistence, isolate_process, suspend) before the PR. Probe tests ran against a scratch copy with stubbed or real non-root `codesign`; nothing ran as root and no real `pfctl` or `launchctl`.
+
+| # | Finding | Severity | Status | Mechanism and evidence | Residual |
+|---|---|---|---|---|---|
+| R1-1 | Nested fake bundles made the sensor run `codesign` (10 s timeout each) on the event loop, under the response lock, before any budget: minutes of no detection per event. A codesign timeout was read as "not Apple-signed" (fail open). | High | **Closed (code)** | A timeout, crash or any exit other than 1 (not signed) or 3 (requirement not met) now refuses (`TestCodesignFailClosed`). More than three nested bundles are refused before any codesign run. codesign has 5 s per bundle. The slow actions run on a background worker with their own lock (`actMu`); kill and suspend never take it and the event loop's tick only tries it, so detection, kills and resumes never wait for a slow action (`TestWorkerQueue`, `TestTickNeverWaitsForSlowAction`, `TestResponseActionsEndToEnd`; the engineering judge found the first version of the tick still waiting). Files on network mounts are refused (`MNT_LOCAL`). | A full worker queue (64) skips further slow actions, reported as `response_rate_limited`. A stalled action delays the other slow actions behind it, at most 3 × 5 s per action. |
+| R1-2 | One `link()` call made every file action refuse (nlink > 1). | Medium | **Closed (code)** | A multiply-linked file that belongs to the uid or euid of the event's process is acted on; only the event's name is removed and the decision reports the other names (`TestQuarantineHardLinkOwned`). A link to another uid's file is still refused (`TestQuarantineGuardRails` "hardlink foreign"). | The other names keep the content of a quarantined file; requarantine covers them (the attribute is on the inode). |
+| R1-3 | A plist with a `com.apple.*`, own or non-plain label was left in place. | Medium | **Closed (code)** | Such a label is never booted out, but the plist is quarantined (`TestRemovePersistence`). Apple's and ZAAFVesper's own plists are refused by path before. | A job already loaded under such a label keeps running until logout or reboot. |
+| R1-4 | Writing the plist with an Apple tool (`/bin/cp`, `sh -c 'cat >'`) avoids remove_persistence. | Medium | **Open (owner decision)** | The companion rule and `RemovePersistence` act only on a writer without platform identity. Extending them to an Apple tool whose parent is untrusted would follow the requarantine macro, with more false positives. | Alert only, high severity, for that case. |
+| R1-5 | All actions share one budget, so cheap decoys (requarantine of own files) can spend it before the kill of a credential stealer. | Medium | **Partial** | A kill after the sensor's own suspend of the same process now counts with it as one (`TestSuspendThenKillOneUnit`). The design requires one shared budget (W1); splitting signals from file and network actions is an owner decision. | Decoys can still use up the global 30 a minute; `response_rate_limited` is raised. |
+| R1-6 | With an empty allow-list, isolate_process can block the gateway, proxy or Apple's servers for the whole Mac for an hour. | Medium | **Partial** | The Mac's DNS resolvers (`/etc/resolv.conf`) are never blocked (`TestIsolateNeverBlocksResolvers`); the sensor warns at start when a rule uses isolate_process with an empty `response.isolation_allow`. No built-in rule uses isolate_process, and without S2's network events every isolation is refused. | The default gateway is not detected; a built-in never-block set (RFC 1918, 17.0.0.0/8) or a mandatory allow-list is an owner decision. |
+| R1-7 | `quarantine_file` with target process could remove another user's or root's file from a sticky directory. | Low | **Closed (code)** | The executable must belong to the uid or euid of the process (`TestQuarantineForeignExecutable`). | — |
+| R1-8 | A lost update between the CLI release and the sensor could leave an untracked pf block. | Low | **Closed (code)** | `isolation release` holds the state lock from read to write; the sensor deletes an address it stops tracking from pf again and never treats an unreadable state file as a release (`TestIsolationStateReconcile`). | — |
+| R1-9 | A sidecar could grow past the read cap and then be overwritten, losing earlier records. | Low | **Closed (code)** | At most 16 records and 64 KiB of attributes per record; the oldest records are dropped to stay under 2 MiB; an existing sidecar that cannot be read is never overwritten (`TestSidecarNeverOverwritten`). | — |
+
+Engineering judge, round 1 (FAIL, capped by one essential item), all fixed in code:
+- The eslogger-sourced platform flag did not reach every action: one preflight now refuses when the platform flag is not known (not from eslogger and no process-table identity), with a documented choice of whose flag counts per action (`TestPlatformFlagMustBeKnown`).
+- A failed `launchctl print` or `bootout` was logged as success: the outcome is now `partial` (`TestRemovePersistence`).
+- Shutdown drained up to 64 queued actions before resuming suspended processes: it now resumes first and drops queued actions that have not started; the LaunchDaemon allows 40 s (`TestCloseResumesFirstAndDropsQueue`).
+- requarantine now checks itself that the event is a `DeleteXattr` of the quarantine attribute by an untrusted remover, and checks an Apple-signed bundle directory itself (`TestRequarantine`).
+
+Checked and found sound by the review: the constant pf ruleset and netip-parsed addresses; the `launchctl` label charset and the "loaded from this very plist" check; the XML and binary plist parsers (60 s fuzz, no panic); the `O_NOFOLLOW` walk, dev/ino binding and `F_GETPATH` re-check; Unicode case folding of the protected list; vault and state directory ownership and modes; restore (no overwrite, no setuid, SHA-256 check); suspend's resume identity check; no real command without root or a test runner.
+
+Engineering judge, round 2: every round-1 item verified fixed; weighted score 4.46, but FAIL (capped at 2.00) under the literal wording of its essential item "every action refuses an Apple platform binary as the acting process". Two actions allow a platform process by documented design (docs/operations.md, "Identity and platform flag"): `quarantine_file` with target `file` (the writer, e.g. curl, is not the target; no built-in rule uses this target) and `requarantine` (Apple's `xattr` under an untrusted parent is the rule's main case). This is an owner decision, listed below.
+
+Other residuals: `platformKnown` treats a process-table kernel unique id as proof that `is_platform` came from Endpoint Security; that holds only while the S2 socket poller gets its process identity from pkg/ps enrichment and never fills the unique id itself (to check at the S1/S2 merge). The isolation expiry skips a 2-second tick while a slow action runs, so under a sustained stream of slow actions the one-hour TTL can run late. After a crash the `pfctl -E` reference is lost (the anchor is flushed at the next start, pf stays enabled) and processes the crashed sensor had suspended stay stopped; `codesign` parses attacker-built bundles as root; isolation is host-wide by address (pf has no per-process filter).
+
 ## Decisions pending with the owner
 
 - **H1:** a CI build with a Developer ID signature.
+- **R1-4:** let remove_persistence act when an Apple tool wrote the plist for an untrusted parent.
+- **R1-5:** a separate budget for kill and suspend.
+- **Judge CK-26:** accept the per-action platform policy (quarantine_file target file and requarantine allow a platform writer or remover), or refuse a platform writer for quarantine_file target file too.
+- **R1-6:** a built-in never-block set (gateway, RFC 1918, Apple's 17.0.0.0/8) or refusing to start isolate rules without `response.isolation_allow`.
 
 Decided on 8 Nov 2026 and recorded in the rows above: New-3 (kill after exec into a platform binary: yes, M1), F3 residual (launchd-parented prompt is an untrusted origin: yes, M2), R5-1 (per-rule aggregation per minute, M5), New-1 / M5 (default budgets unchanged, M5).
 
@@ -64,6 +96,7 @@ Decided on 8 Nov 2026 and recorded in the rows above: New-3 (kill after exec int
 - `p_uniqueid` and `csops` on other users' processes as root.
 - Atomic test runs (28 rules carry GUIDs).
 - Real kills, including the parent-exit race and a kill after an exec into a platform binary under the live sensor.
+- Every v0.2 response action as root: SIGSTOP/SIGCONT, quarantine into the root-owned vault and restore, `launchctl print` and `bootout` in the system and gui domains, `pfctl` loading the anchor under `com.apple/`, `-E`/`-X` tokens and state kills, `codesign -R "anchor apple"` on real bundles, and Gatekeeper's reaction to a re-added quarantine attribute.
 - Per-rule aggregation with the LaunchDaemon's real output directory and clock.
 - YARA on a hung network mount.
 - newsyslog with launchd's open descriptors.

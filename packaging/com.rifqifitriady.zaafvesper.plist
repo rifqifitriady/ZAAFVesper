@@ -35,6 +35,11 @@
 	<true/>
 	<key>ThrottleInterval</key>
 	<integer>10</integer>
+	<!-- Time between SIGTERM and SIGKILL (default 20 s): room to resume
+	     suspended processes, finish the running response action and flush
+	     the pf anchor at shutdown. -->
+	<key>ExitTimeOut</key>
+	<integer>40</integer>
 	<key>ProcessType</key>
 	<string>Standard</string>
 	<key>WorkingDirectory</key>

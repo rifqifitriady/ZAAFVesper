@@ -4,7 +4,7 @@
 # When zaafvesper runs as root, this file, config.d/ and the rules directory must be
 # owned by root and not writable by group or others, or zaafvesper refuses to start.
 #
-# There is deliberately no setting that turns on the kill response: only the
+# There is deliberately no setting that turns on the response actions: only the
 # --enable-response flag does that (and --dry-run-response wins over it).
 
 rules_dir: rules
@@ -38,3 +38,13 @@ yara:
 # process enrichment and before the rules. Each entry needs events, a
 # condition, or both. See config.d/ for the Apple noise set.
 exclude: []
+
+# Response actions (only with --enable-response; see docs/operations.md).
+response:
+  # Addresses and networks isolate_process never blocks (the management
+  # allow-list): your DNS resolvers, proxy, MDM, log collector. Loopback,
+  # link-local, multicast and this Mac's own addresses are never blocked anyway.
+  isolation_allow: []
+  isolation_ttl: 1h          # how long an isolation lasts
+  suspend_for: 30s           # a suspended process is resumed after this unless killed
+  quarantine_max_bytes: 134217728   # 128 MiB

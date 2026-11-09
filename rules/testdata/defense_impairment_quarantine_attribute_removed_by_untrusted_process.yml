@@ -1,0 +1,38 @@
+match:
+  - desc: ad-hoc signed loader strips quarantine from its second stage via removexattr()
+    events:
+      - name: DeleteXattr
+        proc: {pid: 3302, ppid: 1, exe: /Volumes/Installer/Install.app/Contents/MacOS/Install, name: Install, uid: 501, euid: 501, signing_id: Install-5555494411aa, is_platform: false, is_signed: false}
+        file: {path: /Users/rifqi/Library/Application Support/.helper/helper}
+        args: {xattr: com.apple.quarantine}
+  - desc: unsigned dropper runs xattr -d on its payload (Apple tool, untrusted parent)
+    events:
+      - name: DeleteXattr
+        proc: {pid: 3321, ppid: 3320, exe: /usr/bin/xattr, name: xattr, cmdline: "xattr -d com.apple.quarantine /Users/rifqi/Library/.cache/agent", args: [xattr, -d, com.apple.quarantine, /Users/rifqi/Library/.cache/agent], uid: 501, euid: 501, signing_id: com.apple.xattr, is_platform: true, is_signed: true, parent: {pid: 3320, ppid: 1, exe: /Volumes/Setup/Setup.app/Contents/MacOS/Setup, name: Setup, signing_id: Setup-55554944, is_platform: false, is_signed: true, cs_category: local_signing}}
+        file: {path: /Users/rifqi/Library/.cache/agent}
+        args: {xattr: com.apple.quarantine}
+  - desc: xattr whose parent is unknown (evicted or never seen) counts as untrusted
+    events:
+      - name: DeleteXattr
+        proc: {pid: 3331, ppid: 3330, exe: /usr/bin/xattr, name: xattr, uid: 501, euid: 501, signing_id: com.apple.xattr, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/Downloads/tool}
+        args: {xattr: com.apple.quarantine}
+nomatch:
+  - desc: user in a terminal - 'xattr -d com.apple.quarantine myapp.app (ART T1553.001 #1)'
+    events:
+      - name: DeleteXattr
+        proc: {pid: 3301, ppid: 3300, exe: /usr/bin/xattr, name: xattr, cmdline: "xattr -d com.apple.quarantine myapp.app", args: [xattr, -d, com.apple.quarantine, myapp.app], uid: 501, euid: 501, signing_id: com.apple.xattr, is_platform: true, is_signed: true, parent: {pid: 3300, ppid: 3299, exe: /bin/zsh, name: zsh, signing_id: com.apple.zsh, is_platform: true, is_signed: true}}
+        file: {path: /Users/rifqi/Downloads/myapp.app}
+        args: {xattr: com.apple.quarantine}
+  - desc: benign lookalike - syspolicyd (Apple platform) clears the attribute during assessment
+    events:
+      - name: DeleteXattr
+        proc: {pid: 330, ppid: 1, exe: /usr/libexec/syspolicyd, name: syspolicyd, uid: 0, euid: 0, signing_id: com.apple.syspolicyd, is_platform: true, is_signed: true}
+        file: {path: /Applications/Rectangle.app}
+        args: {xattr: com.apple.quarantine}
+  - desc: Developer ID signed app removes quarantine from its own update
+    events:
+      - name: DeleteXattr
+        proc: {pid: 3341, ppid: 1, exe: /Applications/Rectangle.app/Contents/Frameworks/Sparkle.framework/Autoupdate, name: Autoupdate, uid: 501, euid: 501, signing_id: org.sparkle-project.Sparkle.Autoupdate, team_id: XSYZ3E4B7D, cs_category: developer_id, is_platform: false, is_signed: true}
+        file: {path: /Applications/Rectangle.app}
+        args: {xattr: com.apple.quarantine}

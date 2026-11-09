@@ -392,3 +392,26 @@
           '/Users/*/Library/Application Support/Firefox/Profiles/*/cookies.sqlite',
           '/Users/*/Library/Cookies/Cookies.binarycookies',
           '/Users/*/Library/Containers/com.apple.Safari/Data/Library/Cookies/Cookies.binarycookies']
+
+# ---------------------------------------------------------------------------
+# Response companions (v0.2 active response)
+# ---------------------------------------------------------------------------
+
+# A quarantine attribute remover that is untrusted: the remover itself has no
+# verified developer identity, or it is an Apple tool (xattr) whose direct
+# parent has none (a dropper running `xattr -d`). Only the direct parent is
+# judged, not ps.ancestors_untrusted: terminal apps started before the sensor
+# are seeded without a Team ID, which would make every manual `xattr -d` from
+# iTerm2 look untrusted. An unknown parent counts as untrusted.
+- macro: untrusted_quarantine_remover
+  expr: (no_developer_identity or (ps.is_platform = true and parent_no_developer_identity))
+
+# A launch item plist writer that is untrusted (no platform identity and no
+# verified Developer ID / App Store Team ID), except Homebrew's own service
+# plists (homebrew.mxcl.*, written by Homebrew's Ruby for `brew services`),
+# which stay alert-only on the plist rules. The exception is by file name, so
+# malware that names its plist homebrew.mxcl.* still alerts but is not acted on.
+- macro: untrusted_launch_item_writer
+  expr: >
+    (no_developer_identity
+     and not (file.path imatches '*/homebrew.mxcl.*.plist' or file.dest imatches '*/homebrew.mxcl.*.plist'))

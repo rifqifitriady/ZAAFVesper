@@ -83,7 +83,8 @@ fuzz:
 ## YARA=1 for the static YARA build, checked with check-static). Payload:
 ## /usr/local/sbin/zaafvesper (0755), /usr/local/etc/zaafvesper/{zaafvesper.yml,
 ## config.d,rules} (dirs 0755, files 0644), the LaunchDaemon plist (0644),
-## /etc/newsyslog.d/zaafvesper.conf (0644) and /var/log/zaafvesper (0700). pkgbuild records every path as root:wheel
+## /etc/newsyslog.d/zaafvesper.conf (0644), /var/log/zaafvesper (0700) and the response state
+## directory /var/db/zaafvesper with its quarantine vault (both 0700). pkgbuild records every path as root:wheel
 ## (--ownership recommended). The package carries no install scripts.
 package:
 	@test "$$(id -u)" != 0 || { echo "make package runs as your normal user, never as root; root only runs /usr/sbin/installer on the result"; exit 1; }
@@ -99,7 +100,8 @@ package:
 	/usr/bin/plutil -lint $(PLIST)
 	$(PKG_BIN) rules validate $(RULES)
 	mkdir -p $(PKG_ROOT)/usr/local/sbin $(PKG_ROOT)$(ETC)/config.d $(PKG_ROOT)$(ETC)/rules \
-	  $(PKG_ROOT)/Library/LaunchDaemons $(PKG_ROOT)/private/var/log/zaafvesper $(PKG_ROOT)/private/etc/newsyslog.d
+	  $(PKG_ROOT)/Library/LaunchDaemons $(PKG_ROOT)/private/var/log/zaafvesper $(PKG_ROOT)/private/etc/newsyslog.d \
+	  $(PKG_ROOT)/private/var/db/zaafvesper/quarantine
 	install -m 0644 $(NEWSYSLOG) $(PKG_ROOT)/private/etc/newsyslog.d/zaafvesper.conf
 	install -m 0755 $(PKG_BIN) $(PKG_ROOT)/usr/local/sbin/zaafvesper
 	sed 's|^rules_dir:.*|rules_dir: $(ETC)/rules|' configs/zaafvesper.yml > $(PKG_ROOT)$(ETC)/zaafvesper.yml
@@ -111,6 +113,7 @@ package:
 	find $(PKG_ROOT) -type f -exec chmod 0644 {} +
 	chmod 0755 $(PKG_ROOT)/usr/local/sbin/zaafvesper
 	chmod 0700 $(PKG_ROOT)/private/var/log/zaafvesper
+	chmod 0700 $(PKG_ROOT)/private/var/db/zaafvesper $(PKG_ROOT)/private/var/db/zaafvesper/quarantine
 	/usr/bin/xattr -cr $(PKG_ROOT) 2>/dev/null || true
 	rm -f $(PKG_OUT)
 	/usr/bin/pkgbuild --root $(PKG_ROOT) --ownership recommended --identifier $(PKG_ID) \

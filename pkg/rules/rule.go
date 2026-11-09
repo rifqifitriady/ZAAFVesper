@@ -18,15 +18,43 @@ const EngineVersion = "0.1.0"
 // Severities in ascending order.
 var Severities = []string{"info", "low", "medium", "high", "critical"}
 
-// ActionKill is the only response action.
-const ActionKill = "kill"
+// Response action names (v0.2 contract: reserved names; validation and
+// behaviour belong to workstream W1, see pkg/response). Every action is off
+// unless the sensor runs with --enable-response or --dry-run-response.
+const (
+	ActionKill              = "kill"               // SIGKILL the process
+	ActionSuspend           = "suspend"            // SIGSTOP the process, resumed after a bounded time unless killed
+	ActionQuarantineFile    = "quarantine_file"    // move the file into the root-only vault
+	ActionRequarantine      = "requarantine"       // re-add com.apple.quarantine to the file
+	ActionRemovePersistence = "remove_persistence" // launchctl bootout of a launch item's label, then quarantine its plist
+	ActionIsolateProcess    = "isolate_process"    // block the process's remote peers in a pf anchor
+)
 
-// Kill targets. TargetProcess (or an empty target) kills the process of the
-// event that completed the match; TargetParent kills that process's parent.
+// Action targets. TargetProcess (or an empty target) acts on the process of
+// the event that completed the match; TargetParent on that process's parent;
+// TargetFile on the event's file. For quarantine_file, TargetProcess means
+// the executable file of the event's process.
 const (
 	TargetProcess = "process"
 	TargetParent  = "parent"
+	TargetFile    = "file"
 )
+
+// actionTargets lists, per action, the accepted targets; the first is the
+// default used when the rule gives none.
+var actionTargets = map[string][]string{
+	ActionKill:              {TargetProcess, TargetParent},
+	ActionSuspend:           {TargetProcess, TargetParent},
+	ActionIsolateProcess:    {TargetProcess, TargetParent},
+	ActionQuarantineFile:    {TargetFile, TargetProcess},
+	ActionRequarantine:      {TargetFile},
+	ActionRemovePersistence: {TargetFile},
+}
+
+// ActionNames returns every supported action name, sorted.
+func ActionNames() []string {
+	return []string{ActionIsolateProcess, ActionKill, ActionQuarantineFile, ActionRemovePersistence, ActionRequarantine, ActionSuspend}
+}
 
 // Action is a response requested by a rule.
 type Action struct {
@@ -34,7 +62,8 @@ type Action struct {
 	Target string `yaml:"target" json:"target,omitempty"`
 }
 
-// KillTarget returns TargetProcess or TargetParent ("" means process).
+// KillTarget returns TargetProcess or TargetParent ("" means process). It
+// is meaningful for the process actions (kill, suspend, isolate_process).
 func (a Action) KillTarget() string {
 	if a.Target == TargetParent {
 		return TargetParent
@@ -42,10 +71,24 @@ func (a Action) KillTarget() string {
 	return TargetProcess
 }
 
-// String renders the action for display: "kill" or "kill:parent".
+// EffectiveTarget returns the action's target, or its default when the rule
+// gives none ("" for an unknown action).
+func (a Action) EffectiveTarget() string {
+	if a.Target != "" {
+		return a.Target
+	}
+	if ts := actionTargets[a.Name]; len(ts) > 0 {
+		return ts[0]
+	}
+	return ""
+}
+
+// String renders the action for display: the name, plus ":target" when the
+// target is not the action's default ("kill", "kill:parent",
+// "quarantine_file:process").
 func (a Action) String() string {
-	if a.Name == ActionKill && a.KillTarget() == TargetParent {
-		return a.Name + ":" + TargetParent
+	if ts := actionTargets[a.Name]; len(ts) > 0 && a.Target != "" && a.Target != ts[0] {
+		return a.Name + ":" + a.Target
 	}
 	return a.Name
 }
@@ -176,6 +219,18 @@ func semverLess(a, b [3]int) bool {
 	return false
 }
 
+// quoteOr renders ["a","b"] as `"a" or "b"` and ["a"] as `"a"`.
+func quoteOr(ts []string) string {
+	q := make([]string, len(ts))
+	for i, t := range ts {
+		q[i] = strconv.Quote(t)
+	}
+	if len(q) == 1 {
+		return q[0]
+	}
+	return strings.Join(q[:len(q)-1], ", ") + " or " + q[len(q)-1]
+}
+
 // validate checks the static schema (everything except the condition).
 func (r *Rule) validate() []error {
 	var errs []error
@@ -226,15 +281,28 @@ func (r *Rule) validate() []error {
 			bad("platforms: %q is not macos, windows or linux", p)
 		}
 	}
+	seen := map[string]bool{}
 	for _, a := range r.Action {
-		if a.Name != ActionKill {
-			bad("action %q is not supported (only %q)", a.Name, ActionKill)
+		ts, ok := actionTargets[a.Name]
+		if !ok {
+			bad("action %q is not supported (one of %s)", a.Name, strings.Join(ActionNames(), ", "))
+			continue
 		}
-		switch a.Target {
-		case "", TargetProcess, TargetParent:
-		default:
-			bad("action %q target %q must be %q or %q", a.Name, a.Target, TargetProcess, TargetParent)
+		if a.Target != "" {
+			okT := false
+			for _, t := range ts {
+				okT = okT || a.Target == t
+			}
+			if !okT {
+				bad("action %q target %q must be %s", a.Name, a.Target, quoteOr(ts))
+				continue
+			}
 		}
+		key := a.Name + ":" + a.EffectiveTarget()
+		if seen[key] {
+			bad("action %q with target %q is listed twice", a.Name, a.EffectiveTarget())
+		}
+		seen[key] = true
 	}
 	for _, g := range r.Tests.Atomic {
 		if !uuidAnyRe.MatchString(g) {

@@ -1,16 +1,22 @@
-// Package response implements the kill action with guard rails. Response is
-// off unless the operator passes --enable-response (or --dry-run-response);
-// see cmd/zaafvesper. replay never builds a Responder.
+// Package response implements the response actions with guard rails: kill
+// and suspend (signals, response.go and suspend.go), quarantine_file and
+// requarantine (files, quarantine.go), remove_persistence (persistence.go)
+// and isolate_process (isolate.go). Response is off unless the operator
+// passes --enable-response (or --dry-run-response); see cmd/zaafvesper.
+// replay never builds a Responder. Every action happens after the event that
+// triggered it: none of them prevents anything (no Endpoint Security AUTH).
 package response
 
 import (
 	"errors"
 	"fmt"
 	"io"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -36,7 +42,7 @@ const (
 // Errors returned by Kill.
 var (
 	ErrProtected   = errors.New("response: process is protected")
-	ErrRateLimited = errors.New("response: kill rate limit reached")
+	ErrRateLimited = errors.New("response: response rate limit reached")
 	ErrUnknownProc = errors.New("response: process identity unknown or unverified")
 	ErrMismatch    = errors.New("response: pid no longer belongs to the process that matched")
 )
@@ -119,16 +125,20 @@ const (
 	TargetParent  = "parent"
 )
 
-// Decision records one kill decision.
+// Decision records one response decision.
 type Decision struct {
-	Time    time.Time `json:"time"`
-	PID     int32     `json:"pid"`
-	Target  string    `json:"target"` // TargetProcess or TargetParent
-	Name    string    `json:"name,omitempty"`
-	Exe     string    `json:"exe,omitempty"`
-	Reason  string    `json:"reason"`
-	Outcome string    `json:"outcome"`
-	Detail  string    `json:"detail,omitempty"`
+	Time time.Time `json:"time"`
+	// Action is the rule action (ActionSuspend, ActionQuarantineFile, ...);
+	// empty for kill, whose log line format predates the other actions.
+	Action  string `json:"action,omitempty"`
+	PID     int32  `json:"pid"`
+	Target  string `json:"target"` // TargetProcess, TargetParent or TargetFile
+	Name    string `json:"name,omitempty"`
+	Exe     string `json:"exe,omitempty"`
+	Path    string `json:"path,omitempty"` // file actions: the file acted on
+	Reason  string `json:"reason"`
+	Outcome string `json:"outcome"`
+	Detail  string `json:"detail,omitempty"`
 }
 
 // String renders the decision for a log line (sanitized).
@@ -137,8 +147,15 @@ func (d Decision) String() string {
 	if target == "" {
 		target = TargetProcess
 	}
-	s := fmt.Sprintf("%s response %s target=%s pid=%d name=%s exe=%s reason=%q",
-		d.Time.UTC().Format(time.RFC3339), d.Outcome, alert.Sanitize(target), d.PID, alert.Sanitize(d.Name), alert.Sanitize(d.Exe), alert.Sanitize(d.Reason))
+	s := d.Time.UTC().Format(time.RFC3339) + " response " + alert.Sanitize(d.Outcome)
+	if d.Action != "" {
+		s += " action=" + alert.Sanitize(d.Action)
+	}
+	s += fmt.Sprintf(" target=%s pid=%d name=%s exe=%s", alert.Sanitize(target), d.PID, alert.Sanitize(d.Name), alert.Sanitize(d.Exe))
+	if d.Path != "" {
+		s += fmt.Sprintf(" path=%q", alert.Sanitize(d.Path))
+	}
+	s += fmt.Sprintf(" reason=%q", alert.Sanitize(d.Reason))
 	if d.Detail != "" {
 		s += " detail=" + fmt.Sprintf("%q", alert.Sanitize(d.Detail))
 	}
@@ -157,20 +174,80 @@ type Config struct {
 	KillFunc            func(pid int, sig syscall.Signal) error // default syscall.Kill
 	Identify            func(pid int32) (Identity, error)       // default: kernel lookup (sysctl, proc_pidpath, csops), see identify_darwin.go
 	Lookup              func(pid int32) (*event.Proc, bool)     // process table, for Kill(pid); optional
-	// OnDegraded is called, outside the responder's lock, when a kill budget
-	// refuses a kill (condition CondRateLimited).
+	// OnDegraded is called, outside the responder's lock, when a response
+	// budget refuses an action (condition CondRateLimited).
 	OnDegraded func(condition, detail string)
+
+	// Settings of the actions other than kill (zero values take the
+	// defaults; see actions.go).
+
+	// VaultDir is the quarantine vault (default DefaultVaultDir), StateDir
+	// holds the isolation state (default DefaultStateDir). With
+	// RequireRootOwned (production, as root) both must be owned by root and
+	// closed to group and others.
+	VaultDir, StateDir string
+	RequireRootOwned   bool
+	// MaxQuarantineBytes caps the size of a quarantined file
+	// (default DefaultMaxQuarantineBytes).
+	MaxQuarantineBytes int64
+	// ProtectPaths are ZAAFVesper's own files and directories (binary,
+	// configuration, rules, output, vault): never quarantined or changed.
+	ProtectPaths []string
+	// Runner runs pfctl, launchctl and codesign (default RunPinned).
+	Runner Runner
+	// AppleSigned reports whether a bundle directory carries Apple's own
+	// signature (default: codesign -R "anchor apple" through Runner).
+	AppleSigned func(bundle string) (bool, error)
+	// ConsoleUID returns the uid of the console user (default: owner of
+	// /dev/console), for the gui/<uid> domain of /Library/LaunchAgents.
+	ConsoleUID func() (uint32, error)
+	// IsolationTTL is how long an isolation lasts (default
+	// DefaultIsolationTTL); IsolationAllow are networks never blocked (the
+	// management allow-list); LocalAddrs returns this host's addresses
+	// (default: the interface addresses), which are never blocked either.
+	IsolationTTL   time.Duration
+	IsolationAllow []netip.Prefix
+	LocalAddrs     func() ([]netip.Addr, error)
+	// Resolvers returns the DNS resolvers that are never blocked either
+	// (default: the nameservers of /etc/resolv.conf).
+	Resolvers func() []netip.Addr
+	// SuspendFor is how long a suspended process stays stopped before it is
+	// resumed unless killed (default DefaultSuspendFor, at most
+	// MaxSuspendFor).
+	SuspendFor time.Duration
 }
 
-// Responder kills processes within the guard rails. Safe for concurrent use.
+// Responder applies response actions within the guard rails. Safe for
+// concurrent use.
 type Responder struct {
 	mu        sync.Mutex
 	cfg       Config
 	protected map[int32]bool
-	recent    []time.Time            // kills (or dry-run kills) inside the last minute, all rules
+	recent    []time.Time            // actions (or dry-run actions) inside the last minute, all rules
 	perRule   map[string][]time.Time // the same, by rule
 	logged    map[string]time.Time   // last logged refusal by rule|target|pid|outcome
 	stats     map[string]uint64
+
+	// actMu serialises the file and network actions and guards their state
+	// (isolated, saved, pfToken, pfLoaded). It is held across their slow
+	// steps (copies, pfctl, launchctl, codesign); mu is only taken inside it
+	// for budgets, stats and logs, so kill and suspend never wait for them.
+	// Lock order: actMu before mu.
+	actMu sync.Mutex
+	work  atomic.Pointer[worker] // background worker of the slow actions (worker.go), nil until StartWorker
+
+	suspended map[int32]*suspension // stopped processes waiting for their resume (suspend.go)
+	isolated  map[string]*Isolation // blocked peers by address (isolate.go)
+	saved     map[string]bool       // addresses in the state file at the last save
+	pfToken   string                // pfctl -E reference token, released at Close
+	pfLoaded  bool                  // the anchor's table and rules are loaded
+
+	// launchRoot, set only by tests, is a fake root for the launch item
+	// directories of remove_persistence.
+	launchRoot string
+
+	netMu sync.Mutex
+	peers map[string]*peerSet // remote peers seen per process (isolate.go)
 }
 
 // New returns a responder.
@@ -193,8 +270,44 @@ func New(cfg Config) *Responder {
 	if cfg.Log == nil {
 		cfg.Log = func(d Decision) { _, _ = io.WriteString(os.Stderr, d.String()+"\n") }
 	}
+	if cfg.VaultDir == "" {
+		cfg.VaultDir = DefaultVaultDir
+	}
+	if cfg.StateDir == "" {
+		cfg.StateDir = DefaultStateDir
+	}
+	if cfg.MaxQuarantineBytes <= 0 {
+		cfg.MaxQuarantineBytes = DefaultMaxQuarantineBytes
+	}
+	if cfg.Runner == nil {
+		cfg.Runner = RunPinned
+	}
+	if cfg.AppleSigned == nil {
+		cfg.AppleSigned = appleSignedByCodesign(cfg.Runner)
+	}
+	if cfg.ConsoleUID == nil {
+		cfg.ConsoleUID = consoleUID
+	}
+	if cfg.IsolationTTL <= 0 {
+		cfg.IsolationTTL = DefaultIsolationTTL
+	}
+	if cfg.LocalAddrs == nil {
+		cfg.LocalAddrs = interfaceAddrs
+	}
+	if cfg.Resolvers == nil {
+		cfg.Resolvers = resolvConfAddrs
+	}
+	if cfg.SuspendFor <= 0 {
+		cfg.SuspendFor = DefaultSuspendFor
+	}
+	if cfg.SuspendFor > MaxSuspendFor {
+		cfg.SuspendFor = MaxSuspendFor
+	}
+	// The vault and the state directory are ZAAFVesper's own files.
+	cfg.ProtectPaths = append(append([]string(nil), cfg.ProtectPaths...), cfg.VaultDir, cfg.StateDir)
 	r := &Responder{cfg: cfg, protected: map[int32]bool{}, perRule: map[string][]time.Time{},
-		logged: map[string]time.Time{}, stats: map[string]uint64{}}
+		logged: map[string]time.Time{}, stats: map[string]uint64{},
+		suspended: map[int32]*suspension{}, isolated: map[string]*Isolation{}, peers: map[string]*peerSet{}}
 	r.protected[int32(os.Getpid())] = true
 	r.protected[int32(os.Getppid())] = true
 	for _, p := range cfg.ProtectPIDs {
@@ -231,7 +344,7 @@ func (r *Responder) Kill(pid int32, reason string) error {
 			return r.KillProc(&cp, reason)
 		}
 	}
-	return r.decide(&event.Proc{PID: pid}, TargetProcess, "", reason, "identity unknown", false)
+	return r.decide(&event.Proc{PID: pid}, TargetProcess, "", reason, "identity unknown", false, syscall.SIGKILL)
 }
 
 // KillEvent kills the process of e (normally the event that completed an
@@ -239,13 +352,17 @@ func (r *Responder) Kill(pid int32, reason string) error {
 // kern.procargs2: Proc.Seeded or evt.arg[identity]=unverified) is never
 // killed. rule (the rule id) selects the per-rule kill budget.
 func (r *Responder) KillEvent(e *event.Event, rule, reason string) error {
+	return r.signalEvent(e, rule, reason, syscall.SIGKILL)
+}
+
+func (r *Responder) signalEvent(e *event.Event, rule, reason string, sig syscall.Signal) error {
 	if e == nil || e.Proc == nil {
-		return r.decide(&event.Proc{}, TargetProcess, rule, reason, "event has no process", false)
+		return r.decide(&event.Proc{}, TargetProcess, rule, reason, "event has no process", false, sig)
 	}
 	if e.Proc.Seeded || e.Args[ps.ArgIdentity] == ps.Unverified {
-		return r.decide(e.Proc, TargetProcess, rule, reason, "process identity is unverified (seeded at start from kern.procargs2)", false)
+		return r.decide(e.Proc, TargetProcess, rule, reason, "process identity is unverified (seeded at start from kern.procargs2)", false, sig)
 	}
-	return r.decide(e.Proc, TargetProcess, rule, reason, "", e.Source == ESSource)
+	return r.decide(e.Proc, TargetProcess, rule, reason, "", e.Source == ESSource, sig)
 }
 
 // KillParent kills the parent of e's process (rules with action
@@ -254,28 +371,32 @@ func (r *Responder) KillEvent(e *event.Event, rule, reason string) error {
 // (evt.arg[parent_identity]=unverified). Every other guard rail of KillProc
 // applies to the parent. rule selects the per-rule kill budget.
 func (r *Responder) KillParent(e *event.Event, rule, reason string) error {
+	return r.signalParent(e, rule, reason, syscall.SIGKILL)
+}
+
+func (r *Responder) signalParent(e *event.Event, rule, reason string, sig syscall.Signal) error {
 	if e == nil || e.Proc == nil {
-		return r.decide(&event.Proc{}, TargetParent, rule, reason, "event has no process", false)
+		return r.decide(&event.Proc{}, TargetParent, rule, reason, "event has no process", false, sig)
 	}
 	par := e.Proc.Parent
 	if par == nil {
-		return r.decide(&event.Proc{PID: e.Proc.PPID}, TargetParent, rule, reason, "parent process is unknown (not in the process table)", false)
+		return r.decide(&event.Proc{PID: e.Proc.PPID}, TargetParent, rule, reason, "parent process is unknown (not in the process table)", false, sig)
 	}
 	cp := *par
 	if cp.PID == 0 {
 		cp.PID = e.Proc.PPID
 	}
 	if cp.PID != e.Proc.PPID {
-		return r.decide(&cp, TargetParent, rule, reason, fmt.Sprintf("parent pid %d does not match ppid %d", cp.PID, e.Proc.PPID), false)
+		return r.decide(&cp, TargetParent, rule, reason, fmt.Sprintf("parent pid %d does not match ppid %d", cp.PID, e.Proc.PPID), false, sig)
 	}
 	if cp.Seeded || e.Args[ps.ArgParentIdentity] == ps.Unverified {
-		return r.decide(&cp, TargetParent, rule, reason, "parent identity is unverified (seeded at start from kern.procargs2)", false)
+		return r.decide(&cp, TargetParent, rule, reason, "parent identity is unverified (seeded at start from kern.procargs2)", false, sig)
 	}
 	// The parent comes from the process table. With an eslogger event, the
 	// table was built from eslogger events (exec, fork and every other event
 	// carry is_platform_binary; fork and observe copy it with the image), and
 	// seeded entries were refused above, so its IsPlatform is known.
-	return r.decide(&cp, TargetParent, rule, reason, "", e.Source == ESSource)
+	return r.decide(&cp, TargetParent, rule, reason, "", e.Source == ESSource, sig)
 }
 
 // KillProc kills the process described by p unless a guard rail refuses.
@@ -284,9 +405,9 @@ func (r *Responder) KillParent(e *event.Event, rule, reason string) error {
 // known: a current platform image is refused (no exec-into-platform kill).
 func (r *Responder) KillProc(p *event.Proc, reason string) error {
 	if p == nil {
-		return r.decide(&event.Proc{}, TargetProcess, "", reason, "no process", false)
+		return r.decide(&event.Proc{}, TargetProcess, "", reason, "no process", false, syscall.SIGKILL)
 	}
-	return r.decide(p, TargetProcess, "", reason, "", false)
+	return r.decide(p, TargetProcess, "", reason, "", false, syscall.SIGKILL)
 }
 
 func nameOf(p *event.Proc) string {
@@ -458,8 +579,9 @@ func pruneWindow(ts []time.Time, now time.Time) []time.Time {
 // non-empty unknown means the identity is already known to be unusable.
 // platformKnown says p.IsPlatform comes from Endpoint Security (see
 // ESSource); only then may a process that exec'd into a platform binary
-// after detection be killed.
-func (r *Responder) decide(p *event.Proc, target, rule, reason, unknown string, platformKnown bool) error {
+// after detection be signalled. sig is SIGKILL (kill) or SIGSTOP (suspend):
+// both go through exactly the same guard rails and the same budgets.
+func (r *Responder) decide(p *event.Proc, target, rule, reason, unknown string, platformKnown bool, sig syscall.Signal) error {
 	var notice string
 	defer func() { // after the unlock below
 		if notice != "" && r.cfg.OnDegraded != nil {
@@ -470,13 +592,18 @@ func (r *Responder) decide(p *event.Proc, target, rule, reason, unknown string, 
 	defer r.mu.Unlock()
 	now := r.cfg.Now()
 	d := Decision{Time: now, PID: p.PID, Target: target, Name: p.Name, Exe: p.Exe, Reason: reason}
+	statKey := ""
+	if sig == syscall.SIGSTOP {
+		d.Action = ActionSuspend
+		statKey = ActionSuspend + " "
+	}
 	finish := func(outcome, detail string, err error) error {
 		d.Outcome, d.Detail = outcome, detail
-		r.stats[outcome]++
+		r.stats[statKey+outcome]++
 		if target == TargetParent {
-			r.stats[outcome+" (parent)"]++
+			r.stats[statKey+outcome+" (parent)"]++
 		}
-		if r.repeatRefusal(rule, target, p.PID, outcome, now) {
+		if r.repeatRefusal(d.Action+"|"+rule, target, p.PID, outcome, now) {
 			r.stats["log_suppressed"]++
 			return err
 		}
@@ -502,6 +629,38 @@ func (r *Responder) decide(p *event.Proc, target, rule, reason, unknown string, 
 	if err != nil {
 		return finish(outcome, detail, err)
 	}
+	// A kill that follows this responder's own suspend of the same process
+	// (same kernel unique id) completes that response: it does not spend a
+	// second unit of the budget.
+	free := false
+	if s, ok := r.suspended[p.PID]; ok && sig == syscall.SIGKILL && s.proc.UniqueID == p.UniqueID {
+		free = true
+	}
+	if !free {
+		if outcome, detail, err := r.spend(rule, reason, now, &notice); err != nil {
+			return finish(outcome, detail, err)
+		}
+	}
+	if r.cfg.DryRun {
+		return finish(OutcomeDryRun, note, nil)
+	}
+	if err := r.cfg.KillFunc(int(p.PID), sig); err != nil {
+		return finish(OutcomeError, err.Error(), fmt.Errorf("response: signal %d to %d: %w", sig, p.PID, err))
+	}
+	if sig == syscall.SIGSTOP {
+		r.holdSuspended(p, rule, reason, now)
+		return finish(OutcomeSuspended, note, nil)
+	}
+	r.forgetSuspended(p)
+	return finish(OutcomeKilled, note, nil)
+}
+
+// spend takes one unit of the per-rule and of the global response budget
+// for an action at now, or refuses. Every action (kill, suspend, quarantine,
+// requarantine, remove_persistence, isolate_process) shares these budgets.
+// On a refusal, *notice is set to the response_rate_limited detail; the
+// caller raises it after unlocking. Caller holds mu.
+func (r *Responder) spend(rule, reason string, now time.Time, notice *string) (string, string, error) {
 	r.recent = pruneWindow(r.recent, now)
 	ruleTimes := pruneWindow(r.perRule[rule], now)
 	if len(ruleTimes) == 0 {
@@ -509,23 +668,17 @@ func (r *Responder) decide(p *event.Proc, target, rule, reason, unknown string, 
 	}
 	if len(ruleTimes) >= r.cfg.MaxPerRulePerMinute {
 		r.perRule[rule] = ruleTimes
-		notice = fmt.Sprintf("kill budget of %d per minute reached for %s", r.cfg.MaxPerRulePerMinute, reason)
-		return finish(OutcomeRateLimited, fmt.Sprintf("%d kills by this rule in the last minute", len(ruleTimes)), ErrRateLimited)
+		*notice = fmt.Sprintf("response budget of %d per minute reached for %s", r.cfg.MaxPerRulePerMinute, reason)
+		return OutcomeRateLimited, fmt.Sprintf("%d responses by this rule in the last minute", len(ruleTimes)), ErrRateLimited
 	}
 	if len(r.recent) >= r.cfg.MaxPerMinute {
 		r.perRule[rule] = ruleTimes
-		notice = fmt.Sprintf("global kill budget of %d per minute reached (last: %s)", r.cfg.MaxPerMinute, reason)
-		return finish(OutcomeRateLimited, fmt.Sprintf("%d kills in the last minute (all rules)", len(r.recent)), ErrRateLimited)
+		*notice = fmt.Sprintf("global response budget of %d per minute reached (last: %s)", r.cfg.MaxPerMinute, reason)
+		return OutcomeRateLimited, fmt.Sprintf("%d responses in the last minute (all rules)", len(r.recent)), ErrRateLimited
 	}
 	r.recent = append(r.recent, now)
 	r.perRule[rule] = append(ruleTimes, now)
-	if r.cfg.DryRun {
-		return finish(OutcomeDryRun, note, nil)
-	}
-	if err := r.cfg.KillFunc(int(p.PID), syscall.SIGKILL); err != nil {
-		return finish(OutcomeError, err.Error(), fmt.Errorf("response: kill %d: %w", p.PID, err))
-	}
-	return finish(OutcomeKilled, note, nil)
+	return "", "", nil
 }
 
 // repeatRefusal reports whether a refusal with the same rule, target, pid

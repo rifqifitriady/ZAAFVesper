@@ -1,0 +1,35 @@
+name: Quarantine attribute removed by an untrusted process
+id: ca4bc383-648a-4d7e-98ab-657076a3f14e
+version: 1.0.0
+platforms: [macos]
+description: |
+  The com.apple.quarantine extended attribute was deleted from a file by an untrusted
+  process: one without verified developer identity (unsigned, ad-hoc, self-signed or a
+  forged Team ID), or an Apple tool such as xattr whose direct parent has none (a dropper
+  running `xattr -d com.apple.quarantine`). Droppers strip the attribute so that
+  Gatekeeper never assesses the payload. Removals by a user in a terminal (xattr under a
+  platform shell) stay on the medium rule "Quarantine attribute removed from file".
+  Response (only with --enable-response): requarantine re-adds com.apple.quarantine to
+  the same file (bound to the dev/ino of the event), so Gatekeeper assesses it at its
+  next launch. It cannot undo a launch that already happened.
+  Known benign: Homebrew `--no-quarantine` cask installs run by Homebrew's own Ruby, and
+  unsigned developer tools that clear quarantine; the attribute comes back and Gatekeeper
+  asks once.
+labels:
+  tactic.id: TA0112
+  tactic.name: Defense Impairment
+  technique.id: T1553.001
+  technique.name: Gatekeeper Bypass
+references:
+  - https://attack.mitre.org/techniques/T1553/001/
+condition: >
+  delete_xattr
+  and evt.arg[xattr] = 'com.apple.quarantine'
+  and not (apple_trusted_process)
+  and untrusted_quarantine_remover
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) removed the quarantine attribute from %file.path; requarantine target"
+severity: high
+action: [{name: requarantine}]
+tests:
+  atomic: []
+min-engine-version: 0.1.0

@@ -9,16 +9,6 @@ match:
       - name: CreateFile
         proc: {pid: 900, ppid: 1, exe: /System/Library/PrivateFrameworks/PackageKit.framework/Versions/A/Resources/installd, name: installd, uid: 0, euid: 0, signing_id: com.apple.installd, is_platform: true, is_signed: true}
         file: {path: /Library/LaunchDaemons/com.vendor.agent.plist}
-  - desc: forged - Zoom's Team ID on a self-signed writer (cs_category local_signing) stays high
-    events:
-      - name: CreateFile
-        proc: {pid: 5101, ppid: 1, exe: /Library/PrivilegedHelperTools/us.zoom.ZoomDaemon, name: us.zoom.ZoomDaemon, uid: 0, euid: 0, signing_id: us.zoom.ZoomDaemon, team_id: BJ4HAAB9B3, is_platform: false, is_signed: true, cs_category: local_signing}
-        file: {path: /Library/LaunchDaemons/us.zoom.ZoomDaemon.plist}
-  - desc: Team ID with no reported signing category stays high (fail closed)
-    events:
-      - name: CreateFile
-        proc: {pid: 5102, ppid: 1, exe: /Library/PrivilegedHelperTools/us.zoom.ZoomDaemon, name: us.zoom.ZoomDaemon, uid: 0, euid: 0, signing_id: us.zoom.ZoomDaemon, team_id: BJ4HAAB9B3, is_platform: false, is_signed: true}
-        file: {path: /Library/LaunchDaemons/us.zoom.ZoomDaemon.plist}
 nomatch:
   - desc: benign lookalike - Developer ID signed vendor helper writes its daemon (routed to the low-severity companion rule)
     events:
@@ -35,3 +25,13 @@ nomatch:
       - name: CreateFile
         proc: {pid: 2201, ppid: 2200, exe: /bin/cp, name: cp, uid: 501, euid: 501, signing_id: com.apple.cp, is_platform: true, is_signed: true}
         file: {path: /Users/rifqi/Library/LaunchAgents/com.example.plist}
+  - desc: on the companion rule (untrusted writer) - forged - Zoom's Team ID on a self-signed writer (cs_category local_signing) stays high
+    events:
+      - name: CreateFile
+        proc: {pid: 5101, ppid: 1, exe: /Library/PrivilegedHelperTools/us.zoom.ZoomDaemon, name: us.zoom.ZoomDaemon, uid: 0, euid: 0, signing_id: us.zoom.ZoomDaemon, team_id: BJ4HAAB9B3, is_platform: false, is_signed: true, cs_category: local_signing}
+        file: {path: /Library/LaunchDaemons/us.zoom.ZoomDaemon.plist}
+  - desc: on the companion rule (untrusted writer) - Team ID with no reported signing category stays high (fail closed)
+    events:
+      - name: CreateFile
+        proc: {pid: 5102, ppid: 1, exe: /Library/PrivilegedHelperTools/us.zoom.ZoomDaemon, name: us.zoom.ZoomDaemon, uid: 0, euid: 0, signing_id: us.zoom.ZoomDaemon, team_id: BJ4HAAB9B3, is_platform: false, is_signed: true}
+        file: {path: /Library/LaunchDaemons/us.zoom.ZoomDaemon.plist}

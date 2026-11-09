@@ -1,0 +1,57 @@
+match:
+  - desc: unsigned stealer renames a temp file onto /Library/LaunchAgents
+    events:
+      - name: RenameFile
+        proc: {pid: 3300, ppid: 1, exe: /Volumes/Installer/Setup.app/Contents/MacOS/Setup, name: Setup, uid: 501, euid: 501, is_platform: false, is_signed: false}
+        file: {path: /private/tmp/.x1, dest: /Library/LaunchAgents/com.apple.updates.plist}
+  - desc: forged - Google's Team ID on a self-signed writer (cs_category local_signing) stays high
+    events:
+      - name: CreateFile
+        proc: {pid: 4140, ppid: 1, exe: /Users/Shared/GoogleSoftwareUpdateAgent, name: GoogleSoftwareUpdateAgent, uid: 501, euid: 501, signing_id: com.google.Keystone.Agent, team_id: EQHXZ8M8AV, is_platform: false, is_signed: true, cs_category: local_signing}
+        file: {path: /Users/rifqi/Library/LaunchAgents/com.google.keystone.agent.plist}
+  - desc: Team ID with no reported signing category stays high (fail closed)
+    events:
+      - name: CreateFile
+        proc: {pid: 4141, ppid: 1, exe: /Users/Shared/GoogleSoftwareUpdateAgent, name: GoogleSoftwareUpdateAgent, uid: 501, euid: 501, signing_id: com.google.Keystone.Agent, team_id: EQHXZ8M8AV, is_platform: false, is_signed: true}
+        file: {path: /Users/rifqi/Library/LaunchAgents/com.google.keystone.agent.plist}
+  - desc: forged - Zoom's Team ID on a self-signed writer (cs_category local_signing) stays high
+    events:
+      - name: CreateFile
+        proc: {pid: 5101, ppid: 1, exe: /Library/PrivilegedHelperTools/us.zoom.ZoomDaemon, name: us.zoom.ZoomDaemon, uid: 0, euid: 0, signing_id: us.zoom.ZoomDaemon, team_id: BJ4HAAB9B3, is_platform: false, is_signed: true, cs_category: local_signing}
+        file: {path: /Library/LaunchDaemons/us.zoom.ZoomDaemon.plist}
+  - desc: Team ID with no reported signing category stays high (fail closed)
+    events:
+      - name: CreateFile
+        proc: {pid: 5102, ppid: 1, exe: /Library/PrivilegedHelperTools/us.zoom.ZoomDaemon, name: us.zoom.ZoomDaemon, uid: 0, euid: 0, signing_id: us.zoom.ZoomDaemon, team_id: BJ4HAAB9B3, is_platform: false, is_signed: true}
+        file: {path: /Library/LaunchDaemons/us.zoom.ZoomDaemon.plist}
+  - desc: ad-hoc payload writes a LaunchDaemon as root
+    events:
+      - name: CreateFile
+        proc: {pid: 5301, ppid: 1, exe: /private/tmp/.updater, name: .updater, uid: 0, euid: 0, signing_id: a.out, is_platform: false, is_signed: true, cs_category: local_signing}
+        file: {path: /Library/LaunchDaemons/com.system.updater.plist}
+nomatch:
+  - desc: 'sudo cp drops the atomic plist into the user''s LaunchAgents (ART T1543.001 #1)'
+    events:
+      - name: CreateFile
+        proc: {pid: 2101, ppid: 2100, exe: /bin/cp, name: cp, cmdline: "cp /tmp/atomicredteam_T1543_001.plist /Users/rifqi/Library/LaunchAgents/com.atomicredteam.plist", args: [cp, /tmp/atomicredteam_T1543_001.plist, /Users/rifqi/Library/LaunchAgents/com.atomicredteam.plist], uid: 0, euid: 0, signing_id: com.apple.cp, is_platform: true, is_signed: true}
+        file: {path: /Users/rifqi/Library/LaunchAgents/com.atomicredteam.plist}
+  - desc: benign lookalike - Google Keystone (Developer ID, team EQHXZ8M8AV) installs its updater agent
+    events:
+      - name: CreateFile
+        proc: {pid: 4100, ppid: 1, exe: /Users/rifqi/Library/Google/GoogleSoftwareUpdate/GoogleSoftwareUpdate.bundle/Contents/Helpers/GoogleSoftwareUpdateAgent.app/Contents/MacOS/GoogleSoftwareUpdateAgent, name: GoogleSoftwareUpdateAgent, uid: 501, euid: 501, signing_id: com.google.Keystone.Agent, team_id: EQHXZ8M8AV, cs_category: developer_id, is_platform: false, is_signed: true}
+        file: {path: /Users/rifqi/Library/LaunchAgents/com.google.keystone.agent.plist}
+  - desc: 'sudo cp drops the atomic plist into /Library/LaunchDaemons (ART T1543.004 #1)'
+    events:
+      - name: CreateFile
+        proc: {pid: 2201, ppid: 2200, exe: /bin/cp, name: cp, cmdline: "cp atomicredteam_T1543_004.plist /Library/LaunchDaemons/com.atomicredteam.plist", args: [cp, atomicredteam_T1543_004.plist, /Library/LaunchDaemons/com.atomicredteam.plist], uid: 0, euid: 0, signing_id: com.apple.cp, is_platform: true, is_signed: true}
+        file: {path: /Library/LaunchDaemons/com.atomicredteam.plist}
+  - desc: benign lookalike - Developer ID signed vendor helper writes its daemon (routed to the low-severity companion rule)
+    events:
+      - name: CreateFile
+        proc: {pid: 5100, ppid: 1, exe: /Library/PrivilegedHelperTools/us.zoom.ZoomDaemon, name: us.zoom.ZoomDaemon, uid: 0, euid: 0, signing_id: us.zoom.ZoomDaemon, team_id: BJ4HAAB9B3, cs_category: developer_id, is_platform: false, is_signed: true}
+        file: {path: /Library/LaunchDaemons/us.zoom.ZoomDaemon.plist}
+  - desc: brew services start - Homebrew Ruby writes homebrew.mxcl.redis.plist (stays alert-only)
+    events:
+      - name: CreateFile
+        proc: {pid: 5201, ppid: 5200, exe: /opt/homebrew/Cellar/ruby/3.3.0/bin/ruby, name: ruby, uid: 501, euid: 501, signing_id: ruby, is_platform: false, is_signed: true, cs_category: local_signing}
+        file: {path: /Users/rifqi/Library/LaunchAgents/homebrew.mxcl.redis.plist}

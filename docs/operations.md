@@ -43,12 +43,13 @@ The package (no install scripts; every path recorded as `root:wheel`) contains:
 | `/Library/LaunchDaemons/com.rifqifitriady.zaafvesper.plist` | 0644 |
 | `/etc/newsyslog.d/zaafvesper.conf` | 0644 (rotates `/var/log/zaafvesper/*.log` at 10 MB, 5 uncompressed generations, 0600) |
 | `/var/log/zaafvesper/` | 0700 (also created by the sensor if missing) |
+| `/var/db/zaafvesper/` and `/var/db/zaafvesper/quarantine/` | 0700 (response state and quarantine vault; see *Response*) |
 
 The package also resets `/usr/local`, `/usr/local/sbin` and `/usr/local/etc` to `root:wheel 0755`, which is the macOS default on Apple Silicon. On an Intel Mac with Homebrew in `/usr/local` that changes Homebrew's ownership; do not install there without planning for it.
 
 **Full Disk Access** goes to the binary, never to Terminal: System Settings > Privacy & Security > Full Disk Access > `+`, press Cmd-Shift-G and add `/usr/local/sbin/zaafvesper`. Then restart the daemon (`sudo /bin/launchctl kickstart -k system/com.rifqifitriady.zaafvesper`). Every upgrade installs a new binary with a new code-directory hash, so remove and re-add the entry after each upgrade; without it eslogger cannot start and the daemon keeps restarting (see `/var/log/zaafvesper/zaafvesper.log`).
 
-The daemon runs `zaafvesper run --config /usr/local/etc/zaafvesper/zaafvesper.yml --rules /usr/local/etc/zaafvesper/rules --output-dir /var/log/zaafvesper --no-console --no-color` as root with `RunAtLoad` and `KeepAlive`, outside any terminal session, so the normal account has no terminal or `sudo` session through which to stop or pause it (not yet validated live). Alerts go to `/var/log/zaafvesper/alerts-<UTC time>.jsonl`, sensor messages to `/var/log/zaafvesper/zaafvesper.log`. The kill response is off; to enable it, add `--enable-response` (or first `--dry-run-response`) to `ProgramArguments` in the plist, then `bootout` and `bootstrap` again.
+The daemon runs `zaafvesper run --config /usr/local/etc/zaafvesper/zaafvesper.yml --rules /usr/local/etc/zaafvesper/rules --output-dir /var/log/zaafvesper --no-console --no-color` as root with `RunAtLoad` and `KeepAlive`, outside any terminal session, so the normal account has no terminal or `sudo` session through which to stop or pause it (not yet validated live). Alerts go to `/var/log/zaafvesper/alerts-<UTC time>.jsonl`, sensor messages to `/var/log/zaafvesper/zaafvesper.log`. The response actions are off; to enable them, add `--enable-response` (or first `--dry-run-response`) to `ProgramArguments` in the plist, then `bootout` and `bootstrap` again.
 
 Upgrade: build the new package, copy and verify it as above, `sudo /usr/sbin/installer -pkg ... -target /`, `sudo /bin/launchctl kickstart -k system/com.rifqifitriady.zaafvesper`, and re-grant Full Disk Access.
 
@@ -60,6 +61,8 @@ sudo /bin/rm /Library/LaunchDaemons/com.rifqifitriady.zaafvesper.plist /usr/loca
 sudo /bin/rm -r /usr/local/etc/zaafvesper
 sudo /usr/sbin/pkgutil --forget com.rifqifitriady.zaafvesper
 ```
+
+Before removing `/var/db/zaafvesper`, check `sudo /usr/local/sbin/zaafvesper quarantine list`: it holds every file the response moved away. A clean shutdown already removes every pf block (`zaafvesper isolation list` shows none).
 
 `make install` is disabled and prints these steps.
 
@@ -75,22 +78,92 @@ sudo /usr/sbin/pkgutil --forget com.rifqifitriady.zaafvesper
 
 The fix is a CI build with a pinned toolchain and libyara, signed with a Developer ID Installer certificate and notarized, installed only after the signature is checked.
 
-## Response (kill)
+## Response
 
-Response is **off by default**. `--enable-response` lets rules that declare a kill action terminate a process; `--dry-run-response` only logs what would be killed. A rule picks the target:
+Response is **off by default**. `--enable-response` lets rules that declare an action carry it out; `--dry-run-response` runs every guard rail and logs what each action would do, and does nothing (it wins over `--enable-response`). `replay` never acts.
 
-- `action: [{name: kill}]` (or `target: process`) kills the process of the event that completed the match;
-- `action: [{name: kill, target: parent}]` kills that process's **parent**, for example the untrusted program that launched an `osascript` password prompt (osascript itself is an Apple platform binary and is never killed).
+**The honest limit.** Endpoint Security through eslogger is notify-only, and ZAAFVesper has no Endpoint Security entitlement, so nothing here blocks anything *before* it happens. Every action runs after the event that triggered it, typically milliseconds to a second later. A payload can already have run, read a file, phoned home or copied itself elsewhere. The actions contain and clean up; they do not prevent. Real blocking (Endpoint Security AUTH events) needs Apple's entitlement and is out of scope for v0.2.
 
-Every response line names the target (`target=process` or `target=parent`). Before a kill ZAAFVesper re-reads the process from the kernel:
+The actions, which a rule lists in order under `action:`:
 
-- **Same process.** The kernel's unique process id (`p_uniqueid`, read with `proc_pidinfo` right before the kill) must equal the one the process table recorded for the event's process. It is not reused before a reboot, so a different value means another process now holds the pid. The kill is refused when the ids differ, when the event has none recorded, or when it cannot be read now. As a second check the kernel's start time must equal the event's within 1 ms. Tests cover each refusal with stub kernels and a real child process.
-- **Protected at detection.** The kill is refused when the process was an Apple platform binary in the event that matched (`is_platform`, from Endpoint Security).
-- **Protected now.** The kill is refused when the image running *now* lies under `/System`, `/usr/libexec`, `/sbin` or `/usr/sbin` or is `/usr/bin/eslogger` (`proc_pidpath`), when it is an Apple platform binary with a protected name (`launchd`, `WindowServer`, `loginwindow`, `kernel_task`, `eslogger`), and when its code-signing status (`csops`) or its path cannot be read (protection unknown). pid 1, ZAAFVesper's own pids and the eslogger child are always refused.
-- **Renaming does not save it.** In the tests, a process that renamed, deleted or replaced its own executable after exec was still killed (stubbed signal); the changed path or file is written into the decision's `detail`. **Exec into an Apple binary does not save it either** (owner decision 8 Nov 2026): a process that was not a platform binary when it matched and has since exec'd into one, for example `/bin/zsh` or `osascript`, is killed when the kernel unique id and start time still match the event (the same process), and only when the event came from eslogger, so that "not a platform binary" was reported by Endpoint Security and is not just a missing value. The decision's `detail` says the process exec'd into an Apple platform binary after detection. If it exec'd again before the sensor recorded its unique id, the kill is refused (no recorded id).
-- **Unverified identity.** Refused when the process (or the parent, for `target: parent`) was only seeded at start-up, when the parent is not in the process table, and when the process carries a Team ID but Endpoint Security did not report its signing category (kills stay alert-only on such systems).
+| Action | Targets | What it does |
+|---|---|---|
+| `kill` | `process` (default), `parent` | SIGKILL. |
+| `suspend` | `process` (default), `parent` | SIGSTOP right away, so the next action (normally a `kill`) does not race the payload. The process is resumed (SIGCONT, after re-checking it is the same process) after `response.suspend_for` (default 30 s, at most 10 min) unless it was killed, and at a clean shutdown. |
+| `quarantine_file` | `file` (default: the event's file, the destination of a rename), `process` (the executable of the event's process) | Moves the file into the vault `/var/db/zaafvesper/quarantine/<sha256>` (mode 0400, so no exec bit) with a sidecar `<sha256>.json` (original path, owner, mode, extended attributes, rule, process, time), then removes the original. A running process keeps running. |
+| `requarantine` | `file` | Re-adds `com.apple.quarantine` (`0001;<time>;ZAAFVesper;`) to a file or bundle whose attribute was just removed, so Gatekeeper assesses it at the next launch. It acts only on a `DeleteXattr` of that attribute by an untrusted remover; an attribute that is present again is left alone. |
+| `remove_persistence` | `file` | For a plist directly in `/Library/LaunchDaemons`, `/Library/LaunchAgents`, `/Users/<name>/Library/LaunchAgents` or `/var/root/Library/LaunchAgents`: reads its `Label` (XML or binary plist), runs `/bin/launchctl bootout` on it in `system`, `gui/<console user>` or `gui/<home owner>`, then quarantines the plist like `quarantine_file`. |
+| `isolate_process` | `process` (default), `parent` | Adds the process's remote peers to a pf table and blocks them for `response.isolation_ttl` (default 1 h). Peers are the event's own (`NetworkConnect`, `NetworkAccept`) and those seen for the same process in the last 10 minutes. |
 
-Kill budgets: 10 per rule and 30 in total per minute; a refused kill because a budget is spent raises `SensorDegraded` (`response_rate_limited`). The same refusal for the same rule, target and pid is logged once a minute (counted in the stats). Repeats of the same alert, and alerts held back by per-rule aggregation, are still evaluated for response (deduplication and aggregation only quiet the output). `replay` can never kill. Endpoint Security via eslogger is notify-only: ZAAFVesper reacts *after* the behaviour, it cannot block it beforehand. A parent target can exit before the kill; that race has not been tested live.
+Built-in rules with actions: *Binary dropped in a temp or shared folder and executed without developer identity* (`quarantine_file`, target process), *Quarantine attribute removed by an untrusted process* (`requarantine`), *Launch Agent or Daemon written by an untrusted process* (`remove_persistence`) and *Fake password prompt via osascript from untrusted origin* (`suspend` then `kill`, both on the parent). The two "untrusted" rules are companions of the alert-only rules for the same behaviour: a remover or writer with no verified identity goes to the companion, the rest stays alert-only (Apple tools run by a user, PackageKit, Homebrew's `homebrew.mxcl.*` service plists, Developer ID vendors).
+
+### Guard rails shared by every action
+
+- **Budgets.** All actions together: 10 per rule and 30 in total per minute; a kill that follows the sensor's own suspend of the same process counts with it as one. A refusal because a budget is spent raises `SensorDegraded` (`response_rate_limited`). The same refusal for the same rule, target and pid (or path) is logged once a minute. Because the budget is shared, malware that triggers many cheap actions (for example requarantine of its own decoy files) can spend it before the action that matters; that residual is in the findings ledger.
+- **Off the event loop.** kill and suspend run inline (a few system calls). The slow actions (file copies, `codesign`, `launchctl`, `pfctl`) run one at a time on a background worker with a copy of the event and their own lock; the event loop never waits for that lock (the isolation expiry skips a tick while an action runs), so they do not hold up detection, a kill or a resume. When 64 actions are already waiting, a new one is skipped and reported as `response_rate_limited`. At a clean shutdown suspended processes are resumed first, the running action finishes, queued actions that have not started are dropped (counted), and the pf anchor is flushed; the LaunchDaemon allows 40 s for this (`ExitTimeOut`).
+- **Identity and platform flag.** One preflight, shared by every non-signal action, applies the identity rules of kill: an action is refused when the process it judges (the event's process, or its parent for `target: parent`) was only seeded at start-up or is marked unverified, when the parent is not in the process table or its pid does not match, and when whether it is an Apple platform binary is not known (the event is not from eslogger and the process carries no process-table identity). Which process's platform flag counts:
+
+  | Action | Process judged | Apple platform binary |
+  |---|---|---|
+  | `isolate_process` | the process or its parent | refused, with every other kill protection (pids, names, paths, unreported signing category) |
+  | `quarantine_file`, target `process` | the process that ran the file | refused (and the file must belong to its uid or euid) |
+  | `quarantine_file`, target `file` | the process that wrote the file | allowed: the file is the target, not the writer (curl downloads are the usual case); the file's own protection is its path and bundle signature |
+  | `requarantine` | the remover | allowed only when its parent is unknown or untrusted (`xattr` run by a dropper), refused under a trusted parent |
+  | `remove_persistence` | the writer of the plist | refused |
+- **Outcomes.** A step that fails is never logged as success: `partial` means some steps were done and one failed (for example the plist was quarantined but `launchctl` could not confirm the job is out), `error` that the action failed.
+- **Log.** Every decision is one sanitized line in the daemon's log: `response <outcome> action=<name> target=... pid=... path=... reason=... detail=...` (kill lines keep their v0.1 format without `action=`).
+
+### Process actions: kill and suspend
+
+Before a kill or a suspend ZAAFVesper re-reads the process from the kernel:
+
+- **Same process.** The kernel's unique process id (`p_uniqueid`, read with `proc_pidinfo` right before the signal) must equal the one the process table recorded for the event's process. It is not reused before a reboot, so a different value means another process now holds the pid. The signal is refused when the ids differ, when the event has none recorded, or when it cannot be read now. As a second check the kernel's start time must equal the event's within 1 ms. Tests cover each refusal with stub kernels and a real child process.
+- **Protected at detection.** Refused when the process was an Apple platform binary in the event that matched (`is_platform`, from Endpoint Security).
+- **Protected now.** Refused when the image running *now* lies under `/System`, `/usr/libexec`, `/sbin` or `/usr/sbin` or is `/usr/bin/eslogger` (`proc_pidpath`), when it is an Apple platform binary with a protected name (`launchd`, `WindowServer`, `loginwindow`, `kernel_task`, `eslogger`), and when its code-signing status (`csops`) or its path cannot be read (protection unknown). pid 1, ZAAFVesper's own pids and the eslogger child are always refused.
+- **Renaming does not save it.** In the tests, a process that renamed, deleted or replaced its own executable after exec was still killed (stubbed signal); the changed path or file is written into the decision's `detail`. **Exec into an Apple binary does not save it either** (owner decision 8 Nov 2026): a process that was not a platform binary when it matched and has since exec'd into one, for example `/bin/zsh` or `osascript`, is killed when the kernel unique id and start time still match the event, and only when the event came from eslogger. If it exec'd again before the sensor recorded its unique id, the kill is refused (no recorded id).
+- **Suspend** uses exactly these checks. Its resume checks the unique id and start time again, so a pid reused meanwhile never receives SIGCONT. A parent target can exit before the signal; that race has not been tested live.
+
+### File actions: quarantine_file, requarantine, remove_persistence
+
+- **Bound to the event's file.** The event must carry the file's device and inode (from Endpoint Security's stat). The file is opened by walking its path from `/` one component at a time with `O_NOFOLLOW` (a symbolic link anywhere refuses), opened `O_NOFOLLOW|O_NONBLOCK`, and its device and inode must equal the event's. A file replaced, renamed over or swapped for a link since the event is left alone. The kernel's own path of the opened file (`F_GETPATH`) is checked against the protected list again.
+- **Regular files only** (requarantine also accepts a bundle directory), on a local file system (a network mount could stall the copy), and at most `response.quarantine_max_bytes` (default 128 MiB) for `quarantine_file`, 1 MiB for a plist. A file that changes size while it is copied is not quarantined.
+- **Hard links.** A file with several names is acted on only when it belongs to the uid or euid of the process the event is about (that process could have made the extra names, so refusing would let a payload escape with one `link()` call); only the event's name is removed, and the decision says how many other names remain. A hard link to somebody else's file is refused.
+- **Ownership for `target: process`.** The executable must belong to the uid or euid of the process that ran it, so root never clears another user's file from a shared sticky directory (`/private/tmp`, `/Users/Shared`) just because the offender ran it.
+- **Never touched** (compared with Unicode case folding, because APFS is case-insensitive): `/System`, `/usr` (except `/usr/local`), `/bin`, `/sbin`, `/Library/Apple`, `/private/var/db`, `/private/etc`, `/dev`, the TCC database, `com.apple.*` launch plists, any file inside a bundle (`.app`, `.framework`, `.kext`, ...) that carries Apple's own signature (`codesign -R "anchor apple"`, 5 s per bundle; a timeout, a crash or any answer other than "not signed" or "requirement not met" refuses), and any file nested in more than three bundles, an Apple platform binary as `target: process`, and ZAAFVesper's own files: its binary, configuration, rules, output directory, LaunchDaemon plist, `/var/db/zaafvesper` and the vault.
+- **The original is removed only after** the copy is in the vault, synced, and its sidecar written, and only if the name still points to the same inode. The vault must be a directory owned by root with mode 0700 or nothing is written there.
+- **remove_persistence** in addition: the plist's writer must not be an Apple platform binary (a dropper that writes its plist with `/bin/cp` is therefore alert-only; see the findings ledger). `launchctl bootout` runs only for a plain label (`[A-Za-z0-9._-]`, at most 255 characters, a single `Label` key) that is not `com.apple.*` or ZAAFVesper's own, and only when `launchctl print` reports that label loaded **from this very plist**, so a plist that borrows another program's label cannot make the sensor stop that program. If `launchctl` cannot answer (anything but "not found") or the bootout fails, the plist is still quarantined and the outcome is `partial`. A label that fails these checks, an unreadable label, or `/Library/LaunchAgents` with nobody logged in still quarantines the plist but boots nothing out. Jobs loaded in another domain (`user/<uid>`, another GUI user) are not booted out; they stop at logout because the plist is gone. A restored plist is not loaded again.
+
+```bash
+sudo /usr/local/sbin/zaafvesper quarantine list
+sudo /usr/local/sbin/zaafvesper quarantine restore <first 8+ characters of the id>
+```
+
+`restore` creates the file at its original path (never over an existing file, no link followed), with its owner, mode and extended attributes (the quarantine attribute included). setuid, setgid and sticky bits are never restored. It refuses a destination on the protected list.
+
+### Network action: isolate_process
+
+- **pf filters addresses, not processes.** macOS has no per-process firewall without a NetworkExtension, so isolating a process blocks its remote peers **for the whole Mac**: every program loses those addresses until the isolation expires or is released. New peers the process contacts afterwards are not blocked.
+- **Never blocked:** loopback, link-local, multicast and broadcast addresses, scoped addresses, this Mac's own interface addresses, its DNS resolvers (`nameserver` lines of `/etc/resolv.conf`), and the management allow-list `response.isolation_allow` (put your gateway, proxy, MDM and log collector there; the sensor warns at start when a rule uses `isolate_process` and the list is empty). The default gateway is **not** detected automatically. At most 16 addresses per action and 256 in all. No built-in rule uses `isolate_process` yet; it needs the `NetworkConnect` / `NetworkAccept` events of the socket poller (workstream S2), which eslogger does not produce, so until then every isolation is refused with `refused-no-peers`.
+- **The pf ruleset is a constant**: one table `<zaafvesper_isolated>` and two `block drop quick` rules in the anchor `com.apple/com.rifqifitriady.zaafvesper`. Event data never enters a rule; only addresses parsed and re-printed by Go's `net/netip` enter the table. `/sbin/pfctl` is pinned and run with a fixed argument vector and an empty environment. pf states for the blocked addresses are killed so open connections stop.
+- **Lifecycle.** The anchor is loaded and pf enabled (`pfctl -E`, a reference that is released with `pfctl -X` at a clean shutdown) on the first isolation. At start the anchor is flushed (an earlier crash may have left blocks); at a clean shutdown it is flushed again. The anchor lives under `com.apple/` because the stock `/etc/pf.conf` evaluates only anchors there; a custom `/etc/pf.conf` without `anchor "com.apple/*"` makes isolation a no-op.
+- **Network data** comes from the `NetworkConnect` / `NetworkAccept` events of the socket poller (workstream S2). It polls, so connections shorter than the polling interval are missed.
+
+```bash
+sudo /usr/local/sbin/zaafvesper isolation list
+sudo /usr/local/sbin/zaafvesper isolation release 203.0.113.5     # or: release all
+```
+
+### Settings
+
+```yaml
+response:
+  isolation_allow: [10.0.0.53, 192.168.1.0/24]   # never blocked
+  isolation_ttl: 1h
+  suspend_for: 30s
+  quarantine_max_bytes: 134217728
+```
+
+None of these turns a response on; only the flags do.
 
 ## Data handling
 
@@ -110,7 +183,7 @@ When ZAAFVesper's own telemetry is degraded it raises a synthetic `SensorDegrade
 
 ## Not yet validated live
 
-These need root, Full Disk Access or a real attack and have only been tested with unit tests or by reading the code: the package install and its on-disk ownership; launchd `KeepAlive` and the daemon's immunity to the normal account; Full Disk Access on the binary; the ownership and ACL checks against the installed root-owned tree; real kills, including the parent-kill race (the parent may exit first); Endpoint Security's `cs_validation_category` for self-signed code; the JSON shape of eslogger's `executable.stat` (`st_dev`, `st_ino`, `st_ctimespec`); YARA on a hung NFS or SMB mount; and newsyslog's behaviour with launchd's open log descriptors (after a rotation the daemon may keep writing to the rotated file until it restarts; rotated files are left uncompressed so those lines stay readable).
+These need root, Full Disk Access or a real attack and have only been tested with unit tests or by reading the code: every response action as root (real SIGSTOP/SIGCONT, quarantine of a root-owned or other user's file into the root-owned vault, `launchctl print` output and `bootout` in the system and gui domains, `pfctl` loading the anchor, `-E`/`-X` tokens, state kills, and whether the stock `/etc/pf.conf` evaluates `com.apple/com.rifqifitriady.zaafvesper`); `codesign -R "anchor apple"` on real bundles; Gatekeeper's reaction to a re-added quarantine attribute; the package install and its on-disk ownership (including `/var/db/zaafvesper`); launchd `KeepAlive` and the daemon's immunity to the normal account; Full Disk Access on the binary; the ownership and ACL checks against the installed root-owned tree; real kills, including the parent-kill race (the parent may exit first); Endpoint Security's `cs_validation_category` for self-signed code; the JSON shape of eslogger's `executable.stat` (`st_dev`, `st_ino`, `st_ctimespec`); YARA on a hung NFS or SMB mount; and newsyslog's behaviour with launchd's open log descriptors (after a rotation the daemon may keep writing to the rotated file until it restarts; rotated files are left uncompressed so those lines stay readable).
 
 ## Telemetry notes
 

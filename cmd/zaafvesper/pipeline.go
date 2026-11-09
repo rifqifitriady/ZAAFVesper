@@ -76,6 +76,9 @@ func (p *pipeline) handle(e *event.Event, fromScanner bool) {
 		p.excluded++
 		return
 	}
+	if p.responder != nil {
+		p.responder.Observe(e) // remote peers per process, for isolate_process
+	}
 	if p.scanner != nil && !fromScanner && yaraTriggers[e.Name] {
 		p.scanner.Submit(e)
 		p.submitted++
@@ -191,25 +194,9 @@ func (p *pipeline) fallbackAlert(a *rules.Alert) {
 	_, _ = io.WriteString(p.errw, line+"\n")
 }
 
-// respond applies the rule's kill actions when response is on: the process
-// of the completing event (target process) or its parent (target parent).
-// Guard rails live in pkg/response.
-func (p *pipeline) respond(a *rules.Alert) {
-	if p.responder == nil {
-		return
-	}
-	for _, act := range a.Response {
-		if act.Name != rules.ActionKill {
-			continue
-		}
-		reason := "rule " + a.RuleName + " (" + a.RuleID + ")"
-		if act.KillTarget() == rules.TargetParent {
-			_ = p.responder.KillParent(a.Last(), a.RuleID, reason)
-		} else {
-			_ = p.responder.KillEvent(a.Last(), a.RuleID, reason)
-		}
-	}
-}
+// respond applies the rule's response actions when response is on (see
+// respondActions in response_actions.go).
+func (p *pipeline) respond(a *rules.Alert) { p.respondActions(a) }
 
 // printStats writes the end-of-run counters (sanitized, one group per line).
 func (p *pipeline) printStats(w io.Writer, extra map[string]map[string]uint64) {

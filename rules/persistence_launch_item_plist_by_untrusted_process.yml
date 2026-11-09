@@ -1,0 +1,40 @@
+name: Launch Agent or Daemon written by an untrusted process
+id: 3137ceb2-af81-4e4c-afb6-4d5c25b52d8e
+version: 1.0.0
+platforms: [macos]
+description: |
+  A property list was created, modified or renamed into a LaunchAgents or LaunchDaemons
+  directory by a process without any verified identity: not an Apple platform binary
+  and no Team ID with a Developer ID or App Store signing category (unsigned, ad-hoc,
+  self-signed or a forged Team ID). That is how DMG-delivered stealers and loaders
+  persist (Atomic Stealer, Shlayer, XCSSET). Apple file tools, interpreters, PackageKit
+  and Homebrew's homebrew.mxcl.* plists stay on the alert-only rules "Launch Agent
+  persistence via plist write" and "Launch Daemon persistence via plist write".
+  Response (only with --enable-response): remove_persistence reads the plist's Label,
+  runs `launchctl bootout` on it in the right domain (system for LaunchDaemons, the
+  console user's gui domain for /Library/LaunchAgents, the home owner's gui domain for
+  ~/Library/LaunchAgents) only when launchd reports that label loaded from this very
+  plist, then moves the plist into the quarantine vault. com.apple.* labels and
+  ZAAFVesper's own are refused. Whatever the job already did stays done.
+labels:
+  tactic.id: TA0003
+  tactic.name: Persistence
+  technique.id: T1543.001, T1543.004
+  technique.name: Launch Agent, Launch Daemon
+references:
+  - https://attack.mitre.org/techniques/T1543/001/
+  - https://attack.mitre.org/techniques/T1543/004/
+condition: >
+  (
+    (file_written and file.path imatches ('/Users/*/Library/LaunchAgents/*.plist', '/Library/LaunchAgents/*.plist', '/private/var/root/Library/LaunchAgents/*.plist', '/Library/LaunchDaemons/*.plist'))
+    or (rename_file and file.dest imatches ('/Users/*/Library/LaunchAgents/*.plist', '/Library/LaunchAgents/*.plist', '/private/var/root/Library/LaunchAgents/*.plist', '/Library/LaunchDaemons/*.plist'))
+  )
+  and not (apple_trusted_process)
+  and not (developer_id_signed)
+  and untrusted_launch_item_writer
+output: "%ps.exe (pid %ps.pid, uid %ps.uid, parent %ps.parent.exe) wrote launch item %file.path %file.dest"
+severity: high
+action: [{name: remove_persistence}]
+tests:
+  atomic: []
+min-engine-version: 0.1.0
