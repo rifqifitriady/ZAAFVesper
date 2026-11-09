@@ -1,0 +1,26 @@
+title: Download, chmod +x in a temp folder and execution by one user (macOS)
+id: 843eac30-ba42-46a5-95d5-802225b02c3f
+name: zv_corr_macos_download_chmod_execute
+status: experimental
+description: |
+  The staging pattern of a second-stage payload: curl or wget over HTTP, then chmod +x on a
+  file in a temp folder, then a process running from a temp folder, in that order, by the
+  same user on the same host within 10 minutes.
+  Needs ZAAFElegia M2 (correlation rules). ZAAFElegia 0.0.1 parses and skips it.
+author: ZAAFVesper project
+references:
+  - https://attack.mitre.org/techniques/T1105/
+  - https://attack.mitre.org/techniques/T1204/002/
+correlation:
+  type: temporal_ordered
+  rules:
+    - zv_macos_curl_http_download
+    - zv_macos_chmod_exec_temp
+    - zv_macos_exec_from_temp
+  group-by:
+    - Computer
+    - User
+  timespan: 10m
+falsepositives:
+  - Install scripts that download, chmod and run a helper from /tmp
+level: high

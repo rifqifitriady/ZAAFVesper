@@ -1,0 +1,27 @@
+title: File in a temp folder made executable (macOS)
+id: 272c88e4-4331-40cb-afed-f3a032b907e3
+name: zv_macos_chmod_exec_temp
+status: experimental
+description: chmod adds the execute bit to a file in /tmp, /private/tmp or /var/tmp. Base rule for the ZAAFVesper download-to-execution correlation.
+author: ZAAFVesper project
+references:
+  - https://attack.mitre.org/techniques/T1222/002/
+tags:
+  - attack.defense-evasion
+  - attack.t1222.002
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image: /bin/chmod
+    CommandLine|contains: '+x'
+  temp:
+    CommandLine|contains:
+      - ' /tmp/'
+      - ' /private/tmp/'
+      - ' /var/tmp/'
+  condition: selection and temp
+falsepositives:
+  - Installers that stage helpers in /tmp
+level: low

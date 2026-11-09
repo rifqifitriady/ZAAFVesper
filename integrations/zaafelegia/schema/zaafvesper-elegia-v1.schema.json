@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rifqifitriady/ZAAFVesper/integrations/zaafelegia/schema/zaafvesper-elegia-v1.schema.json",
+  "title": "ZAAFVesper event record for ZAAFElegia, schema zaafvesper.elegia/1",
+  "description": "One line of --elegia-out or of an --elegia-dir segment. Sigma field names (Image, CommandLine, DestinationIp, ...) come from pkg/sigmamap for the event's logsource category; everything ZAAFVesper adds lives under zaafvesper, so the flat namespace stays Sigma's.",
+  "type": "object",
+  "required": ["logsource", "zaafvesper"],
+  "properties": {
+    "logsource": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": {"enum": ["macos", "windows", "linux"]},
+        "category": {"type": "string", "pattern": "^[a-z_]+$"}
+      }
+    },
+    "EventID": {"type": "integer", "minimum": 1, "description": "Sysmon-compatible event id; absent for events without a Sysmon equivalent."},
+    "UtcTime": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$", "description": "UTC, Sysmon format; ZAAFElegia reads it as the event time."},
+    "Computer": {"type": "string", "description": "Host name of the sensor (Sysmon's field name)."},
+    "Initiated": {"enum": ["true", "false"], "description": "network_connection: outbound (true) or inbound (false); absent for a listening socket."},
+    "truncated": {"const": true, "description": "Present when the record was cut to its size cap."},
+    "zaafvesper": {
+      "type": "object",
+      "required": ["schema", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "schema": {"const": "zaafvesper.elegia/1"},
+        "name": {"type": "string", "description": "Canonical event name (pkg/event), e.g. CreateProcess, NetworkConnect."},
+        "seq": {"type": "integer", "minimum": 1},
+        "source": {"type": "string", "description": "eslogger, netpoll, sysmon, zaafvesper (synthetic), ..."},
+        "platform": {"enum": ["macos", "windows", "linux"]},
+        "identity": {"const": "unverified", "description": "The process identity came from the kernel, not from an exec event: no signing data."},
+        "proc": {"$ref": "#/$defs/proc"},
+        "parent": {"$ref": "#/$defs/parent"}
+      }
+    }
+  },
+  "patternProperties": {
+    "^[A-Z][A-Za-z0-9]*$": {
+      "description": "Sigma field names of the record's category (pkg/sigmamap.ExportFields). Strings, integers (pids, ports, event ids) or lists of strings; booleans are the strings true/false, as in Sysmon.",
+      "type": ["string", "integer", "array"],
+      "items": {"type": "string"}
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "parent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["is_platform"],
+      "properties": {
+        "pid": {"type": "integer"},
+        "unique_id": {"type": "integer", "minimum": 1, "description": "macOS kernel per-boot unique process id (p_uniqueid)."},
+        "signing_id": {"type": "string"},
+        "team_id": {"type": "string"},
+        "is_platform": {"type": "boolean"}
+      }
+    },
+    "proc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["is_platform", "is_signed"],
+      "properties": {
+        "pid": {"type": "integer"},
+        "pidversion": {"type": "integer"},
+        "unique_id": {"type": "integer", "minimum": 1, "description": "macOS kernel per-boot unique process id (p_uniqueid); the zaafvesper pipeline maps ProcessGuid to it on macOS."},
+        "signing_id": {"type": "string"},
+        "team_id": {"type": "string"},
+        "cs_category": {"type": "string", "description": "Code-signing validation category (platform, developer_id, app_store, local_signing, ...)."},
+        "is_platform": {"type": "boolean"},
+        "is_signed": {"type": "boolean"},
+        "seeded": {"const": true, "description": "Learned at start-up, not from an exec event."}
+      }
+    }
+  }
+}

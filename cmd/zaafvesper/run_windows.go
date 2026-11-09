@@ -156,9 +156,11 @@ func platformOutputCheck(n *netOutOptions) error {
 		return errors.New("--syslog and --webhook are not available on Windows yet (they need the on-disk spool); use --output-dir")
 	case n.alertsOCSF != "":
 		return errors.New("--alerts-ocsf is not available on Windows yet; use --output-dir")
-	case n.elegiaOut != "" && n.elegiaOut != "-":
+	case n.elegia.out != "" && n.elegia.out != "-":
 		return errors.New("--elegia-out FILE is not available on Windows yet; use --elegia-out - from a console")
-	case n.elegiaOut == "-":
+	case n.elegia.dir != "":
+		return errors.New("--elegia-dir is not available on Windows yet; use --elegia-out - from a console")
+	case n.elegia.out == "-":
 		if isSvc, err := svc.IsWindowsService(); err == nil && isSvc {
 			return errors.New("--elegia-out - writes to stdout, which a Windows service does not have")
 		}

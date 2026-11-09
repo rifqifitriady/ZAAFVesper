@@ -1,0 +1,72 @@
+# ZAAFVesper -> ZAAFElegia end to end (v0.4 G): builds zaaf at a pinned
+# ZAAFElegia commit, replays the sample scenarios into --elegia-dir segments
+# and a live --elegia-out pipe, and checks the findings against
+# integrations/zaafelegia/samples/expected.json. Unprivileged, no network
+# beyond the pinned downloads, read-only token, no secrets, actions pinned.
+name: elegia-e2e
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: elegia-e2e-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  # ZAAFElegia main after its M2 correlation plan (correlations still parsed
+  # and skipped). Raise it when ZAAFElegia ships M2; the check then expects
+  # the correlation alerts too.
+  ZAAFELEGIA_REPO: https://github.com/rifqifitriady/ZAAFElegia.git
+  ZAAFELEGIA_COMMIT: 16ba4474fc5cd85d11dcaec89f51e59c489d5887
+  RUSTUP_TOOLCHAIN: 1.99.1
+  GO_VERSION: go1.27.3
+  GO_SHA256: 65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Go (pinned, sha256-verified)
+        run: |
+          archive="$GO_VERSION.linux-amd64.tar.gz"
+          curl -fsSL --proto '=https' --tlsv1.2 -o "$RUNNER_TEMP/$archive" "https://go.dev/dl/$archive"
+          echo "$GO_SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -C "$RUNNER_TEMP" -xzf "$RUNNER_TEMP/$archive"
+          echo "$RUNNER_TEMP/go/bin" >> "$GITHUB_PATH"
+          echo "GOTOOLCHAIN=local" >> "$GITHUB_ENV"
+      - name: Build zaafvesper
+        run: CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/zaafvesper" ./cmd/zaafvesper
+      - name: Build zaaf (ZAAFElegia) at the pinned commit
+        run: |
+          src="$RUNNER_TEMP/zaafelegia"
+          git init -q "$src"
+          git -C "$src" fetch -q --depth 1 "$ZAAFELEGIA_REPO" "$ZAAFELEGIA_COMMIT"
+          git -C "$src" -c advice.detachedHead=false checkout -q FETCH_HEAD
+          test "$(git -C "$src" rev-parse HEAD)" = "$ZAAFELEGIA_COMMIT"
+          rustc --version
+          (cd "$src" && cargo build --release --locked -p zaaf-cli)
+          cp "$src/target/release/zaaf" "$RUNNER_TEMP/zaaf"
+          "$RUNNER_TEMP/zaaf" --version
+      - name: End to end
+        env:
+          ZV: ${{ runner.temp }}/zaafvesper
+          ZAAF: ${{ runner.temp }}/zaaf
+          OUT: ${{ runner.temp }}/elegia-e2e
+        run: |
+          set +e
+          scripts/ci/g/e2e.sh
+          rc=$?
+          [ -f "$OUT/results.md" ] && cat "$OUT/results.md" >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: elegia-e2e
+          path: ${{ runner.temp }}/elegia-e2e
+          retention-days: 14

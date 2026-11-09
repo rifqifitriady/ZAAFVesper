@@ -1,0 +1,24 @@
+title: Quarantine removed from many files by one user (macOS)
+id: d53f406e-5a40-444e-a224-83c2ef843d0a
+name: zv_corr_macos_quarantine_strip_burst
+status: experimental
+description: |
+  Five or more quarantine removals by the same user on the same host within five minutes,
+  as droppers do before running a set of unsigned payloads.
+  Needs ZAAFElegia M2 (correlation rules). ZAAFElegia 0.0.1 parses and skips it.
+author: ZAAFVesper project
+references:
+  - https://attack.mitre.org/techniques/T1553/001/
+correlation:
+  type: event_count
+  rules:
+    - zv_macos_quarantine_removed
+  group-by:
+    - Computer
+    - User
+  timespan: 5m
+  condition:
+    gte: 5
+falsepositives:
+  - Developers clearing quarantine on a batch of their own downloads
+level: medium

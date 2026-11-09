@@ -15,7 +15,7 @@ import (
 
 func TestSigmaRecordNetwork(t *testing.T) {
 	e := testAlert("").Events[0]
-	b, err := EncodeSigma(e, "macos", 0)
+	b, err := EncodeSigma(e, SigmaOptions{DefaultProduct: "macos", Host: "mac-01"}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,12 +40,12 @@ func TestSigmaRecordNetwork(t *testing.T) {
 	}
 	// Inbound maps to Initiated "false"; a process creation gets its own fields.
 	e.Net.Direction = "inbound"
-	if r := SigmaRecord(e, "macos"); r["Initiated"] != "false" {
+	if r := SigmaRecord(e, SigmaOptions{DefaultProduct: "macos"}); r["Initiated"] != "false" {
 		t.Fatalf("inbound Initiated %v", r["Initiated"])
 	}
 	pc := &event.Event{Name: event.CreateProcess, Time: time.Unix(0, 0), Proc: &event.Proc{PID: 9, PPID: 8, Exe: "/usr/bin/curl",
 		Cmdline: "curl x", Cwd: "/tmp", Parent: &event.Proc{PID: 8, Exe: "/bin/zsh", Cmdline: "-zsh"}}}
-	r := SigmaRecord(pc, "macos")
+	r := SigmaRecord(pc, SigmaOptions{DefaultProduct: "macos"})
 	for k, v := range map[string]any{"Image": "/usr/bin/curl", "CommandLine": "curl x", "CurrentDirectory": "/tmp",
 		"ParentImage": "/bin/zsh", "ParentCommandLine": "-zsh", "ParentProcessId": int64(8), "EventID": 1} {
 		if r[k] != v {
@@ -53,7 +53,7 @@ func TestSigmaRecordNetwork(t *testing.T) {
 		}
 	}
 	// No Sigma category: process identity only, no EventID.
-	fk := SigmaRecord(&event.Event{Name: event.Fork, Proc: &event.Proc{PID: 3, Exe: "/bin/sh", Cmdline: "sh"}}, "macos")
+	fk := SigmaRecord(&event.Event{Name: event.Fork, Proc: &event.Proc{PID: 3, Exe: "/bin/sh", Cmdline: "sh"}}, SigmaOptions{DefaultProduct: "macos"})
 	if fk["Image"] != "/bin/sh" || fk["CommandLine"] != nil || fk["EventID"] != nil || fk["logsource"].(map[string]any)["category"] != nil {
 		t.Fatalf("generic record %v", fk)
 	}
@@ -61,7 +61,7 @@ func TestSigmaRecordNetwork(t *testing.T) {
 
 func TestOCSFFinding(t *testing.T) {
 	a := testAlert("bash connected out")
-	b, err := EncodeOCSF(a, "0.2.0", "macos", 5, 0)
+	b, err := EncodeOCSF(a, "0.2.0", SigmaOptions{DefaultProduct: "macos"}, 5, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestOCSFFinding(t *testing.T) {
 		e.Proc = &p
 		big.Events = append(big.Events, &e)
 	}
-	b, err = EncodeOCSF(big, "0.2.0", "macos", 6, 8192)
+	b, err = EncodeOCSF(big, "0.2.0", SigmaOptions{DefaultProduct: "macos"}, 6, 8192)
 	if err != nil || len(b) > 8192 || !json.Valid(b) {
 		t.Fatalf("oversized finding: %d bytes, %v", len(b), err)
 	}

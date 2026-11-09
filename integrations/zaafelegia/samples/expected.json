@@ -1,0 +1,18 @@
+{
+  "_comment": "What zaaf hunt -p pipeline/zaafvesper.yml -r rules must find in macos-scenarios (the NDJSON sample, or the same events replayed from a capture). base: matches per base rule name. correlations: alerts per correlation rule name once ZAAFElegia supports correlation rules (milestone M2); until then zaaf parses and skips them.",
+  "events": 18,
+  "base": {
+    "zv_macos_curl_http_download": 1,
+    "zv_macos_chmod_exec_temp": 1,
+    "zv_macos_exec_from_temp": 1,
+    "zv_macos_system_discovery": 4,
+    "zv_macos_shell_outbound": 4,
+    "zv_macos_quarantine_removed": 6
+  },
+  "correlations": {
+    "zv_corr_macos_download_chmod_execute": 1,
+    "zv_corr_macos_discovery_burst": 1,
+    "zv_corr_macos_shell_many_ports": 1,
+    "zv_corr_macos_quarantine_strip_burst": 1
+  }
+}
