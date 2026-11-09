@@ -137,14 +137,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
-      # Microsoft's packages for Ubuntu 24.04 (packages.microsoft.com
-      # ubuntu/24.04/prod), hashes from that repository's Packages index.
-      # linux-setup.sh stops when ubuntu-latest is no longer 24.04: then
-      # pick the packages for the new release and update these pins.
+      # Microsoft's packages (packages.microsoft.com ubuntu/<release>/prod),
+      # hashes from each release's Packages index. linux-setup.sh picks the
+      # pair for the runner's Ubuntu release and stops on any other release
+      # (ubuntu-latest moved from 24.04 to 26.04 in November 2026).
       SYSMONFORLINUX_VERSION: 1.6.0
-      SYSMONFORLINUX_SHA256: 95f634597f1558c9ff1554d0f04efbcbcb06badc54486945884b0aea1bfb2106
       SYSINTERNALSEBPF_VERSION: 2.3.0
-      SYSINTERNALSEBPF_SHA256: a693b347abbe41f6bed199406058c4b83dfe71b8f34f278803d95159ee73c588
+      SYSMONFORLINUX_SHA256_2404: 95f634597f1558c9ff1554d0f04efbcbcb06badc54486945884b0aea1bfb2106
+      SYSINTERNALSEBPF_SHA256_2404: a693b347abbe41f6bed199406058c4b83dfe71b8f34f278803d95159ee73c588
+      SYSMONFORLINUX_SHA256_2604: 4f3b967f353b7832a1fed8461f92cf47bfb053e16a8457e2072008a110c06c1f
+      SYSINTERNALSEBPF_SHA256_2604: 38e957d7131c6ca99464c3825962d66e98c788a3110a4a8412eeaf7e46759cb0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

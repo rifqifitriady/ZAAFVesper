@@ -30,7 +30,7 @@ Every download is pinned and checked before use. A changed download stops the jo
 | Atomic Red Team commit | workflow `ART_COMMIT` | Pick a new commit and download each listed `atomics/<T>/<T>.yaml` from it. Review the tests in the plans. Write the new hashes into `atomics.sha256`. |
 | Sysmon (Windows) | workflow `SYSMON_ZIP_SHA256` | Sysinternals serves one current build at a fixed URL. When the job fails on the hash, download `Sysmon.zip`, check the Microsoft signature of `Sysmon64.exe`, and replace the hash. |
 | sysmon-modular configuration | workflow `SYSMON_MODULAR_COMMIT`, `_TAG`, `SYSMON_CONFIG_SHA256` | Take a newer `configs-<commit>` release. Its tag must point to the commit you pin. Use the file's hash from that release's `SHA256SUMS`. |
-| Sysmon for Linux | workflow `SYSMONFORLINUX_*`, `SYSINTERNALSEBPF_*` | Use the version and `SHA256:` line from `packages.microsoft.com/ubuntu/<release>/prod/dists/<codename>/main/binary-amd64/Packages.gz`. Also update the release path in `linux-setup.sh` and its check when `ubuntu-latest` moves. |
+| Sysmon for Linux | workflow `SYSMONFORLINUX_*`, `SYSINTERNALSEBPF_*` (one hash pair per Ubuntu release) | Use the version and `SHA256:` line from `packages.microsoft.com/ubuntu/<release>/prod/dists/<codename>/main/binary-amd64/Packages.gz`. When `ubuntu-latest` moves to a release without pins, the job stops: add that release's pair and a case in `linux-setup.sh`. |
 | GitHub actions | `uses: …@<sha> # vX` | Resolve the new tag to its commit SHA. |
 
 ## Rules for the tests

@@ -4,12 +4,15 @@
 # hash-checked downloads. Runs on a throw-away GitHub runner with sudo.
 set -euo pipefail
 
-# The pinned packages are Microsoft's builds for Ubuntu 24.04.
+# Microsoft builds Sysmon for Linux per Ubuntu release; the workflow pins
+# the packages for 24.04 and 26.04.
 . /etc/os-release
-if [ "${ID:-}" != ubuntu ] || [ "${VERSION_ID:-}" != 24.04 ]; then
-  echo "runner is ${PRETTY_NAME:-unknown}: the Sysmon for Linux pins are for Ubuntu 24.04; update them (scripts/ci/b/README.md)" >&2
-  exit 1
-fi
+case "${ID:-}-${VERSION_ID:-}" in
+  ubuntu-24.04) sfl_sha=$SYSMONFORLINUX_SHA256_2404; ebpf_sha=$SYSINTERNALSEBPF_SHA256_2404 ;;
+  ubuntu-26.04) sfl_sha=$SYSMONFORLINUX_SHA256_2604; ebpf_sha=$SYSINTERNALSEBPF_SHA256_2604 ;;
+  *) echo "runner is ${PRETTY_NAME:-unknown}: no Sysmon for Linux pins for it; add them (scripts/ci/b/README.md)" >&2; exit 1 ;;
+esac
+echo "runner: $PRETTY_NAME"
 
 work="$RUNNER_TEMP/zv"
 mkdir -p "$work"
@@ -20,9 +23,9 @@ pinned() { # url out sha256
 
 # 1. Sysmon for Linux and its eBPF library, Microsoft's packages at pinned
 #    versions (dependencies come from Ubuntu's signed archive through apt).
-base=https://packages.microsoft.com/ubuntu/24.04/prod/pool/main/s
-pinned "$base/sysinternalsebpf/sysinternalsebpf_${SYSINTERNALSEBPF_VERSION}_amd64.deb" "$work/sysinternalsebpf.deb" "$SYSINTERNALSEBPF_SHA256"
-pinned "$base/sysmonforlinux/sysmonforlinux_${SYSMONFORLINUX_VERSION}_amd64.deb" "$work/sysmonforlinux.deb" "$SYSMONFORLINUX_SHA256"
+base="https://packages.microsoft.com/ubuntu/${VERSION_ID}/prod/pool/main/s"
+pinned "$base/sysinternalsebpf/sysinternalsebpf_${SYSINTERNALSEBPF_VERSION}_amd64.deb" "$work/sysinternalsebpf.deb" "$ebpf_sha"
+pinned "$base/sysmonforlinux/sysmonforlinux_${SYSMONFORLINUX_VERSION}_amd64.deb" "$work/sysmonforlinux.deb" "$sfl_sha"
 sudo apt-get update -qq
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$work/sysinternalsebpf.deb" "$work/sysmonforlinux.deb"
 # journald's rate limit off for Sysmon (packaging/linux/sysmon-log-ratelimit.conf),
