@@ -21,6 +21,7 @@ alive_for() {
 }
 
 echo "== 1. eslogger under sudo"
+"$here/esdiag.sh" "$ART/esdiag" || true
 sudo /usr/bin/eslogger exec >"$work/es.json" 2>"$ART/eslogger-probe.err" &
 espid=$!
 sleep 3; /usr/bin/true; sleep 1
