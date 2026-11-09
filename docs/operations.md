@@ -76,7 +76,41 @@ Before removing `/var/db/zaafvesper`, check `sudo /usr/local/sbin/zaafvesper qua
 - *`dist/` is user-writable.* Between `make package` and the root-side copy the package can be replaced. Comparing root's hash of the copy with the printed hash detects a swap after printing, not one made by malware that also controls the build output.
 - *A compromised account controls `sudo`.* A `sudo` shell function or alias, or a changed `PATH`, in that account can run something else as root. Type `sudo` commands in a fresh login shell of another admin account (or use `command sudo` after checking `type sudo`) when you suspect the account.
 
-The fix is a CI build with a pinned toolchain and libyara, signed with a Developer ID Installer certificate and notarized, installed only after the signature is checked.
+Release builds from GitHub Actions remove the same-account build for the pure-Go package (see *Verify a download* below). The remaining fix is a Developer ID Installer signature and notarization, checked before install.
+
+## Verify a download (release builds)
+
+Releases are built by GitHub Actions, not on anyone's Mac. Pushing a tag `v*` runs
+[`.github/workflows/release.yml`](../.github/workflows/release.yml) at that tag's commit. It builds:
+
+- `zaafvesper-<version>-<os>-<arch>[.exe]` for darwin arm64/amd64, windows amd64/arm64 and linux amd64/arm64 (pure Go, without YARA);
+- `ZAAFVesper-<version>.pkg`, the unsigned macOS installer from `make package` (pure Go; the workflow checks it holds only Bom, PackageInfo and Payload, no scripts);
+- `zaafvesper-<version>.cdx.json`, a CycloneDX SBOM of the Go modules in the binary;
+- `SHA256SUMS` for all of the above.
+
+Every one of these files gets a signed build-provenance attestation (SLSA provenance, signed through Sigstore with the workflow's own identity). The workflow then opens a **draft** release; a person reviews it and publishes it. The workflow uses no repository secrets, every action is pinned to a commit, and only the final job can write.
+
+Check a download before you use it, ideally on a machine or account you trust:
+
+```bash
+# 1. Provenance: built by this repository's release workflow, from a tagged commit
+gh attestation verify ZAAFVesper-0.3.0.pkg --repo rifqifitriady/ZAAFVesper \
+  --signer-workflow rifqifitriady/ZAAFVesper/.github/workflows/release.yml
+# 2. Checksums: SHA256SUMS is attested too, so verify it first, then the files against it
+gh attestation verify SHA256SUMS --repo rifqifitriady/ZAAFVesper \
+  --signer-workflow rifqifitriady/ZAAFVesper/.github/workflows/release.yml
+shasum -a 256 -c SHA256SUMS --ignore-missing
+```
+
+`gh attestation verify` prints the source commit and the workflow run; check that the commit is the one the tag points to. Then install the package as described above, comparing the SHA-256 that **root** computes on its own copy (`sudo /usr/bin/shasum -a 256 ...`) with the line for that file in the verified `SHA256SUMS`.
+
+**What this does for finding H1, and what it does not.**
+
+- *Fixed:* the build no longer runs on the account it protects. Malware in your account can no longer change the sources, the Go toolchain or the staged files of a release build, nor the hash printed for it. The attestation ties each file to the commit and the workflow run that produced it, so a swapped or rebuilt file fails `gh attestation verify`.
+- *Not fixed:* the package is still **not signed with an Apple Developer ID and not notarized**. Gatekeeper and `pkgutil --check-signature` see an unsigned package, and nothing Apple ships checks the attestation for you. Closing H1 still needs a Developer ID Installer certificate in CI and notarization (an owner decision).
+- *Trust moves, it does not disappear:* you now trust GitHub's runners and their images, the pinned actions, the Go module proxy and checksum database, and Sigstore. A compromised GitHub account with write access can push a tag; the draft step and the commit shown by the attestation are the checks against that.
+- *Verification runs where you run it:* `gh` is not an Apple binary. If you verify inside an account you suspect, that account can lie to you. Verify on another machine or account, then let root compare hashes with `/usr/bin/shasum`.
+- *No YARA in release builds:* the released binaries and package are pure Go. A static YARA package is still built locally with `make package YARA=1`, with the same-account risk described above. CI does test the static YARA build on a macOS runner.
 
 ## Response
 
