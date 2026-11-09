@@ -127,7 +127,8 @@ jobs:
           go-version-file: go.mod
       - name: Fetch the ATT&CK data (pinned, hash checked)
         run: |
-          curl -fsSL --retry 3 -o "$RUNNER_TEMP/enterprise-attack.json" "$ATTACK_URL"
+          set -euo pipefail
+          curl -fsSL --proto '=https' --retry 3 -o "$RUNNER_TEMP/enterprise-attack.json" "$ATTACK_URL"
           echo "$ATTACK_SHA256  $RUNNER_TEMP/enterprise-attack.json" | sha256sum -c -
       - name: Coverage report (fails on unknown, revoked or deprecated ATT&CK ids)
         run: |

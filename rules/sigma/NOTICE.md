@@ -111,6 +111,8 @@ hand-written rules.
 ATT&CK tactic tag in Sigma, so `rules validate` warns that they have no
 `technique.id`.
 
+**Left out in v0.4.** Two SigmaHQ Windows rules that convert cleanly are not shipped because their Sigma tags add the Execution tactic (TA0002) to a technique ATT&CK files under another tactic only, which `zaafvesper coverage --attack` reports: `proc_creation_win_cmstp_execution_by_creation` (T1218.003, Stealth) and `proc_creation_win_mmc_mmc20_lateral_movement` (T1021.003, Lateral Movement). Converted rules are not edited by hand, so they wait for a converter option that drops tactics their techniques do not have.
+
 ### Windows
 
 | Rule | Original file (SigmaHQ) | Author |
@@ -124,12 +126,10 @@ ATT&CK tactic tag in Sigma, so `rules validate` warns that they have no
 | Boot Configuration Tampering Via Bcdedit.EXE | `rules/windows/process_creation/proc_creation_win_bcdedit_boot_conf_tamper.yml` | E.M. Anhaus (originally from Atomic Blue Detections, Endgame), oscd.community |
 | File Download Via Bitsadmin | `rules/windows/process_creation/proc_creation_win_bitsadmin_download.yml` | Michael Haag, FPT.EagleEye |
 | Suspicious File Downloaded From Direct IP Via Certutil.EXE | `rules/windows/process_creation/proc_creation_win_certutil_download_direct_ip.yml` | Nasreddine Bencherchali (Nextron Systems) |
-| CMSTP Execution Process Creation | `rules/windows/process_creation/proc_creation_win_cmstp_execution_by_creation.yml` | Nik Seetharaman |
 | Findstr GPP Passwords | `rules/windows/process_creation/proc_creation_win_findstr_gpp_passwords.yml` | frack113 |
 | HackTool - WinRM Access Via Evil-WinRM | `rules/windows/process_creation/proc_creation_win_hktl_evil_winrm.yml` | frack113 |
 | HackTool - Mimikatz Execution | `rules/windows/process_creation/proc_creation_win_hktl_mimikatz_command_line.yml` | Teymur Kheirkhabarov, oscd.community, David ANDRE (additional keywords), Tim Shelton |
 | HackTool - Rubeus Execution | `rules/windows/process_creation/proc_creation_win_hktl_rubeus.yml` | Florian Roth (Nextron Systems) |
-| MMC20 Lateral Movement | `rules/windows/process_creation/proc_creation_win_mmc_mmc20_lateral_movement.yml` | @2xxeformyshirt (Security Risk Advisors) - rule; Teymur Kheirkhabarov (idea) |
 | Remotely Hosted HTA File Executed Via Mshta.EXE | `rules/windows/process_creation/proc_creation_win_mshta_http.yml` | Nasreddine Bencherchali (Nextron Systems) |
 | Msxsl.EXE Execution | `rules/windows/process_creation/proc_creation_win_msxsl_execution.yml` | Timur Zinniatullin, oscd.community |
 | Invocation of Active Directory Diagnostic Tool (ntdsutil.exe) | `rules/windows/process_creation/proc_creation_win_ntdsutil_usage.yml` | Thomas Patzke |

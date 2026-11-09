@@ -24,6 +24,9 @@ nomatch:
   - desc: "openssl dgst hashes a file named design.pdf"
     events:
       - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5514, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "args": ["openssl", "dgst", "-sha256", "design.pdf"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.openssl", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "openssl enc -base64 only encodes"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5515, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "args": ["openssl", "enc", "-base64", "-in", "logo.png", "-out", "logo.b64"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.openssl", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
   - desc: "7z extracts an archive"
     events:
       - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5513, "ppid": 4000, "exe": "/opt/homebrew/bin/7z", "name": "7z", "args": ["7z", "x", "-pinfected", "sample.7z"], "uid": 501, "euid": 501, "is_platform": false, "is_signed": true, "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}

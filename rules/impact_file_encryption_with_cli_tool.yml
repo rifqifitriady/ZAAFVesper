@@ -9,6 +9,7 @@ description: |
   or 7z adding to an archive with a password. Ransomware written as scripts encrypts
   user files with exactly these tools. Developers and admins also encrypt files by
   hand; a single run is a low-confidence signal, many runs in a row a strong one.
+  openssl enc with only -base64 (encoding, no cipher or password option) does not match.
 labels:
   tactic.id: TA0040
   tactic.name: Impact
@@ -21,7 +22,9 @@ condition: >
   and (
     (ps.name = 'openssl'
      and ps.cmdline regex '^(\\S*/)?openssl\\s+(enc(\\s|$)|-?(aes|aria|camellia|sm4|des|bf|cast|chacha20|rc2|rc4|seed|idea)[a-z0-9-]*(\\s|$))'
-     and not (ps.args in ('-d', '-decrypt') and not ps.args in ('-e', '-encrypt')))
+     and not (ps.args in ('-d', '-decrypt') and not ps.args in ('-e', '-encrypt'))
+     and not (ps.args = 'enc' and ps.args in ('-base64', '-a', '-A')
+              and not ps.args imatches ('-aes*', '-aria*', '-camellia*', '-sm4*', '-des*', '-bf*', '-cast*', '-chacha20*', '-rc2*', '-rc4*', '-seed*', '-idea*', '-pbkdf2', '-k', '-kfile', '-pass')))
     or (base(ps.exe) iin ('gpg', 'gpg2') and ps.args in ('-c', '--symmetric') and ps.args = '--batch')
     or (base(ps.exe) iin ('7z', '7zz', '7za') and ps.args = 'a' and ps.args imatches '-p*')
   )

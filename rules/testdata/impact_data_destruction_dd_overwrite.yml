@@ -21,3 +21,6 @@ nomatch:
   - desc: "dd reads a disk into an image file"
     events:
       - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24514, "ppid": 24000, "exe": "/usr/bin/dd", "name": "dd", "uid": -1, "euid": -1, "username": "root", "cmdline": "dd if=/dev/sda of=/backup/sda.img bs=4M", "args": ["dd", "if=/dev/sda", "of=/backup/sda.img", "bs=4M"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "dd creates a swap file on Linux"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24516, "ppid": 24000, "exe": "/usr/bin/dd", "name": "dd", "uid": -1, "euid": -1, "username": "root", "cmdline": "dd if=/dev/zero of=/swapfile bs=1M count=2048", "args": ["dd", "if=/dev/zero", "of=/swapfile", "bs=1M", "count=2048"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}

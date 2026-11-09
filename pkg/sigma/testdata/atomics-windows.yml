@@ -6,9 +6,7 @@
 58f50261-c53b-4c88-bd12-1d71f12eda4c: [9c2dd36d-5c8b-4b29-8d72-a11b0d5d7439] # proc_creation_win_vaultcmd_list_creds
 e0b0c2ab-3d52-46d9-8cb7-049dc775fbd1: [b6ec082c-7384-46b3-a111-9a9b8b14e5e7, af197fd7-e868-448e-9bd5-05d1bcd9d9e5] # proc_creation_win_reg_enumeration_for_credentials_in_registry
 91a2c315-9ee6-4052-a853-6f6a8238f90d: [870fe8fb-5e23-4f5f-b89d-dd7fe26f3b5f] # proc_creation_win_findstr_gpp_passwords
-f1f3bf22-deb2-418d-8cce-e1a45e46a5bd: [6dc74eb1-c9d6-4c53-b3b5-6f50ae339673] # proc_creation_win_mmc_mmc20_lateral_movement
 0d5675be-bc88-4172-86d3-1e96a4476536: [74ace21e-a31c-4f7d-b540-53e4eb6d1f73, 01d1c6c0-faf0-408e-b368-752a02285cb2] # proc_creation_win_reg_rdp_keys_tamper
-7773b877-5abb-4a3e-b9c9-fd0369b59b00: [9c8ef159-c666-472f-9874-90c8d60d136b, 00738d2a-4651-4d76-adf2-c43a41dfb243, 0fd48ef7-d890-4e93-a533-f7dedd5191d3] # proc_creation_win_wmic_remote_execution
 730fc21b-eaff-474b-ad23-90fd265d4988: [873106b7-cfed-454b-8680-fa9f6400431c, 004a5d68-627b-452d-af3d-43bd1fc75a3b] # proc_creation_win_sysinternals_psexec_execution
 a197e378-d31b-41c0-9635-cfdf1c1bb423: [efe86d95-44c4-4509-ae42-7bfd9d1f5b3d] # proc_creation_win_hktl_evil_winrm
 e593cf51-88db-4ee1-b920-37e89012a3c9: [22cfde89-befe-4e15-9753-47306b37a6e3, f3ad3c5b-1db1-45c1-81bf-d3370ebab6c8, 8a7f56ee-10e7-444c-a139-0109438288eb, e4c04b6f-c492-4782-82c7-3bf75eb8077e, d91cae26-7fc1-457b-a854-34c8aad48c89] # proc_creation_win_rundll32_susp_activity
