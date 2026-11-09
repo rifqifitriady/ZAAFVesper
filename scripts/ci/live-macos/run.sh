@@ -3,15 +3,42 @@
 # /usr/local as root and writes to the runner's home). Expects in $BIN:
 # zaafvesper, receiver, dropped, zaaf. Writes everything to $ART.
 set -euo pipefail
+# Refuses to run anywhere but a throw-away GitHub-hosted runner: it changes
+# the user's shell files and crontab and installs into /usr/local as root.
+if [ "${GITHUB_ACTIONS:-}" != true ] || [ "${RUNNER_ENVIRONMENT:-}" != github-hosted ]; then
+	echo "$0: runs only on a GitHub-hosted runner" >&2
+	exit 2
+fi
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../../.." && pwd)
 : "${BIN:?}" "${ART:?}"
 mkdir -p "$ART"
 work=$(mktemp -d /tmp/zvci.XXXXXX)
+: >/tmp/zaafvesper-live-macos.ci # lets triggers.sh run (see there)
 ETC=/usr/local/etc/zaafvesper
 SBIN=/usr/local/sbin/zaafvesper
 OUTDIR=/var/log/zaafvesper-ci
 SPOOL=/var/db/zaafvesper/spool
+finished=no
+# cleanup runs on every exit (a failed step included): stops the root sensor,
+# the receivers, test listeners and launchd jobs, and keeps the sensor's
+# files for the artifact.
+cleanup() {
+	[ "$finished" = yes ] && return 0
+	echo "== cleanup after a failure"
+	sudo /usr/bin/pkill -INT -f "^$SBIN run" 2>/dev/null; sleep 3
+	sudo /usr/bin/pkill -KILL -f "^$SBIN run" 2>/dev/null
+	sudo /usr/bin/pkill -TERM -x eslogger 2>/dev/null
+	[ -f "$work/receiver.pid" ] && kill "$(cat "$work/receiver.pid")" 2>/dev/null
+	/usr/bin/pkill -x nc 2>/dev/null
+	for l in triggers-a triggers-b; do sudo /bin/launchctl remove "com.zaafvesper.ci.$l" 2>/dev/null; done
+	if [ -d "$OUTDIR" ] && [ ! -d "$ART/outdir" ]; then
+		sudo /bin/cp -R "$OUTDIR" "$ART/outdir" && sudo /usr/sbin/chown -R "$(id -u)" "$ART/outdir"
+	fi
+	rm -f /tmp/zaafvesper-live-macos.ci
+	return 0
+}
+trap cleanup EXIT
 status() { printf '%s\t%s\n' "$1" "$2" >>"$ART/status.tsv"; }
 # alive_for PID SECONDS: wait up to SECONDS for PID to exit; 0 when it did.
 alive_for() {
@@ -21,16 +48,17 @@ alive_for() {
 }
 
 echo "== 1. eslogger under sudo"
+# esdiag runs eslogger alone and starts marked commands from this job's tree
+# and from a launchd job. Its exit status is not the verdict; the counts are.
 "$here/esdiag.sh" "$ART/esdiag" || true
-sudo /usr/bin/eslogger exec >"$work/es.json" 2>"$ART/eslogger-probe.err" &
-espid=$!
-sleep 3; /usr/bin/true; sleep 1
-# eslogger ignores SIGINT; SIGTERM stops it (as the sensor does).
-sudo /usr/bin/pkill -TERM -x eslogger || true
-alive_for "$espid" 10 || { sudo /usr/bin/pkill -KILL -x eslogger || true; }
-wait "$espid" 2>/dev/null || true
-n=$(wc -l <"$work/es.json" | tr -d ' ')
-if [ "$n" -gt 0 ]; then status eslogger "ok ($n exec events in 4 s)"; else status eslogger "blocked: $(head -c 300 "$ART/eslogger-probe.err" | tr '\n\t' '  ')"; fi
+line=$(grep '^exec-only' "$ART/esdiag/esdiag.tsv" 2>/dev/null || true)
+ld=$(sed -n 's/.*launchd_hits=\([0-9]*\).*/\1/p' <<<"$line")
+tree=$(sed -n 's/.*tree_hits=\([0-9]*\).*/\1/p' <<<"$line")
+if [ "${ld:-0}" -gt 0 ]; then
+	status eslogger "ok: reports launchd-started commands ($ld events); job-tree commands: $tree events"
+else
+	status eslogger "blocked or silent: $(head -c 300 "$ART/esdiag/es-exec-only.err" 2>/dev/null | tr '\n\t' '  ')"
+fi
 csrutil status >>"$ART/runner.txt" 2>&1 || true; sw_vers >>"$ART/runner.txt"
 
 echo "== 2. install as root (root-owned tree, as the package does)"
@@ -122,6 +150,16 @@ wait "$pipe" 2>/dev/null || true
 kill "$(cat "$work/receiver.pid")" 2>/dev/null || true
 sudo /bin/cp -R "$OUTDIR" "$ART/outdir"
 sudo /usr/sbin/chown -R "$(id -u)" "$ART/outdir"
-if grep -rqF "$token" "$ART/sensor.log" "$ART/events.ndjson" "$ART/outdir" "$ART/receiver/syslog.log"; then status token_in_outputs yes; else status token_in_outputs no; fi
+# Everything that is uploaded, the decompressed capture included.
+# grep -c reads the whole stream (no early exit, so no SIGPIPE under pipefail).
+hits=$( { grep -rlF -- "$token" "$ART" || true; } | wc -l | tr -d ' ')
+for c in "$ART"/outdir/capture-*.rcap; do
+	[ -f "$c" ] || continue
+	n=$(/usr/bin/gzip -dc "$c" | grep -cF -- "$token" || true)
+	hits=$((hits + ${n:-0}))
+done
+if [ "$hits" -gt 0 ]; then status token_in_outputs "yes ($hits)"; else status token_in_outputs no; fi
 cp "$here/sigma/"*.yml "$ART/" 2>/dev/null || true
+finished=yes
+rm -f /tmp/zaafvesper-live-macos.ci
 echo "done"

@@ -8,6 +8,12 @@
 #   PHASE a: the main set; PHASE b: a few more while the SIEM receivers are down.
 set -u
 phase=$1 out=$2 work=$3 dropped=$4
+# Started by run.sh (itself guarded to GitHub-hosted runners) through
+# launchd, which does not pass the job's environment: check run.sh's marker.
+if [ ! -f /tmp/zaafvesper-live-macos.ci ]; then
+	echo "$0: runs only from scripts/ci/live-macos/run.sh on a GitHub-hosted runner" >&2
+	exit 2
+fi
 mkdir -p "$work"
 trig() { # id rulefile what -- command...
 	local id=$1 rule=$2 what=$3

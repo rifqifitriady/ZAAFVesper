@@ -4,6 +4,12 @@
 # (outside that tree), and with a small (exec) or a large (the sensor's)
 # subscription. Writes esdiag.tsv to $1 and the raw heads next to it.
 set -u
+# Refuses to run anywhere but a throw-away GitHub-hosted runner: it changes
+# the user's shell files and crontab and installs into /usr/local as root.
+if [ "${GITHUB_ACTIONS:-}" != true ] || [ "${RUNNER_ENVIRONMENT:-}" != github-hosted ]; then
+	echo "$0: runs only on a GitHub-hosted runner" >&2
+	exit 2
+fi
 out=$1; mkdir -p "$out"
 probe() { # name subscription...
 	local name=$1; shift

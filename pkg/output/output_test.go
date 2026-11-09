@@ -664,3 +664,36 @@ func TestForwarderFinalFlushOnClose(t *testing.T) {
 		t.Fatalf("down at close: stats %v after %v", f2.Stats(), time.Since(start))
 	}
 }
+
+// An endpoint that accepts the request and never answers cannot hold up
+// Close: the final flush is bounded (finalFlushTimeout) and the record is
+// spooled for the next start (security review note on v0.3 C).
+func TestFinalFlushBoundedByHangingEndpoint(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+	defer close(release)
+	conf := &tls.Config{RootCAs: x509.NewCertPool(), MinVersion: tls.VersionTLS12}
+	conf.RootCAs.AddCert(srv.Certificate())
+	w, err := NewWebhook(WebhookConfig{URL: srv.URL + "/hook", Token: "t", TLS: conf, Host: "h"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp, _ := OpenSpool(filepath.Join(t.TempDir(), "sp"), 1<<20, false)
+	f := NewForwarder(ForwarderConfig{Transport: w, Spool: sp, FlushEvery: time.Hour})
+	_ = f.Send(testAlert("hanging"))
+	time.Sleep(20 * time.Millisecond)
+	start := time.Now()
+	_ = f.Close(5 * time.Second)
+	if el := time.Since(start); el > finalFlushTimeout+time.Second {
+		t.Fatalf("Close took %v with a hanging endpoint", el)
+	}
+	if st := f.Stats(); st["spooled"] != 1 || st["sent"] != 0 {
+		t.Fatalf("stats %v", st)
+	}
+}

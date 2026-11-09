@@ -45,6 +45,9 @@ for f in glob.glob(os.path.join(repo, "rules", "*.yml")):
 status = dict(l.split("\t", 1) for l in read_lines(os.path.join(art, "status.tsv")))
 es = status.get("eslogger", "missing")
 add("eslogger", "eslogger under sudo", es.startswith("ok"), es)
+for l in read_lines(os.path.join(art, "esdiag", "esdiag.tsv")):
+    name, _, counts = l.partition("\t")
+    add("eslogger", f"diagnosis ({name} subscription)", True, counts + " (tree = this job's processes, launchd = a launchd job)", "INFO")
 add("eslogger", "zaafvesper run as root", status.get("sensor") == "started as root", status.get("sensor", "missing"))
 
 alert_files = [f for f in glob.glob(os.path.join(art, "outdir", "alerts-*.jsonl")) if "alerts-high-" not in f]
