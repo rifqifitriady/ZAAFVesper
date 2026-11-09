@@ -563,6 +563,14 @@ func procOf(e *event.Event) *event.Proc {
 // event must not be seeded or unverified. It acts after the event: a
 // process already running from the file keeps running.
 func (r *Responder) QuarantineFile(e *event.Event, target, rule, reason string) error {
+	var run func() error
+	run = func() error {
+		return r.retryOnLimit(fileRetryKey(ActionQuarantineFile, rule, e, target), rule, reason, r.quarantineFile(e, target, rule, reason), run)
+	}
+	return run()
+}
+
+func (r *Responder) quarantineFile(e *event.Event, target, rule, reason string) error {
 	if target == "" {
 		target = TargetFile
 	}
@@ -649,6 +657,14 @@ func RequarantineValue(now time.Time) []byte {
 // parent is untrusted, so a platform remover alone is not refused). It does
 // nothing for a copy of the file that already runs.
 func (r *Responder) Requarantine(e *event.Event, rule, reason string) error {
+	var run func() error
+	run = func() error {
+		return r.retryOnLimit(fileRetryKey(ActionRequarantine, rule, e, TargetFile), rule, reason, r.requarantine(e, rule, reason), run)
+	}
+	return run()
+}
+
+func (r *Responder) requarantine(e *event.Event, rule, reason string) error {
 	p := procOf(e)
 	d := Decision{Action: ActionRequarantine, PID: p.PID, Target: TargetFile, Name: p.Name, Exe: p.Exe, Reason: reason}
 	if e != nil && e.File != nil {

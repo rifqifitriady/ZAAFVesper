@@ -349,6 +349,18 @@ func interfaceAddrs() ([]netip.Addr, error) {
 // released. Connections the process opens to new peers later are not
 // blocked.
 func (r *Responder) IsolateProcess(e *event.Event, target, rule, reason string) error {
+	var run func() error
+	run = func() error {
+		key := ActionIsolateProcess + "|" + rule + "|" + target
+		if e != nil && e.Proc != nil {
+			key += "|" + procKey(e.Proc)
+		}
+		return r.retryOnLimit(key, rule, reason, r.isolateProcess(e, target, rule, reason), run)
+	}
+	return run()
+}
+
+func (r *Responder) isolateProcess(e *event.Event, target, rule, reason string) error {
 	if target == "" {
 		target = TargetProcess
 	}
@@ -508,6 +520,7 @@ func (r *Responder) Tick(now time.Time) {
 	r.mu.Lock()
 	r.tickSuspended(now)
 	r.mu.Unlock()
+	r.tickRetries(now)
 	// The event loop calls Tick: never wait for a slow action. When one is
 	// running, isolation expiry waits for the next tick (2 s later).
 	if !r.actMu.TryLock() {
@@ -551,6 +564,9 @@ func (r *Responder) Tick(now time.Time) {
 // state cleared.
 func (r *Responder) Close() error {
 	r.ResumeAll()
+	r.mu.Lock()
+	r.retries = map[string]*retryEntry{} // no retry after shutdown
+	r.mu.Unlock()
 	r.stopWorker(true)
 	if r.cfg.DryRun {
 		return nil

@@ -82,9 +82,13 @@ Security re-check of the owner-decision changes (9 Nov 2026): every earlier find
 | # | Finding | Severity | Status | Residual |
 |---|---|---|---|---|
 | N1 | Fake nested bundles still occupied the single slow-action worker through codesign timeouts (up to 3 × 5 s per event, before any budget). | Medium | **Partial** | Bundles in temp folders, home folders and mounted volumes are no longer codesign-checked (they are user copies), which removes the vector where an unprivileged process can build them (`TestUserWritableBundlesNotCodesigned`). An admin-group user can still build them in `/Applications`; a queue share per rule is a follow-up. Kill and suspend are never affected. |
-| N2 | Ten decoy plists in a minute spend remove_persistence's per-rule budget and the real eleventh plist is never handled (no retry). | Low | **Open (owner decision)** | Retry of rate-limited file actions, or no per-rule budget for remove_persistence. The alert still fires. |
-| N3 | A Developer ID signed interpreter (python.org python3, node, Electron as node) is trusted as a plist writer whatever its chain. | Low | **Open (owner decision)** | Acting on verified-vendor writers in an untrusted chain adds false positives. The alert still fires. |
+| N2 | Ten decoy plists in a minute spent remove_persistence's per-rule budget and the real eleventh plist was never handled (no retry). | Low | **Closed (code), owner decision 9 Nov 2026** | A slow action refused only by its budget is listed (at most 64) and run again on the worker every 10 s, with every guard rail, for up to 10 minutes; a file that changed meanwhile is refused and dropped; an entry still refused after 10 minutes is logged as `retry-abandoned`; dry-run never retries (`TestRetryAfterBudget`, `TestRetryAbandoned`). Residual: more than 64 waiting actions, or a budget kept spent for 10 minutes, still drop the action (the alert stands). |
+| N3 | A Developer ID signed interpreter (python.org python3, node, Electron as node) is trusted as a plist writer whatever its chain. | Low | **Accepted (owner decision 9 Nov 2026)** | Alert only for that case: acting on verified-vendor writers would add false positives (developer scripts, installers). |
 | N4 | An isolated address that later became the gateway or a resolver stayed blocked; Apple's IPv6 network was not protected. | Low | **Closed (code)** | Isolated addresses are re-checked against the never-block set every minute and released (`TestNeverBlockRecheck`); 2620:149::/32 added. Scoped VPN resolvers and secondary default routes are not detected. |
+
+Security check of the N2 retry (9 Nov 2026): a retry runs the whole action again with every guard rail, so it cannot act on another file or process; lock order and shutdown are sound. Two lows, fixed in code:
+- R1: decoys could fill the 64-entry retry list so the real action was not retried. Now the oldest entry of the same rule makes room (decoys come first) and `response_rate_limited` is raised (`TestRetryListFullEvictsSameRule`). Residual (follow-up, not decided): re-scanning the LaunchAgents directories when a retry is evicted or abandoned.
+- R2: an entry was handed to the worker again every 10 s while an earlier copy still waited, filling the worker queue. Now an entry in flight is not handed again, retries use the worker only while its queue is under half full, and an action refused because the queue is full is listed for a retry instead of skipped (`TestRetryNotQueuedTwice`).
 
 Engineering judge, round 3 (last): **PASS, 4.46** with the owner decisions of 9 Nov 2026; its one new low item (a `route` lookup that timed out counted as "no default route") is fixed: only exit 1 "not in table" means no route, anything else refuses (`TestIsolateNeverBlockSet`).
 
@@ -110,11 +114,9 @@ Detection gaps recorded in [docs/rules.md](../rules.md) (network rules): connect
 ## Decisions pending with the owner
 
 - **H1:** a CI build with a Developer ID signature.
-- **N2:** retry rate-limited file actions, or no per-rule budget for remove_persistence.
-- **N3:** act on Developer ID signed interpreters that write a launch plist in an untrusted chain.
 - **S2:** should a blinded or capped socket poller (`netpoll_fd_capped`, `netpoll_tracking_full`) raise a high-severity alert rather than the medium `SensorDegraded` alert?
 
-Decided on 9 Nov 2026 and recorded above: judge CK-26 (per-action platform policy accepted as designed), R1-4 (remove_persistence for an Apple tool in an untrusted chain), R1-5 (separate kill/suspend budget), R1-6 (built-in never-block set; RFC 1918 can be isolated).
+Decided on 9 Nov 2026 and recorded above (confirmed by the owner directly in the S1 session): judge CK-26 (per-action platform policy accepted as designed), R1-4 (remove_persistence for an Apple tool in an untrusted chain), R1-5 (separate kill/suspend budget), R1-6 (built-in never-block set; RFC 1918 can be isolated), N2 (retry budget-refused actions), N3 (Developer ID interpreters stay alert-only).
 
 Decided on 8 Nov 2026 and recorded in the rows above: New-3 (kill after exec into a platform binary: yes, M1), F3 residual (launchd-parented prompt is an untrusted origin: yes, M2), R5-1 (per-rule aggregation per minute, M5), New-1 / M5 (default budgets unchanged, M5).
 

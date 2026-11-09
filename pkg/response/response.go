@@ -242,11 +242,12 @@ type Responder struct {
 	actMu sync.Mutex
 	work  atomic.Pointer[worker] // background worker of the slow actions (worker.go), nil until StartWorker
 
-	suspended map[int32]*suspension // stopped processes waiting for their resume (suspend.go)
-	isolated  map[string]*Isolation // blocked peers by address (isolate.go)
-	saved     map[string]bool       // addresses in the state file at the last save
-	pfToken   string                // pfctl -E reference token, released at Close
-	pfLoaded  bool                  // the anchor's table and rules are loaded
+	suspended map[int32]*suspension  // stopped processes waiting for their resume (suspend.go)
+	retries   map[string]*retryEntry // slow actions refused by the budget, to try again (retry.go)
+	isolated  map[string]*Isolation  // blocked peers by address (isolate.go)
+	saved     map[string]bool        // addresses in the state file at the last save
+	pfToken   string                 // pfctl -E reference token, released at Close
+	pfLoaded  bool                   // the anchor's table and rules are loaded
 	// lastNeverCheck is when isolated addresses were last checked against
 	// the never-block set (isolate.go recheckNeverBlock).
 	lastNeverCheck time.Time
@@ -320,7 +321,7 @@ func New(cfg Config) *Responder {
 	r := &Responder{cfg: cfg, protected: map[int32]bool{},
 		budgets: [2]*budget{{name: "kill/suspend", perRule: map[string][]time.Time{}}, {name: "file/network action", perRule: map[string][]time.Time{}}},
 		logged:  map[string]time.Time{}, stats: map[string]uint64{},
-		suspended: map[int32]*suspension{}, isolated: map[string]*Isolation{}, peers: map[string]*peerSet{}}
+		suspended: map[int32]*suspension{}, retries: map[string]*retryEntry{}, isolated: map[string]*Isolation{}, peers: map[string]*peerSet{}}
 	r.protected[int32(os.Getpid())] = true
 	r.protected[int32(os.Getppid())] = true
 	for _, p := range cfg.ProtectPIDs {

@@ -1442,3 +1442,137 @@ func TestUserWritableBundlesNotCodesigned(t *testing.T) {
 		t.Fatalf("/Applications: %q %v", why, checked)
 	}
 }
+
+// TestRetryAfterBudget (security re-check N2): ten decoy plists spend the
+// per-rule budget, the real eleventh is refused, and a retry handles it
+// once the budget frees; a file that changed meanwhile is dropped from the
+// retry list; dry-run never retries.
+func TestRetryAfterBudget(t *testing.T) {
+	g := newRig(t, false, nil)
+	g.r.launchRoot = g.dir
+	g.run = func(bin string, args []string) ([]byte, error) { return nil, &ExitError{Code: 113} }
+	for i := 0; i < DefaultMaxPerRulePerMinute; i++ {
+		_, e := g.file("Users/alice/Library/LaunchAgents/decoy"+strconv.Itoa(i)+".plist", plist("com.decoy.a"+strconv.Itoa(i)), 0o644)
+		if err := g.r.RemovePersistence(e, "rule-p", "p"); err != nil {
+			t.Fatalf("decoy %d: %v", i, err)
+		}
+	}
+	real, e := g.file("Users/alice/Library/LaunchAgents/com.real.agent.plist", plist("com.real.agent"), 0o644)
+	if err := g.r.RemovePersistence(e, "rule-p", "p"); !errors.Is(err, ErrRateLimited) || !exists(real) || g.r.Retries() != 1 {
+		t.Fatalf("real plist: %v retries=%d", err, g.r.Retries())
+	}
+	// Inside the minute: the retry is refused again and stays listed.
+	g.now = g.now.Add(retryEvery)
+	g.r.Tick(g.now)
+	if !exists(real) || g.r.Retries() != 1 {
+		t.Fatalf("early retry: retries=%d", g.r.Retries())
+	}
+	// After the minute the budget is free again: the retry removes it.
+	g.now = g.now.Add(time.Minute)
+	g.r.Tick(g.now)
+	if exists(real) || g.r.Retries() != 0 || g.r.Stats()["retry succeeded"] != 1 {
+		t.Fatalf("retry: exists=%v retries=%d stats=%v", exists(real), g.r.Retries(), g.r.Stats())
+	}
+	// A file replaced before its retry is refused and dropped.
+	g2 := newRig(t, false, func(c *Config) { c.MaxPerRulePerMinute = 1 })
+	_, e1 := g2.file("q/one", "1", 0o644)
+	_ = g2.r.QuarantineFile(e1, TargetFile, "r", "r")
+	p2, e2 := g2.file("q/two", "2", 0o644)
+	if err := g2.r.QuarantineFile(e2, TargetFile, "r", "r"); !errors.Is(err, ErrRateLimited) || g2.r.Retries() != 1 {
+		t.Fatalf("second: %v", err)
+	}
+	_ = os.Remove(p2)
+	_ = os.WriteFile(p2, []byte("swapped"), 0o644)
+	g2.now = g2.now.Add(2 * time.Minute)
+	g2.r.Tick(g2.now)
+	if !exists(p2) || g2.r.Retries() != 0 || g2.last().Outcome != OutcomeFileCheck {
+		t.Fatalf("swapped file: retries=%d %+v", g2.r.Retries(), g2.last())
+	}
+	// Dry-run: nothing is listed for retry.
+	g3 := newRig(t, true, func(c *Config) { c.MaxPerRulePerMinute = 1 })
+	_, a := g3.file("d/a", "a", 0o644)
+	_, b := g3.file("d/b", "b", 0o644)
+	_ = g3.r.QuarantineFile(a, TargetFile, "r", "r")
+	if err := g3.r.QuarantineFile(b, TargetFile, "r", "r"); !errors.Is(err, ErrRateLimited) || g3.r.Retries() != 0 {
+		t.Fatalf("dry-run retry: %v %d", err, g3.r.Retries())
+	}
+}
+
+func TestRetryAbandoned(t *testing.T) {
+	g := newRig(t, false, func(c *Config) { c.MaxPerRulePerMinute = 1 })
+	_, a := g.file("x/a", "a", 0o644)
+	p, b := g.file("x/b", "b", 0o644)
+	_ = g.r.QuarantineFile(a, TargetFile, "r", "r")
+	_ = g.r.QuarantineFile(b, TargetFile, "r", "r")
+	g.r.mu.Lock()
+	for _, en := range g.r.retries {
+		en.first = g.now.Add(-retryWindow - time.Second)
+	}
+	g.r.mu.Unlock()
+	g.r.Tick(g.now)
+	if g.r.Retries() != 0 || !exists(p) || g.last().Outcome != "retry-abandoned" {
+		t.Fatalf("abandon: %d %+v", g.r.Retries(), g.last())
+	}
+}
+
+// TestRetryListFullEvictsSameRule (security check R1): decoys filling the
+// retry list do not push out the real action: the oldest entry of the same
+// rule makes room and response_rate_limited is raised.
+func TestRetryListFullEvictsSameRule(t *testing.T) {
+	g := newRig(t, false, func(c *Config) { c.MaxPerRulePerMinute = 1 })
+	_, first := g.file("f/first", "x", 0o644)
+	_ = g.r.QuarantineFile(first, TargetFile, "r", "r")
+	for i := 0; i < maxRetries; i++ {
+		_, e := g.file("f/decoy"+strconv.Itoa(i), strconv.Itoa(i), 0o644)
+		_ = g.r.QuarantineFile(e, TargetFile, "r", "r")
+	}
+	real, e := g.file("f/real", "real", 0o644)
+	if err := g.r.QuarantineFile(e, TargetFile, "r", "r"); !errors.Is(err, ErrRateLimited) || g.r.Retries() != maxRetries ||
+		g.r.Stats()["retry evicted"] != 1 || !strings.Contains(g.degr[len(g.degr)-1], "retry list full") {
+		t.Fatalf("full list: %v retries=%d stats=%v degr=%v", err, g.r.Retries(), g.r.Stats(), g.degr)
+	}
+	key := fileRetryKey(ActionQuarantineFile, "r", e, TargetFile)
+	g.r.mu.Lock()
+	_, listed := g.r.retries[key]
+	g.r.mu.Unlock()
+	if !listed || !exists(real) {
+		t.Fatal("real action not listed for retry")
+	}
+}
+
+// TestRetryNotQueuedTwice (security check R2): an entry already handed to
+// the worker is not handed again while it waits, and retries leave half the
+// worker queue to fresh actions; Defer lists an action the full queue
+// refused.
+func TestRetryNotQueuedTwice(t *testing.T) {
+	g := newRig(t, false, func(c *Config) { c.MaxPerRulePerMinute = 1 })
+	g.r.StartWorker(4)
+	block, started := make(chan struct{}), make(chan struct{})
+	g.r.Go(func() { close(started); <-block })
+	<-started
+	_, a := g.file("n/a", "a", 0o644)
+	_, b := g.file("n/b", "b", 0o644)
+	_ = g.r.QuarantineFile(a, TargetFile, "r", "r")
+	_ = g.r.QuarantineFile(b, TargetFile, "r", "r")
+	for i := 0; i < 6; i++ {
+		g.now = g.now.Add(retryEvery)
+		g.r.Tick(g.now)
+	}
+	if n := len(g.r.work.Load().ch); n != 1 {
+		t.Fatalf("queued %d copies of one retry", n)
+	}
+	ran := 0
+	g.r.Defer("r2", "deferred action", func() { ran++ })
+	if g.r.Retries() != 2 {
+		t.Fatalf("retries = %d", g.r.Retries())
+	}
+	close(block)
+	g.r.Wait()
+	g.now = g.now.Add(time.Minute)
+	g.r.Tick(g.now)
+	g.r.Wait()
+	if ran != 1 || g.r.Retries() != 0 {
+		t.Fatalf("deferred ran %d, retries %d", ran, g.r.Retries())
+	}
+	g.r.StopWorker()
+}

@@ -28,8 +28,8 @@ const responseQueue = 64
 // actions (quarantine_file, requarantine, remove_persistence,
 // isolate_process: file copies, codesign, launchctl, pfctl) run on the
 // responder's worker with a copy of the event, so they never hold up the
-// event loop; when its queue is full the action is skipped and reported as
-// response_rate_limited. Guard rails live in pkg/response.
+// event loop; when its queue is full the action is listed for a retry and
+// reported as response_rate_limited. Guard rails live in pkg/response.
 func (p *pipeline) respondActions(a *rules.Alert) {
 	if p.responder == nil {
 		return
@@ -68,7 +68,9 @@ func (p *pipeline) respondActions(a *rules.Alert) {
 		}
 		e := cloneEvent(ev)
 		if !r.Go(func() { slow(e) }) {
-			p.degraded(response.CondRateLimited, fmt.Sprintf("response queue full (%d actions waiting); %s skipped for %s", responseQueue, act.Name, reason))
+			// Not skipped: listed for a retry like a budget refusal.
+			r.Defer(rule, reason, func() { slow(e) })
+			p.degraded(response.CondRateLimited, fmt.Sprintf("response queue full (%d actions waiting); %s for %s will be retried", responseQueue, act.Name, reason))
 		}
 	}
 }

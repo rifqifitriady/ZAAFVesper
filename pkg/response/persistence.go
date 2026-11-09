@@ -89,6 +89,14 @@ func (r *Responder) launchDomain(path string) (domain string, why string) {
 // plist (a borrowed label) is never booted out; plus every quarantine guard
 // rail. It acts after the event: whatever the job already did stays done.
 func (r *Responder) RemovePersistence(e *event.Event, rule, reason string) error {
+	var run func() error
+	run = func() error {
+		return r.retryOnLimit(fileRetryKey(ActionRemovePersistence, rule, e, TargetFile), rule, reason, r.removePersistence(e, rule, reason), run)
+	}
+	return run()
+}
+
+func (r *Responder) removePersistence(e *event.Event, rule, reason string) error {
 	p := procOf(e)
 	d := Decision{Action: ActionRemovePersistence, PID: p.PID, Target: TargetFile, Name: p.Name, Exe: p.Exe, Reason: reason}
 	path := ""
