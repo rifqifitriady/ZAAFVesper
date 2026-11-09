@@ -87,7 +87,9 @@ type vHarness struct {
 	results []vResult
 	subs    []*vSubject
 	cleanup []func()
-	stdout  io.Writer
+	// pfWasEnabled: pf's state before the run (macOS).
+	pfWasEnabled bool
+	stdout       io.Writer
 }
 
 func cmdValidateResponse(args []string, stdout, stderr io.Writer) int {
@@ -332,19 +334,22 @@ func (h *vHarness) runCommon() {
 	h.killRefused("kernel unique id differs (pid reused)", func(p *event.Proc) { p.UniqueID++ }, response.OutcomeMismatch)
 	// Refused: the start time does not match.
 	h.killRefused("start time differs", func(p *event.Proc) { p.StartTime = p.StartTime.Add(-2 * time.Second) }, response.OutcomeMismatch)
-	// Refused: ZAAFVesper's own process.
-	if p, err := procOf(int32(os.Getpid())); err == nil {
-		h.reset()
-		err := h.r.KillEvent(&event.Event{Source: vSource(), Proc: p}, "validate-kill", "validation: kill self")
-		h.record("kill", "the sensor's own process", expectDeny, errors.Is(err, response.ErrProtected), "")
+	// Refused: ZAAFVesper's own process (its pid is protected before any
+	// kernel read; on Windows the kernel read also refuses its image).
+	self := &event.Proc{PID: int32(os.Getpid()), Exe: h.self, Name: filepath.Base(h.self), UniqueID: 1, StartTime: time.Now()}
+	if p, err := procOf(self.PID); err == nil {
+		self = p
 	}
+	h.reset()
+	err := h.r.KillEvent(&event.Event{Source: vSource(), Proc: self}, "validate-kill", "validation: kill self")
+	h.record("kill", "the sensor's own process", expectDeny, errors.Is(err, response.ErrProtected), "")
 	// Refused: pid 1 (launchd, init) or the Windows System process.
 	pid := int32(1)
 	if runtime.GOOS == "windows" {
 		pid = 4
 	}
 	h.reset()
-	err := h.r.KillEvent(&event.Event{Source: vSource(), Proc: &event.Proc{PID: pid, Exe: "system", UniqueID: 1, StartTime: time.Now()}}, "validate-kill", "validation: kill system")
+	err = h.r.KillEvent(&event.Event{Source: vSource(), Proc: &event.Proc{PID: pid, Exe: "system", UniqueID: 1, StartTime: time.Now()}}, "validate-kill", "validation: kill system")
 	h.record("kill", fmt.Sprintf("system process (pid %d)", pid), expectDeny, err != nil && strings.HasPrefix(h.decision().Outcome, "refused-"), "")
 
 	say(h.stdout, "--- suspend")

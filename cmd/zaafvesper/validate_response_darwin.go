@@ -77,6 +77,7 @@ func (h *vHarness) platformConfig(rc *response.Config) {
 }
 
 func (h *vHarness) runPlatform() {
+	h.pfWasEnabled = pfEnabled()
 	if err := h.r.StartResponse(); err != nil {
 		say(h.stdout, "note: StartResponse: %v", err)
 	}
@@ -97,6 +98,18 @@ func randID() string {
 func run(bin string, args ...string) (string, error) {
 	out, err := exec.Command(bin, args...).CombinedOutput()
 	return string(out), err
+}
+
+// stdout runs bin and returns its standard output only (pfctl writes
+// notices such as "No ALTQ support in kernel" to stderr).
+func stdout(bin string, args ...string) string {
+	out, _ := exec.Command(bin, args...).Output()
+	return string(out)
+}
+
+// pfEnabled reports whether pf is enabled (pfctl -s info).
+func pfEnabled() bool {
+	return strings.Contains(stdout(response.PfctlBin, "-s", "info"), "Status: Enabled")
 }
 
 // writer starts a test process to play the untrusted writer or remover of
@@ -553,11 +566,16 @@ func (h *vHarness) isolateCases() {
 	h.r.Tick(time.Now())
 	h.reset()
 	h.record("isolate_process", fmt.Sprintf("time-to-live expiry (%s in this run)", vIsolationTTL), expectAct, len(pfTable()) == 0, fmt.Sprintf("table now %v", keys(pfTable())))
-	// Clean shutdown flushes the anchor.
+	// Clean shutdown flushes the anchor and releases the pf enable
+	// reference (pf returns to the state it had before the run).
 	_ = h.r.Close()
-	rules, _ := run(response.PfctlBin, "-a", response.PFAnchor, "-s", "rules")
+	rules := strings.TrimSpace(stdout(response.PfctlBin, "-a", response.PFAnchor, "-s", "rules"))
 	h.reset()
-	h.record("isolate_process", "clean shutdown flushes the anchor", expectAct, strings.TrimSpace(rules) == "", "rules left: "+strings.TrimSpace(rules))
+	h.record("isolate_process", "clean shutdown flushes the anchor", expectAct, rules == "", "rules left: "+rules)
+	now := pfEnabled()
+	h.reset()
+	h.record("isolate_process", "clean shutdown releases the pf enable reference (pfctl -X)", expectAct, now == h.pfWasEnabled,
+		fmt.Sprintf("pf enabled before the run=%v, after shutdown=%v", h.pfWasEnabled, now))
 }
 
 func hasAddr(ip string) bool {
@@ -571,7 +589,7 @@ func hasAddr(ip string) bool {
 }
 
 func pfTable() map[string]bool {
-	out, _ := run(response.PfctlBin, "-a", response.PFAnchor, "-t", response.PFTable, "-T", "show")
+	out := stdout(response.PfctlBin, "-a", response.PFAnchor, "-t", response.PFTable, "-T", "show")
 	m := map[string]bool{}
 	for _, f := range strings.Fields(out) {
 		if _, err := netip.ParseAddr(f); err == nil {
