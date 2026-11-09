@@ -1,82 +1,71 @@
 <div align="center">
 
-<img src="docs/assets/banner.svg" width="100%" alt="ZAAFVesper: behaviour-driven security sensor for macOS, with Windows and Linux in preview">
+<img src="docs/assets/banner.svg" width="100%" alt="ZAAFVesper: behaviour-driven threat detection and response for macOS, with Windows and Linux in preview">
 
 <br>
 
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-0A0D26?style=for-the-badge&logo=apple&logoColor=white)](#platform-support) [![Version](https://img.shields.io/badge/version-v0.2-5EF0D6?style=for-the-badge)](CHANGELOG.md) [![Go](https://img.shields.io/badge/Go-1.27-1FE5C3?style=for-the-badge&logo=go&logoColor=0A0D26)](go.mod) [![License](https://img.shields.io/badge/license-Apache--2.0-9D6BFF?style=for-the-badge)](LICENSE) [![Status](https://img.shields.io/badge/status-pre--release-FF3EC8?style=for-the-badge)](#project-status)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-0A0D26?style=for-the-badge&logo=apple&logoColor=white)](#platforms) [![Version](https://img.shields.io/badge/version-v0.2-5EF0D6?style=for-the-badge)](CHANGELOG.md) [![Go](https://img.shields.io/badge/Go-1.27-1FE5C3?style=for-the-badge&logo=go&logoColor=0A0D26)](go.mod) [![License](https://img.shields.io/badge/license-Apache--2.0-9D6BFF?style=for-the-badge)](LICENSE)
 
-[![Rules](https://img.shields.io/badge/detection%20rules-94-3B8EFF?style=flat-square)](docs/rules.md) [![Fixtures](https://img.shields.io/badge/rule%20fixtures-467%20passing-1FE5C3?style=flat-square)](rules/testdata) [![ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-63%20techniques-FF3EC8?style=flat-square)](#detection-coverage) [![Atomic](https://img.shields.io/badge/Atomic%20Red%20Team-28%20rules%20linked-9D6BFF?style=flat-square)](https://github.com/redcanaryco/atomic-red-team)
+[![Rules](https://img.shields.io/badge/detection%20rules-94-3B8EFF?style=flat-square)](docs/rules.md) [![Fixtures](https://img.shields.io/badge/rule%20fixtures-467%20passing-1FE5C3?style=flat-square)](rules/testdata) [![ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-63%20techniques-FF3EC8?style=flat-square)](#detection-coverage) [![Status](https://img.shields.io/badge/status-pre--release-FF3EC8?style=flat-square)](#status)
 
-**[What's new](CHANGELOG.md)** · **[Quick start](#quick-start)** · **[How it works](#how-it-works)** · **[Coverage](#detection-coverage)** · **[Writing rules](#writing-rules)** · **[Security](#security-model)** · **[Operations guide](docs/operations.md)**
+**[Quick start](#quick-start)** · **[How it works](#how-it-works)** · **[Coverage](#detection-coverage)** · **[Security](#security-model)** · **[Roadmap](#roadmap)** · **[Operations guide](docs/operations.md)** · **[Changelog](CHANGELOG.md)**
 
 </div>
 
 ---
 
-ZAAFVesper watches what processes on a Mac actually **do**: what they spawn, which files they touch, which secrets they read, how they try to persist. It matches that behaviour against readable rules mapped to MITRE ATT&CK. Events come from Apple's Endpoint Security framework through the built-in `eslogger`. The rule language is modelled on [Fibratus](https://github.com/rabbitstack/fibratus), and every built-in rule ships with test fixtures. Most rules also name the Atomic Red Team test that exercises them. Since v0.2 the same engine also reads Sysmon on Windows and Linux (preview), imports Sigma rules, sees network connections, ships alerts to a SIEM or to [ZAAFElegia](https://github.com/rifqifitriady/ZAAFElegia), and can contain a threat after it is detected.
+**ZAAFVesper** watches what processes actually **do**: what they spawn, which files they touch, which secrets they read, how they persist and whom they talk to. It matches that behaviour against readable rules mapped to MITRE ATT&CK, and when you allow it, it contains the threat.
+- **Sources:** on macOS it reads Apple's Endpoint Security through the built-in `eslogger`; on Windows and Linux (preview) it reads Sysmon.
+- **One rule language** for all three platforms, modelled on [Fibratus](https://github.com/rabbitstack/fibratus).
+- **Every rule ships with test fixtures.**
 
 > *Vesper* is the evening star: a watch that stays awake after dark.
 
-## Project status
+## Status
 
 > [!WARNING]
-> **Pre-release.** Every rule passes its fixtures and the code has been through several independent security review rounds. However, the installer package, the LaunchDaemon, Full Disk Access and the response actions (kills, suspend, quarantine, launchctl and pf) have **not yet been validated live as root**. Treat a first install as a test on a machine you can recover. Open items and residual risks are tracked in [docs/security/open-findings.md](docs/security/open-findings.md).
+> **Pre-release.** Every rule passes its fixtures, the code has been through several independent security reviews, and v0.3 is now proving it on live GitHub runners. The installer, the LaunchDaemon, Full Disk Access and the response actions have **not yet been validated as root on your own machine**. Treat a first install as a test on a machine you can recover. Open risks: [docs/security/open-findings.md](docs/security/open-findings.md).
 
-## Platform support
-
-| Platform | Event source | Status |
-|---|---|---|
-| macOS 13+ | Endpoint Security via `eslogger` | Main platform. Rules and fixtures pass; live install as root still to be validated (above). |
-| Windows 10/11, Server 2016+ | Sysmon through the event log (`EvtSubscribe`), Windows service | **Preview, untested on a real host.** Cross-compiled; the Sysmon decoder passes fixtures built from Microsoft's documented schema. See [packaging/windows](packaging/windows/README.md). |
-| Linux (systemd) | Sysmon for Linux through journald, systemd unit | **Preview, untested on a real host with Sysmon.** Unit tests, the `/proc` process table, the pidfd kill and a replayed journal run pass in a Linux container. See [packaging/linux](packaging/linux/README.md). |
-
-Rules declare their platforms (`platforms: [windows]`); `run` loads only the
-rules for the host, and `rules test` checks all of them on any machine. YARA is
-macOS-only for now (the Windows and Linux builds are pure Go).
-
-## What it does
+## Highlights
 
 <table>
 <tr>
-<td width="50%" valign="top">
+<td width="33%" valign="top">
 
-**Behaviour rules, not signatures**<br>
-94 rules: 46 hand-written for macOS (process, file, network, persistence, credential and defence-impairment activity), 11 for Windows and Linux, and 37 converted from SigmaHQ with `zaafvesper sigma convert`. Single-event rules and `sequence` rules correlate steps such as *download → write → execute* by path or process.
+**Behaviour, not signatures**<br>
+94 rules: 46 hand-written for macOS, 11 for Windows and Linux, 37 converted from SigmaHQ. Sequences correlate steps such as *download → write → execute*.
 
 </td>
-<td width="50%" valign="top">
+<td width="33%" valign="top">
 
 **Trust that cannot be borrowed**<br>
-Allow-lists trust only Apple platform binaries, or a vendor's Team ID plus signing ID **with** a verified Developer ID or App Store signing category. A self-signed binary that copies a Team ID is still untrusted.
+Only Apple platform binaries, or a vendor's Team ID **with** a verified Developer ID or App Store signature, are trusted. A self-signed copy of a Team ID is not.
 
 </td>
-</tr>
-<tr>
-<td valign="top">
+<td width="33%" valign="top">
 
 **Process-tree context**<br>
-Every event carries its parent and ancestry, signing identity and a kernel-unique process id. An unknown, double-forked or untrusted ancestor is treated as suspicious, never as safe.
-
-</td>
-<td valign="top">
-
-**YARA, bound to what ran**<br>
-Executed and written files are scanned with YARA. Each scan is tied to the inode in the event, so swapping or deleting the binary right after exec is reported instead of silently skipped.
+Every event carries its ancestry, signing identity and a kernel-unique process id. An unknown or double-forked ancestor counts as suspicious.
 
 </td>
 </tr>
 <tr>
 <td valign="top">
 
-**Capture and replay**<br>
-Record events to a compressed `.rcap` file. Later, replay that capture or raw `eslogger` JSON through the same pipeline, as your normal user, to test rules or investigate.
+**Sigma and SIEM ready**<br>
+`zaafvesper sigma convert` imports Sigma rules. Alerts go to syslog over TLS, a webhook, Splunk HEC or [ZAAFElegia](https://github.com/rifqifitriady/ZAAFElegia) as OCSF findings.
 
 </td>
 <td valign="top">
 
-**Careful, opt-in active response**<br>
-Off by default. A rule may kill or suspend the offending process or its untrusted parent, move a dropped file into a root-only quarantine vault, put back a stripped quarantine attribute, boot out and quarantine a Launch Agent or Daemon, or block a process's remote peers in pf for an hour. Every action re-checks its target first (kernel identity for processes, device and inode for files), refuses Apple and protected system paths, and is rate-limited. **All of it happens after the event: it contains damage, it does not prevent it.**
+**YARA and network**<br>
+Files that run or are written are scanned with YARA, bound to their inode. Socket polling reports connections without an Apple entitlement.
+
+</td>
+<td valign="top">
+
+**Careful, opt-in containment**<br>
+Kill, suspend, quarantine, re-quarantine, roll back a Launch Agent, or cut a process off in pf. Every action re-checks its target first. **It contains, it does not prevent.**
 
 </td>
 </tr>
@@ -84,18 +73,21 @@ Off by default. A rule may kill or suspend the offending process or its untruste
 
 ## How it works
 
-<p align="center"><img src="docs/assets/pipeline.svg" width="100%" alt="Pipeline: Endpoint Security, Decode, Process tree, Rule engine with YARA, then Alerts, Response and Capture; Replay feeds the same pipeline"></p>
+<p align="center"><img src="docs/assets/pipeline.svg" width="100%" alt="Pipeline: macOS Endpoint Security, Windows Sysmon, Linux Sysmon and socket polling are normalised, enriched by the process tree and evaluated by the rule engine with YARA and Sigma rules; matches go to alerts, SIEM, ZAAFElegia, containment and capture"></p>
 
-1. **Collect.** `/usr/bin/eslogger` streams Endpoint Security notifications as JSON, and ZAAFVesper decodes 24 event types into one platform-neutral event model.
-2. **Enrich.** The process tree adds parent, ancestry, signing category and a kernel-unique id to each event. Its memory is bounded, and under pressure it sheds detail before it drops identity.
-3. **Detect.** Rules are indexed by event name and evaluated in order; sequences keep bounded partial state. YARA matches come back into the engine as events.
-4. **Act.** Every match is written as an alert to the console and to JSONL files with size caps. With `--enable-response`, a match can also trigger a response action (kill, suspend, quarantine, requarantine, remove persistence, isolate), always after the event. The sensor raises a `SensorDegraded` event whenever its own telemetry suffers.
+1. **Collect.** Endpoint Security on macOS, Sysmon on Windows and Linux, and socket polling feed one platform-neutral event model.
+2. **Enrich.** The process tree adds parent, ancestry, signing trust and a kernel-unique id. Memory is bounded; under pressure it sheds detail before identity.
+3. **Detect.** Rules are indexed by event and evaluated in order; sequences keep bounded state. YARA matches return to the engine as events.
+4. **Act.**
+   - Alerts go to the console, size-capped JSONL, SIEM outputs and ZAAFElegia.
+   - With `--enable-response`, a rule can contain the threat.
+   - The sensor reports when its own telemetry degrades.
 
 ## See it run
 
 <p align="center"><img src="docs/assets/demo.svg" width="100%" alt="Terminal: zaafvesper replay prints one alert per line with timestamp, severity, rule name and ATT&CK technique"></p>
 
-<sub>Real output of <code>zaafvesper replay</code> over the bundled eslogger test fixtures (synthetic events). Only the first line of each alert is shown, and only a subset of the alerts.</sub>
+<sub>Real output of <code>zaafvesper replay</code> over the bundled eslogger test fixtures (synthetic events). Only the first line of each alert is shown, and only some of the alerts.</sub>
 
 ## Quick start
 
@@ -108,151 +100,131 @@ make build                                   # pure Go, YARA disabled
 ./bin/zaafvesper rules test rules            # run every rule against its fixtures
 cat testdata/eslogger/*.jsonl > demo.jsonl
 ./bin/zaafvesper replay --rules rules demo.jsonl
-./bin/zaafvesper coverage --rules rules --navigator -   # ATT&CK Navigator layer
-./bin/zaafvesper sigma convert ~/sigma/rules/macos -o my-rules --report report.json
+./bin/zaafvesper coverage --rules rules --navigator -        # ATT&CK Navigator layer
+./bin/zaafvesper sigma convert ~/sigma/rules/macos -o my-rules # import Sigma rules
 ```
 
-### Requirements
+**Requirements**
+- Go 1.27+.
+- macOS 13 or later for the live sensor (`eslogger` ships with the OS).
+- For YARA: `brew install yara pkg-config`, then `make build-yara`.
 
-- macOS 13 or later (developed on macOS 26, Apple Silicon). `eslogger` ships with the OS.
-- Go 1.27+. For YARA: `brew install yara pkg-config`, then `make build-yara`. Builds meant to run as root link libyara statically.
+**Run it live on macOS.**
+- The sensor runs as a root LaunchDaemon from a script-free package that you build as yourself. Root only runs Apple's own tools on it.
+- `make package` prints the verify-then-install steps.
+- The [operations guide](docs/operations.md) covers Full Disk Access, response, upgrades and every output.
 
-### Run it live
+## Platforms
 
-Live mode runs as a root LaunchDaemon installed from a script-free package. You build the package as yourself; root only runs Apple's own tools on it.
+| Platform | Event source | Status |
+|---|---|---|
+| macOS 13+ | Endpoint Security via `eslogger` | Main platform. Live install as root still to be validated on your machine. |
+| Windows 10/11, Server 2016+ | Sysmon through the event log, Windows service | **Preview.** Rules fired against Atomic Red Team on a GitHub Windows runner in v0.3 testing. [Install notes](packaging/windows/README.md). |
+| Linux (systemd) | Sysmon for Linux through journald | **Preview.** Rules fired against Atomic Red Team on a GitHub Ubuntu runner in v0.3 testing. [Install notes](packaging/linux/README.md). |
 
-```bash
-make package                 # as your normal user; prints the .pkg path and its SHA-256
-# then follow the root-side copy, verify and install steps it prints
-```
-
-The [operations guide](docs/operations.md) covers the rest: the verify-then-install sequence, Full Disk Access for the sensor binary, enabling response, upgrade and uninstall, alert files and rotation, sensor health, and everything still to be validated live.
-
-## Network telemetry and outputs
-
-- **Network events without an entitlement.** ZAAFVesper polls the kernel's socket tables every second and right after each exec, and reports each connection or listener once (`NetworkConnect`, `NetworkAccept`). This is polling: a connection that opens and closes between two polls is missed, and macOS shows no DNS without a NetworkExtension.
-- **SIEM outputs.** Alerts (and optionally every event) go to syslog over TLS (RFC 5424, pinned CA), an HTTPS webhook or Splunk HEC, with a capped, root-owned disk spool while the endpoint is down.
-- **ZAAFElegia.** `--elegia-out -` streams every event with Sigma field names, so `zaafvesper run --elegia-out - | zaaf hunt -r <sigma rules> -` runs Sigma rules over live telemetry; `--alerts-ocsf` writes alerts as OCSF Detection Findings. See [integrations/zaafelegia](integrations/zaafelegia/README.md).
-
-Details and limits: [docs/operations.md](docs/operations.md#network-telemetry-socket-polling). The live sensor paths (polling other users' processes as root, real SIEM receivers, the live pipe into ZAAFElegia) have not been run as root yet.
+- **Platform rules:** each rule declares `platforms:`. `run` loads only the host's rules, while `rules test` checks all of them on any machine.
+- **YARA:** macOS only for now.
 
 ## Detection coverage
+
+94 rules cover 63 MITRE ATT&CK techniques.
+- **Navigator:** `zaafvesper coverage --navigator` exports a layer.
+- **Details:** the full rule list, false-positive notes and trust policy are in [docs/rules.md](docs/rules.md).
+
+<details>
+<summary><b>macOS rules by tactic</b> (46 hand-written + 12 converted from SigmaHQ)</summary>
 
 | Tactic | Rules | Examples |
 |---|:-:|---|
 | Persistence | 11 | Launch Agents and Daemons, Login Items, cron, emond, kernel extensions, shell start-up files |
 | Defense Impairment | 9 | Gatekeeper or firewall disabled, quarantine stripped, logs cleared, security tool or sensor stopped |
-| Execution | 7 | Script piped into a shell, suspicious AppleScript/JXA, launchctl jobs from temp folders, unsigned binary dropped and run, XProtect and YARA hits, a shell holding a network connection (reverse shell) |
+| Execution | 7 | Script piped into a shell, suspicious AppleScript/JXA, launchctl jobs from temp, unsigned binary dropped and run, XProtect and YARA hits, reverse shell |
 | Credential Access | 6 | Fake password prompts, Keychain dumps, browser credential stores, SSH and GnuPG keys |
 | Stealth | 4 | `DYLD_INSERT_LIBRARIES`, task port and ptrace injection, hidden files, shell history deleted |
+| Command and Control | 3 | Download then stdin shell, unsigned binary from temp connecting out, interpreter to a public IP on an uncommon port |
 | Privilege Escalation | 3 | Setuid bits, sudoers changes, TCC database tampering |
 | Discovery | 2 | Security software enumeration, scripted system profiling |
-| Command and Control | 3 | Download followed by a stdin-fed shell, unsigned binary in a temp folder connecting out, script interpreter to a public IP on an uncommon port |
 | Collection | 1 | Non-interactive screen capture |
 
-The table counts the 46 hand-written macOS rules (the two sensor-health rules apply on every platform). The 12 converted SigmaHQ macOS rules in `rules/sigma/macos/` add account changes (admin group, root and guest accounts), SIP and Time Machine tampering, Office child processes and JXA or run-only AppleScript.
+The SigmaHQ macOS set adds account changes, SIP and Time Machine tampering, Office child processes and run-only AppleScript.
 
-**Windows and Linux (preview).** 11 hand-written rules in `rules/windows/` and `rules/linux/` (LSASS memory reads, shadow-copy deletion, encoded PowerShell, Run keys, WMI subscriptions, remote threads; reverse shells, cron and systemd persistence, sudoers changes, shell history deletion) and 25 converted SigmaHQ rules in `rules/sigma/windows/` and `rules/sigma/linux/`. They pass their fixtures but have not yet run against a real Windows or Linux host. The full list, with false-positive notes and trust policy, is in [docs/rules.md](docs/rules.md). `zaafvesper coverage --navigator` exports an ATT&CK Navigator layer.
+</details>
 
-## Writing rules
+<details>
+<summary><b>Windows and Linux rules</b> (11 hand-written + 25 converted from SigmaHQ)</summary>
 
-Rules are YAML, and each one ships with fixtures in `rules/testdata/`. This is a built-in rule, shortened:
+- **Windows:** LSASS memory reads, shadow-copy deletion, encoded PowerShell, Run keys, WMI subscriptions and remote threads.
+- **Linux:** reverse shells, cron and systemd persistence, sudoers changes and shell-history deletion.
+- **SigmaHQ:** 25 converted rules in `rules/sigma/windows/` and `rules/sigma/linux/`.
+
+</details>
+
+<details>
+<summary><b>Writing rules</b></summary>
+
+Rules are YAML with fixtures next to them. A built-in rule, shortened:
 
 ```yaml
 name: Quarantine attribute removed from file
-labels:
-  tactic.id: TA0112
-  technique.id: T1553.001
-  technique.name: Gatekeeper Bypass
+platforms: [macos]
+labels: {tactic.id: TA0112, technique.id: T1553.001, technique.name: Gatekeeper Bypass}
 condition: >
   delete_xattr
   and evt.arg[xattr] = 'com.apple.quarantine'
   and not (apple_trusted_process)
 output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) removed the quarantine attribute from %file.path"
 severity: medium
-tests:
-  atomic: [fb3d46c6-9480-4803-8d7d-ce676e1f1a9b]
-```
-
-Sequences correlate steps across events:
-
-```yaml
-condition: >
-  sequence maxspan 10m
-    |create_file and file.path imatches temp_drop_globs| by file.path
-    |spawn_process and no_developer_identity and ps.exe imatches temp_drop_globs| by ps.exe
 ```
 
 - **Operators:** `= != in iin contains icontains startswith endswith matches imatches regex`.
-- **Reuse:** shared macros and lists live in `rules/macros/macros.yml`.
-- **Missing fields:** a comparison on an absent field is always false, so write trust as a positive check and untrust with `not`.
-- **Workflow:** `rules validate`, then `rules test`, before shipping.
-- **Sigma:** `zaafvesper sigma convert <dir> -o <rules dir>` converts Sigma rules for macOS, Windows and Linux. Rules it cannot convert exactly (aggregations, unmapped fields, IPv6 `cidr`, `base64` and others) are skipped with a reason. Converted rules need fixtures like any other rule before `rules test` passes. Details in [docs/rules.md](docs/rules.md#sigma-import).
-- **Reference:** the language is specified in [docs/plans/2026-11-07-zaafvesper-mvp.md](docs/plans/2026-11-07-zaafvesper-mvp.md).
+- **Absent fields:** a comparison on an absent field is always false, so write trust positively and untrust with `not`.
+- **Sequences:** `sequence maxspan 10m |…| by … |…| by …`.
+- **Reference:** the language is in [docs/plans/2026-11-07-zaafvesper-mvp.md](docs/plans/2026-11-07-zaafvesper-mvp.md); Sigma import details are in [docs/rules.md](docs/rules.md#sigma-import).
+
+</details>
 
 ## Security model
 
 ZAAFVesper runs as root, so the sensor itself is treated as an attack surface. It assumes malware can run as your normal account.
 
-- **Install:** root never builds anything. The package contains no scripts and everything in it is root-owned. The LaunchDaemon cannot be stopped from your normal account.
-- **Before start:** the binary, rules and configuration are checked up to `/` for root ownership, mode bits and ACLs that grant write. Each file is then read through one `O_NOFOLLOW` descriptor.
-- **Bounded memory:** argv, env, the process table, sequences, the YARA queue and the alert files all have caps. Event text is sanitised before it reaches a terminal.
-- **Network and outputs:** socket polling only reads the process table; its events never update it, and identities it reads from the kernel are marked unverified, so they never drive a kill. SIEM tokens are read from a root-owned `0600` file and never logged or spooled; syslog trusts only the CA you name; webhooks follow no redirects.
-- **Kills:** a kill is checked against the kernel's unique process id and start time. A process that was an Apple platform binary when it was detected is never killed, and neither is one whose current image lies on a protected system path. A detected process that later execs into an Apple binary such as `/bin/zsh` is still killed once its identity was recorded (only when Endpoint Security reported that it was not an Apple binary when it was detected); an exec that happens before the sensor recorded the process escapes the kill, not the alert.
-- **File and network actions:** a file is acted on only if it is still the inode the event reported, reached without following any symbolic link, a regular file on a local disk (hard-linked only when it belongs to the offending process), outside system paths, Apple-signed bundles and ZAAFVesper's own files. `launchctl` and `pfctl` are pinned binaries run with fixed arguments; a launch label is booted out only if launchd loaded it from that very plist, and pf rules are a constant (only parsed IP addresses enter its table; loopback, link-local, this Mac's addresses, its default gateway and DNS resolvers, Apple's 17.0.0.0/8 and a configured management allow-list are never blocked). pf filters by address, so an isolation blocks those peers for the whole Mac.
+- **Install:** root never builds anything; the package has no scripts and everything in it is root-owned. The LaunchDaemon cannot be stopped from your normal account.
+- **Before start:** binary, rules and configuration are checked up to `/` for root ownership, mode bits and write-granting ACLs, then read through one `O_NOFOLLOW` descriptor.
+- **Bounded:** argv, env, the process table, sequences, the YARA queue and alert files are capped; event text is sanitised.
+- **Containment:**
+  - Every action re-checks its target first: kernel unique id and start time for a process, device and inode for a file.
+  - It refuses Apple and protected system paths.
+  - Kill and file/network actions have separate rate limits.
 
-What each response action can and cannot do (all of them act after the event; details in [docs/operations.md](docs/operations.md#response)):
+<details>
+<summary><b>What each response action can and cannot do</b></summary>
 
 | Action | Does | Does not |
 |---|---|---|
-| `kill` | SIGKILL the process or its parent after re-checking its kernel identity | undo what it already did; touch Apple platform binaries or protected paths |
-| `suspend` | SIGSTOP it at once, so a following `kill` does not race it | keep it stopped: it is resumed after 30 s (or at shutdown) unless killed |
-| `quarantine_file` | move the file into a root-only vault, restorable with `zaafvesper quarantine restore` | stop a process already running from it, or remove other hard-linked names |
-| `requarantine` | put `com.apple.quarantine` back so Gatekeeper checks the file at its next launch | affect a launch that already happened |
-| `remove_persistence` | boot out the job (only if launchd loaded that label from this plist) and quarantine the plist | undo what the job already did; stop a job loaded in another user's domain before logout |
-| `isolate_process` | block the process's known remote peers in pf for an hour | block per process: those addresses are blocked for the whole Mac, and new peers are not |
+| `kill` | SIGKILL the process or its untrusted parent after re-checking its kernel identity | undo what it already did; touch Apple platform binaries or protected paths |
+| `suspend` | SIGSTOP it at once so a following `kill` does not race it | keep it stopped: resumed after 30 s unless killed |
+| `quarantine_file` | move the file into a root-only vault, restorable with `zaafvesper quarantine restore` | stop a process already running from it |
+| `requarantine` | put `com.apple.quarantine` back so Gatekeeper checks the next launch | affect a launch that already happened |
+| `remove_persistence` | boot out the job (only if launchd loaded it from that plist) and quarantine the plist | undo what the job already did |
+| `isolate_process` | block the process's known peers in pf for an hour | block per process: the addresses are blocked for the whole Mac; never the gateway, DNS or Apple's network |
 
-The status of every finding, with the tests that back it, is in **[docs/security/open-findings.md](docs/security/open-findings.md)**. The largest open item is the build chain: the package is built on the same account it protects, and it is unsigned. Closing that needs a signed and notarized CI build.
+</details>
 
-## Project layout
-
-```
-cmd/zaafvesper/        CLI: run, replay, rules, coverage, sigma, quarantine, isolation
-pkg/event/             platform-neutral event model and field registry
-pkg/source/eslogger/   eslogger decoder and supervisor
-pkg/source/sysmon/     Sysmon XML decoder (Windows and Linux) and identity binder
-pkg/source/winevt/     Windows event log source (Sysmon channel)
-pkg/source/sysmonlinux/ journald source (Sysmon for Linux)
-pkg/source/netpoll/    socket polling (network events without an entitlement)
-pkg/output/            syslog/TLS, webhook, Splunk HEC, spool, ZAAFElegia and OCSF
-pkg/ps/                process tree, ancestry and identity
-pkg/filter/ql/         rule language: lexer, parser, compiler
-pkg/rules/             rule loading, engine, sequences, fixtures
-pkg/sigma/             Sigma parser and converter
-pkg/yara/              YARA scanner bound to file identity
-pkg/alert/, response/  alert sinks and caps, response actions and their guard rails
-rules/                 46 macOS rules, rules/windows, rules/linux, macros, fixtures, YARA signatures
-rules/sigma/           converted SigmaHQ rules (DRL 1.1): macos/, windows/, linux/
-integrations/          ZAAFElegia example and notes
-packaging/             LaunchDaemon plist, newsyslog config (the package also creates /var/db/zaafvesper); windows/ and linux/ install notes
-```
+Every finding and the tests behind it are tracked in [docs/security/open-findings.md](docs/security/open-findings.md). The largest open item is the build chain: v0.3 moves builds to GitHub with signed provenance, but closing it fully needs Apple Developer ID signing.
 
 ## Roadmap
 
-- Validate the Windows and Linux adapters, and the macOS install, on real hosts.
-- Complete network telemetry (DNS, short connections) through a NetworkExtension.
-- Native Endpoint Security client with AUTH events: real blocking before execution (needs Apple's entitlement; today's response only acts after the event).
-- Signed and notarized package built in CI.
+<p align="center"><img src="docs/assets/roadmap.svg" width="100%" alt="Roadmap: v0.1 Foundation and v0.2 Platform done, v0.3 Prove it live in progress, v0.4 Trust and v0.5 Prevent planned"></p>
 
-## Acknowledgements
-
-- [rabbitstack/fibratus](https://github.com/rabbitstack/fibratus): the rule language and the overall model.
-- [redcanaryco/atomic-red-team](https://github.com/redcanaryco/atomic-red-team): the tests that rules are linked to.
-- [SigmaHQ/sigma](https://github.com/SigmaHQ/sigma): the converted rules in `rules/sigma/` (macos, windows, linux), under the [Detection Rule License 1.1](https://github.com/SigmaHQ/Detection-Rule-License) (see [rules/sigma/NOTICE.md](rules/sigma/NOTICE.md)).
-- [ZAAFElegia](https://github.com/rifqifitriady/ZAAFElegia): the Sigma conformance cases the converter is tested against.
-- [olafhartong/sysmon-modular](https://github.com/olafhartong/sysmon-modular): the modular approach to telemetry noise.
-- [A-poc/RedTeam-Tools](https://github.com/A-poc/RedTeam-Tools) and [mukul975/Anthropic-Cybersecurity-Skills](https://github.com/mukul975/Anthropic-Cybersecurity-Skills): attacker tradecraft and detection practice.
+| Version | Theme | What it brings |
+|---|---|---|
+| v0.1 · done | Foundation | eslogger, rule engine, 41 macOS rules, YARA, installer and LaunchDaemon |
+| v0.2 · done | Platform | Windows and Linux (Sysmon), Sigma import, network telemetry, SIEM and ZAAFElegia outputs, active response |
+| v0.3 · in progress | Prove it live | CI and releases built on GitHub with signed provenance; live tests on macOS, Windows and Linux runners with Atomic Red Team |
+| v0.4 · planned | Trust | Developer ID signed, notarized package (needs an Apple Developer account) |
+| v0.5 · planned | Prevent | Blocking before execution with Endpoint Security AUTH events, DNS through a NetworkExtension (needs Apple's entitlements) |
 
 ## License
 
-[Apache-2.0](LICENSE). The converted SigmaHQ rules in `rules/sigma/` are under the Detection Rule License 1.1.
+[Apache-2.0](LICENSE), with two exceptions:
+- **SigmaHQ rules:** the converted rules in `rules/sigma/` are under the [Detection Rule License 1.1](https://github.com/SigmaHQ/Detection-Rule-License); see [rules/sigma/NOTICE.md](rules/sigma/NOTICE.md).
+- **Sigma conformance cases:** the cases in `pkg/sigma/testdata/` come from [ZAAFElegia](https://github.com/rifqifitriady/ZAAFElegia) (Apache-2.0).
