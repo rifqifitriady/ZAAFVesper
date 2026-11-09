@@ -1,0 +1,36 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: LSASS Process Memory Dump Files
+id: a5a2d357-1ab8-4675-a967-ef9990a59391
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects creation of files with names used by different memory dumping tools to create a memory dump of the LSASS process memory, which contains user credentials.
+
+  Converted from Sigma rule a5a2d357-1ab8-4675-a967-ef9990a59391 by zaafvesper sigma convert. Sigma author: Florian Roth (Nextron Systems).
+labels:
+  sigma.author: Florian Roth (Nextron Systems)
+  sigma.id: a5a2d357-1ab8-4675-a967-ef9990a59391
+  sigma.level: high
+  sigma.source: rules/windows/file/file_event/file_event_win_lsass_default_dump_file_names.yml
+  sigma.status: test
+  sigma.tags: attack.credential-access, attack.t1003.001
+  sigma.title: LSASS Process Memory Dump Files
+  tactic.id: TA0006
+  tactic.name: Credential Access
+  technique.id: T1003.001
+references:
+  - https://www.google.com/search?q=procdump+lsass
+  - https://medium.com/@markmotig/some-ways-to-dump-lsass-exe-c4a75fdc49bf
+  - https://github.com/elastic/detection-rules/blob/c76a39796972ecde44cb1da6df47f1b6562c9770/rules/windows/credential_access_lsass_memdump_file_created.toml
+  - https://www.whiteoaksecurity.com/blog/attacks-defenses-dumping-lsass-no-mimikatz/
+  - https://github.com/helpsystems/nanodump
+  - https://github.com/CCob/MirrorDump
+  - https://github.com/safedv/RustiveDump/blob/1a9b026b477587becfb62df9677cede619d42030/src/main.rs#L35
+  - https://github.com/ricardojoserf/NativeDump/blob/01d8cd17f31f51f5955a38e85cd3c83a17596175/NativeDump/Program.cs#L258
+condition: evt.name in ('CreateFile', 'WriteFile') and (file.path iendswith ('\\Andrew.dmp', '\\Coredump.dmp', '\\lsass.dmp', '\\lsass.rar', '\\lsass.zip', '\\NotLSASS.zip', '\\PPLBlade.dmp', '\\rustive.dmp') or file.path icontains ('\\lsass_2', '\\lsassdmp', '\\lsassdump') or (file.path icontains '\\lsass' and file.path icontains '.dmp') or (file.path icontains 'SQLDmpr' and file.path iendswith '.mdmp') or (file.path icontains ('\\nanodump', '\\proc_') and file.path iendswith '.dmp'))
+output: '%ps.exe (pid %ps.pid) wrote %file.path (Sigma rule by Florian Roth (Nextron Systems))'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

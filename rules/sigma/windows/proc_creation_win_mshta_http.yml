@@ -1,0 +1,29 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Remotely Hosted HTA File Executed Via Mshta.EXE
+id: b98d0db6-511d-45de-ad02-e82a98729620
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects execution of the "mshta" utility with an argument containing the "http" keyword, which could indicate that an attacker is executing a remotely hosted malicious hta file
+
+  Converted from Sigma rule b98d0db6-511d-45de-ad02-e82a98729620 by zaafvesper sigma convert. Sigma author: Nasreddine Bencherchali (Nextron Systems).
+labels:
+  sigma.author: Nasreddine Bencherchali (Nextron Systems)
+  sigma.id: b98d0db6-511d-45de-ad02-e82a98729620
+  sigma.level: high
+  sigma.source: rules/windows/process_creation/proc_creation_win_mshta_http.yml
+  sigma.status: test
+  sigma.tags: attack.execution, attack.stealth, attack.t1218.005
+  sigma.title: Remotely Hosted HTA File Executed Via Mshta.EXE
+  tactic.id: TA0002, TA0005
+  tactic.name: Execution, Stealth
+  technique.id: T1218.005
+references:
+  - https://www.trendmicro.com/en_us/research/22/e/avoslocker-ransomware-variant-abuses-driver-file-to-disable-anti-Virus-scans-log4shell.html
+condition: evt.name in ('CreateProcess') and ((ps.exe iendswith '\\mshta.exe' or ps.original_name iin ('MSHTA.EXE')) and ps.cmdline icontains ('http://', 'https://', 'ftp://'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Nasreddine Bencherchali (Nextron Systems))'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

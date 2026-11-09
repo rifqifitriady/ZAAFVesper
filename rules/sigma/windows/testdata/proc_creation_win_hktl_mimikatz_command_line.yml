@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "mimikatz logonpasswords"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6228, "ppid": 4000, "exe": "C:\\Users\\alice\\Downloads\\m.exe", "name": "m.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "m.exe \"privilege::debug\" \"sekurlsa::logonpasswords\" exit", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - a text file about tokens"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6240, "ppid": 4000, "exe": "C:\\Windows\\System32\\notepad.exe", "name": "notepad.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "notepad.exe C:\\notes\\token list.txt", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "PowerShell listing processes"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6241, "ppid": 4000, "exe": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "name": "powershell.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "powershell.exe Get-Process", "original_name": "PowerShell.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

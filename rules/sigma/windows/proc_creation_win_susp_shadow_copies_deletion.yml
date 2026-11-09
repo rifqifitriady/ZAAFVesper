@@ -1,0 +1,37 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Shadow Copies Deletion Using Operating Systems Utilities
+id: c947b146-0abc-4c87-9c64-b17e9d7274a2
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Shadow Copies deletion using operating systems utilities
+
+  Converted from Sigma rule c947b146-0abc-4c87-9c64-b17e9d7274a2 by zaafvesper sigma convert. Sigma author: Florian Roth (Nextron Systems), Michael Haag, Teymur Kheirkhabarov, Daniil Yugoslavskiy, oscd.community, Andreas Hunkeler (@Karneades).
+labels:
+  sigma.author: Florian Roth (Nextron Systems), Michael Haag, Teymur Kheirkhabarov, Daniil Yugoslavskiy, oscd.community, Andreas Hunkeler (@Karneades)
+  sigma.id: c947b146-0abc-4c87-9c64-b17e9d7274a2
+  sigma.level: high
+  sigma.source: rules/windows/process_creation/proc_creation_win_susp_shadow_copies_deletion.yml
+  sigma.status: stable
+  sigma.tags: attack.impact, attack.stealth, attack.t1070, attack.t1490
+  sigma.title: Shadow Copies Deletion Using Operating Systems Utilities
+  tactic.id: TA0005, TA0040
+  tactic.name: Stealth, Impact
+  technique.id: T1070, T1490
+references:
+  - https://www.slideshare.net/heirhabarov/hunting-for-credentials-dumping-in-windows-environment
+  - https://blog.talosintelligence.com/2017/05/wannacry.html
+  - https://securingtomorrow.mcafee.com/other-blogs/mcafee-labs/new-teslacrypt-ransomware-arrives-via-spam/
+  - https://www.bleepingcomputer.com/news/security/why-everyone-should-disable-vssadmin-exe-now/
+  - https://www.hybrid-analysis.com/sample/ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa?environmentId=100
+  - https://github.com/Neo23x0/Raccine#the-process
+  - https://github.com/Neo23x0/Raccine/blob/20a569fa21625086433dcce8bb2765d0ea08dcb6/yara/gen_ransomware_command_lines.yar
+  - https://redcanary.com/blog/intelligence-insights-october-2021/
+  - https://symantec-enterprise-blogs.security.com/blogs/threat-intelligence/blackbyte-exbyte-ransomware
+condition: evt.name in ('CreateProcess') and ((((ps.exe iendswith ('\\powershell.exe', '\\pwsh.exe', '\\wmic.exe', '\\vssadmin.exe', '\\diskshadow.exe') or ps.original_name iin ('PowerShell.EXE', 'pwsh.dll', 'wmic.exe', 'VSSADMIN.EXE', 'diskshadow.exe')) and (ps.cmdline icontains 'shadow' and ps.cmdline icontains 'delete')) or ((ps.exe iendswith '\\wbadmin.exe' or ps.original_name iin ('WBADMIN.EXE')) and (ps.cmdline icontains 'delete' and ps.cmdline icontains 'catalog' and ps.cmdline icontains 'quiet'))) or ((ps.exe iendswith '\\vssadmin.exe' or ps.original_name iin ('VSSADMIN.EXE')) and ((ps.cmdline icontains 'resize' and ps.cmdline icontains 'shadowstorage') and ps.cmdline icontains ('unbounded', '/MaxSize='))))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Florian Roth (Nextron Systems), Michael Haag, Teymur Kheirkhabarov, Daniil Yugoslavskiy, oscd.community, Andreas Hunkeler (@Karneades))'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Legitimate Administrator deletes Shadow Copies using operating systems utilities for legitimate reason; LANDesk LDClient Ivanti-PSModule (PS EncodedCommand)'

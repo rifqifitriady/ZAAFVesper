@@ -1,0 +1,6 @@
+spec_ref: sigma-rules-specification.md#string-wildcard
+description: '`*` matches any run of characters (including path separators), `?` exactly one.'
+expected:
+  - [c004-q, c004-star]
+  - [c004-star]
+  - []

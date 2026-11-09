@@ -1,0 +1,6 @@
+{"CommandLine": "psexec.exe -s cmd"}
+{"CommandLine": "psexec.exe /s cmd"}
+{"CommandLine": "psexec.exe \u2013s cmd"}
+{"CommandLine": "psexec.exe --s cmd"}
+{"CommandLine": "psexec.exe —s cmd"}
+{"CommandLine": "psexec.exe ―s cmd"}

@@ -1,0 +1,7 @@
+title: cidr bare ipv6 address
+id: c028-bare6
+logsource: {product: test}
+detection:
+    s:
+        Ip|cidr: '2001:db8::1'
+    condition: s

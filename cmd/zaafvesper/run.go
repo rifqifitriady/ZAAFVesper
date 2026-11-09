@@ -21,6 +21,7 @@ import (
 	"github.com/rifqifitriady/ZAAFVesper/pkg/rules"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/source"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/source/eslogger"
+	"github.com/rifqifitriady/ZAAFVesper/pkg/source/netpoll"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/yara"
 )
 
@@ -71,6 +72,9 @@ type runOptions struct {
 	// Test hooks for the responder (nil in production).
 	killFunc func(pid int, sig syscall.Signal) error
 	identify func(pid int32) (response.Identity, error)
+	// netout holds the W2 flags (network polling, SIEM and ZAAFElegia
+	// outputs; see outputs.go).
+	netout netOutOptions
 }
 
 func cmdRun(args []string, stdout, stderr io.Writer) int {
@@ -94,6 +98,7 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 	fs.BoolVar(&o.keepEnv, "keep-env", false, "store full environment values in captures and JSONL alerts (default: names only, plus DYLD_* values)")
 	fs.Int64Var(&o.captureMaxBytes, "capture-max-bytes", capture.DefaultMaxBytes, "stop capturing after this many uncompressed bytes")
 	fs.DurationVar(&o.dedupWindow, "dedup-window", alert.DefaultDedupWindow, "suppress repeats of the same rule for the same pid within this window")
+	o.netout.register(fs)
 	if !parseFlags(fs, args, stderr) {
 		return 2
 	}
@@ -142,7 +147,7 @@ func (o *runOptions) checkOutputFlags() error {
 	case o.jsonKeep < 1 || o.captureKeep < 1 || o.jsonHighKeep < 1:
 		return errors.New("--json-keep, --json-high-keep and --capture-keep must be at least 1")
 	}
-	return nil
+	return o.netout.check()
 }
 
 // subscription computes the canonical events to subscribe at the source.
@@ -193,6 +198,8 @@ type sensor struct {
 	src     source.Source
 	events  []string
 	closers []func() error
+	net     *netpoll.Source                     // nil: no socket polling (outputs.go)
+	extra   map[string]func() map[string]uint64 // W2 counters printed at shutdown
 }
 
 // sourcePIDs returns the pid of the running eslogger child when the source
@@ -304,7 +311,8 @@ func buildSensor(o runOptions, stdout, stderr io.Writer) (*sensor, error) {
 		// The console is fed from its own goroutine through a bounded queue,
 		// so a stuck terminal drops alerts (counted) instead of stalling the
 		// sensor.
-		console := alert.NewAsync(alert.NewConsole(stdout, colorFor(stdout, o.noColor)), alert.DefaultQueue)
+		cw := o.netout.consoleWriter(stdout, stderr) // stderr when --elegia-out - owns stdout
+		console := alert.NewAsync(alert.NewConsole(cw, colorFor(cw, o.noColor)), alert.DefaultQueue)
 		p.sinks = append(p.sinks, console)
 		s.closers = append(s.closers, func() error { return console.Close(2 * time.Second) })
 	}
@@ -354,6 +362,10 @@ func buildSensor(o runOptions, stdout, stderr io.Writer) (*sensor, error) {
 		}
 		say(stderr, "response: %s (kill only for rules with action kill; at most %d per rule and %d in all per minute)",
 			mode, response.DefaultMaxPerRulePerMinute, response.DefaultMaxPerMinute)
+	}
+
+	if err := s.wireNetOut(o, engine, snap, stdout, stderr); err != nil {
+		return fail(err)
 	}
 
 	required := engine.RequiredEvents()
@@ -428,6 +440,7 @@ func runSensor(ctx context.Context, o runOptions, stdout, stderr io.Writer) erro
 	}
 	errCh := make(chan error, 1)
 	go func() { errCh <- s.src.Run(runCtx, s.events, srcCh) }()
+	netCh := s.startNet(runCtx, stderr) // nil when socket polling is off
 
 	flush := time.NewTicker(2 * time.Second)
 	defer flush.Stop()
@@ -449,6 +462,8 @@ loop:
 			p.handle(e, false)
 		case e := <-yaraCh:
 			p.handle(e, true)
+		case e := <-netCh:
+			p.handleNetwork(e)
 		case <-statsTick.C:
 			p.periodicStats(stderr)
 		case <-flush.C:
@@ -496,6 +511,9 @@ drain:
 // and YARA (including exec_unbound and file_changed).
 func (s *sensor) extraStats() map[string]map[string]uint64 {
 	extra := map[string]map[string]uint64{"source": s.src.Stats(), "process table": s.snap.Stats()}
+	for name, stats := range s.extra {
+		extra[name] = stats()
+	}
 	if st, ok := s.p.scanner.(interface{ Stats() map[string]uint64 }); ok {
 		extra["yara"] = st.Stats()
 	}

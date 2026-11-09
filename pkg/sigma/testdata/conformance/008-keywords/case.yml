@@ -1,0 +1,7 @@
+spec_ref: sigma-rules-specification.md#keywords-search
+description: Keyword lists are OR-ed `contains` searches over every value of the event (interpretation 1); `'|all'` requires every keyword somewhere in the event, not necessarily in the same field.
+expected:
+  - [c008-kw]
+  - [c008-all]
+  - [c008-all]
+  - []

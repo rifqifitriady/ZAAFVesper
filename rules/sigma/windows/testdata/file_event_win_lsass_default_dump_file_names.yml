@@ -1,0 +1,15 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "procdump writes lsass.dmp"
+    events:
+      - {"name": "CreateFile", "platform": "windows", "proc": {"pid": 6228, "ppid": 4000, "exe": "C:\\Users\\alice\\Downloads\\procdump64.exe", "name": "procdump64.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}, "file": {"path": "C:\\Windows\\Temp\\lsass.dmp"}}
+  - desc: "nanodump default output"
+    events:
+      - {"name": "CreateFile", "platform": "windows", "proc": {"pid": 6230, "ppid": 4000, "exe": "C:\\Users\\alice\\Downloads\\nano.exe", "name": "nano.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}, "file": {"path": "C:\\Users\\alice\\nanodump_1.dmp"}}
+nomatch:
+  - desc: "benign lookalike - a crash dump of another program"
+    events:
+      - {"name": "CreateFile", "platform": "windows", "proc": {"pid": 4000, "ppid": 4000, "exe": "C:\\Windows\\System32\\WerFault.exe", "name": "WerFault.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}, "file": {"path": "C:\\ProgramData\\Microsoft\\Windows\\WER\\Temp\\notepad.dmp"}}
+  - desc: "a document that mentions lsass"
+    events:
+      - {"name": "CreateFile", "platform": "windows", "proc": {"pid": 4001, "ppid": 4000, "exe": "C:\\Program Files\\Office\\winword.exe", "name": "winword.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}, "file": {"path": "C:\\Users\\alice\\Documents\\lsass-notes.docx"}}

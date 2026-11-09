@@ -1,0 +1,29 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Driver Load From A Temporary Directory
+id: 2c4523d5-d481-4ed0-8ec3-7fbf0cb41a75
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects a driver load from a temporary directory
+
+  Converted from Sigma rule 2c4523d5-d481-4ed0-8ec3-7fbf0cb41a75 by zaafvesper sigma convert. Sigma author: Florian Roth (Nextron Systems).
+labels:
+  sigma.author: Florian Roth (Nextron Systems)
+  sigma.id: 2c4523d5-d481-4ed0-8ec3-7fbf0cb41a75
+  sigma.level: high
+  sigma.source: rules/windows/driver_load/driver_load_win_susp_temp_use.yml
+  sigma.status: test
+  sigma.tags: attack.persistence, attack.privilege-escalation, attack.t1543.003
+  sigma.title: Driver Load From A Temporary Directory
+  tactic.id: TA0003, TA0004
+  tactic.name: Persistence, Privilege Escalation
+  technique.id: T1543.003
+references:
+  - Internal Research
+condition: evt.name in ('DriverLoad', 'LoadKext') and (image.path icontains '\\Temp\\')
+output: '%ps.exe (pid %ps.pid) matched on %evt.name (Sigma rule by Florian Roth (Nextron Systems))'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: There is a relevant set of false positives depending on applications in the environment'

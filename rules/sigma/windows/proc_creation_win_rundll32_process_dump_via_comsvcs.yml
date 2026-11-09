@@ -1,0 +1,36 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Process Memory Dump Via Comsvcs.DLL
+id: 646ea171-dded-4578-8a4d-65e9822892e3
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects a process memory dump via "comsvcs.dll" using rundll32, covering multiple different techniques (ordinal, minidump function, etc.)
+
+  Converted from Sigma rule 646ea171-dded-4578-8a4d-65e9822892e3 by zaafvesper sigma convert. Sigma author: Florian Roth (Nextron Systems), Modexp, Nasreddine Bencherchali (Nextron Systems), Swachchhanda Shrawan Poudel (Nextron Systems).
+labels:
+  sigma.author: Florian Roth (Nextron Systems), Modexp, Nasreddine Bencherchali (Nextron Systems), Swachchhanda Shrawan Poudel (Nextron Systems)
+  sigma.id: 646ea171-dded-4578-8a4d-65e9822892e3
+  sigma.level: high
+  sigma.source: rules/windows/process_creation/proc_creation_win_rundll32_process_dump_via_comsvcs.yml
+  sigma.status: test
+  sigma.tags: attack.credential-access, attack.stealth, attack.t1036, attack.t1003.001, car.2013-05-009
+  sigma.title: Process Memory Dump Via Comsvcs.DLL
+  tactic.id: TA0005, TA0006
+  tactic.name: Stealth, Credential Access
+  technique.id: T1036, T1003.001
+references:
+  - https://twitter.com/shantanukhande/status/1229348874298388484
+  - https://twitter.com/pythonresponder/status/1385064506049630211?s=21
+  - https://twitter.com/Hexacorn/status/1224848930795552769
+  - https://modexp.wordpress.com/2019/08/30/minidumpwritedump-via-com-services-dll/
+  - https://twitter.com/SBousseaden/status/1167417096374050817
+  - https://twitter.com/Wietze/status/1542107456507203586
+  - https://github.com/Hackndo/lsassy/blob/14d8f8ae596ecf22b449bfe919829173b8a07635/lsassy/dumpmethod/comsvcs.py
+  - https://www.youtube.com/watch?v=52tAmVLg1KM&t=2070s
+condition: 'evt.name in (''CreateProcess'') and (((ps.exe iendswith ''\\rundll32.exe'' or ps.original_name iin (''RUNDLL32.EXE'') or ps.cmdline icontains ''rundll32'') and ((ps.cmdline icontains ''comsvcs'' and ps.cmdline icontains ''full'') and ps.cmdline icontains (''#-'', ''#+'', ''#24'', ''24 '', ''MiniDump'', ''#65560''))) or ((ps.cmdline icontains ''24'' and ps.cmdline icontains ''comsvcs'' and ps.cmdline icontains ''full'') and ps.cmdline icontains ('' #'', '',#'', '', #'', ''"#'')))'
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Florian Roth (Nextron Systems), Modexp, Nasreddine Bencherchali (Nextron Systems), Swachchhanda Shrawan Poudel (Nextron Systems))'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unlikely'

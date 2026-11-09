@@ -1,0 +1,29 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Potential Perl Reverse Shell Execution
+id: 259df6bc-003f-4306-9f54-4ff1a08fa38e
+version: 1.0.0
+platforms: [linux]
+description: |-
+  Detects execution of the perl binary with the "-e" flag and common strings related to potential reverse shell activity
+
+  Converted from Sigma rule 259df6bc-003f-4306-9f54-4ff1a08fa38e by zaafvesper sigma convert. Sigma author: @d4ns4n_, Nasreddine Bencherchali (Nextron Systems).
+labels:
+  sigma.author: '@d4ns4n_, Nasreddine Bencherchali (Nextron Systems)'
+  sigma.id: 259df6bc-003f-4306-9f54-4ff1a08fa38e
+  sigma.level: high
+  sigma.source: rules/linux/process_creation/proc_creation_lnx_perl_reverse_shell.yml
+  sigma.status: test
+  sigma.tags: attack.execution
+  sigma.title: Potential Perl Reverse Shell Execution
+  tactic.id: TA0002
+  tactic.name: Execution
+references:
+  - https://pentestmonkey.net/cheat-sheet/shells/reverse-shell-cheat-sheet
+  - https://www.revshells.com/
+condition: evt.name in ('CreateProcess') and ((ps.exe iendswith '/perl' and ps.cmdline icontains ' -e ') and ((ps.cmdline icontains 'fdopen(' and ps.cmdline icontains '::Socket::INET') or (ps.cmdline icontains 'Socket' and ps.cmdline icontains 'connect' and ps.cmdline icontains 'open' and ps.cmdline icontains 'exec')))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by @d4ns4n_, Nasreddine Bencherchali (Nextron Systems))'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unlikely'

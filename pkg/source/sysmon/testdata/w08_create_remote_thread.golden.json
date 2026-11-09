@@ -34,6 +34,8 @@
   "args": {
     "new_thread_id": "7764",
     "start_address": "0x00007FF6A1B21000",
+    "start_function": "",
+    "start_module": "",
     "sysmon_event_id": "8"
   },
   "platform": "windows"

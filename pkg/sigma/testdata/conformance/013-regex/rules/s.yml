@@ -1,0 +1,7 @@
+title: re dotall
+id: c013-s
+logsource: {product: test}
+detection:
+    s:
+        Text|re|s: 'a.b'
+    condition: s

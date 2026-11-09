@@ -1,0 +1,38 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Suspicious Eventlog Clearing or Configuration Change Activity
+id: cc36992a-4671-4f21-a91d-6c2b72a2edf5
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects the clearing or configuration tampering of EventLog using utilities such as "wevtutil", "powershell" and "wmic".
+  This technique were seen used by threat actors and ransomware strains in order to evade defenses.
+
+  Converted from Sigma rule cc36992a-4671-4f21-a91d-6c2b72a2edf5 by zaafvesper sigma convert. Sigma author: Ecco, Daniil Yugoslavskiy, oscd.community, D3F7A5105, Swachchhanda Shrawan Poudel (Nextron Systems).
+labels:
+  sigma.author: Ecco, Daniil Yugoslavskiy, oscd.community, D3F7A5105, Swachchhanda Shrawan Poudel (Nextron Systems)
+  sigma.id: cc36992a-4671-4f21-a91d-6c2b72a2edf5
+  sigma.level: high
+  sigma.source: rules/windows/process_creation/proc_creation_win_susp_eventlog_clear.yml
+  sigma.status: stable
+  sigma.tags: attack.defense-impairment, attack.t1685.005, attack.t1685.001, car.2016-04-002
+  sigma.title: Suspicious Eventlog Clearing or Configuration Change Activity
+  tactic.id: TA0112
+  tactic.name: Defense Impairment
+  technique.id: T1685.005, T1685.001
+references:
+  - https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1070.001/T1070.001.md
+  - https://eqllib.readthedocs.io/en/latest/analytics/5b223758-07d6-4100-9e11-238cfdd0fe97.html
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wevtutil
+  - https://gist.github.com/fovtran/ac0624983c7722e80a8f5a4babb170ee
+  - https://jdhnet.wordpress.com/2017/12/19/changing-the-location-of-the-windows-event-logs/
+  - https://www.linkedin.com/posts/huntress-labs_when-a-sketchy-incident-hits-your-network-activity-7304940371078238208-Th_l/?utm_source=share&utm_medium=member_desktop&rcm=ACoAAAJTlRcB28IaUtg03HUU-IdliwzoAL1flGc
+  - https://stackoverflow.com/questions/66011412/how-to-clear-a-event-log-in-powershell-7
+  - https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.eventing.reader.eventlogsession.clearlog?view=windowsdesktop-9.0&viewFallbackFrom=dotnet-plat-ext-5.0#System_Diagnostics_Eventing_Reader_EventLogSession_ClearLog_System_String_
+  - https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.eventlog.clear
+condition: evt.name in ('CreateProcess') and (((((ps.exe iendswith '\\wevtutil.exe' or ps.original_name iin ('wevtutil.exe')) and ps.cmdline icontains ('clear-log ', ' cl ', 'set-log ', ' sl ', 'lfn:')) or (ps.exe iendswith ('\\powershell.exe', '\\powershell_ise.exe', '\\pwsh.exe') and (ps.cmdline icontains ('Clear-EventLog ', 'Remove-EventLog ', 'Limit-EventLog ', 'Clear-WinEvent ') or (ps.cmdline icontains 'Eventing.Reader.EventLogSession' and ps.cmdline icontains 'ClearLog') or (ps.cmdline icontains 'Diagnostics.EventLog' and ps.cmdline icontains 'Clear')))) or (ps.exe iendswith ('\\powershell.exe', '\\powershell_ise.exe', '\\pwsh.exe', '\\wmic.exe') and ps.cmdline icontains 'ClearEventLog')) and not (ps.parent.exe iin ('C:\\Windows\\SysWOW64\\msiexec.exe', 'C:\\Windows\\System32\\msiexec.exe') and ps.cmdline icontains ' sl '))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Ecco, Daniil Yugoslavskiy, oscd.community, D3F7A5105, Swachchhanda Shrawan Poudel (Nextron Systems))'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Admin activity; Scripts and administrative tools used in the monitored environment; Maintenance activity'

@@ -1,0 +1,11 @@
+match:
+  - desc: "sysadminctl turns the guest account on"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4601, "ppid": 4000, "exe": "/usr/sbin/sysadminctl", "name": "sysadminctl", "args": ["sysadminctl", "-guestAccount", "on"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.sysadminctl", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+nomatch:
+  - desc: "benign lookalike - sysadminctl reads the guest account status"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4611, "ppid": 4000, "exe": "/usr/sbin/sysadminctl", "name": "sysadminctl", "args": ["sysadminctl", "-guestAccount", "status"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.sysadminctl", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+  - desc: "benign lookalike - sysadminctl turns the guest account off"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4612, "ppid": 4000, "exe": "/usr/sbin/sysadminctl", "name": "sysadminctl", "args": ["sysadminctl", "-guestAccount", "off"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.sysadminctl", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}

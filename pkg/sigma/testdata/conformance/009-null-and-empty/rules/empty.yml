@@ -1,0 +1,7 @@
+title: empty
+id: c009-empty
+logsource: {product: test}
+detection:
+    s:
+        Field: ''
+    condition: s

@@ -1,0 +1,13 @@
+title: grammar
+id: c020-notone
+logsource: {product: test}
+detection:
+    sel_a:
+        A: 1
+    sel_b:
+        B: 1
+    filter_c:
+        C: 1
+    _hidden:
+        H: 1
+    condition: not 1 of sel_*

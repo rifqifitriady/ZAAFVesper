@@ -1,0 +1,7 @@
+title: bad-hour-day
+id: c029-2
+logsource: {product: test}
+detection:
+    selection:
+        T|hour|day: 7
+    condition: selection

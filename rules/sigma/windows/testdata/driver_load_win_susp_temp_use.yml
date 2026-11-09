@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "driver loaded from C:\\Windows\\Temp"
+    events:
+      - {"name": "DriverLoad", "platform": "windows", "module": {"path": "C:\\Windows\\Temp\\gdrv.sys", "signed": true, "signature": "Example Hardware Ltd", "signature_status": "Expired"}}
+nomatch:
+  - desc: "benign lookalike - driver from System32\\drivers"
+    events:
+      - {"name": "DriverLoad", "platform": "windows", "module": {"path": "C:\\Windows\\System32\\drivers\\usbhub3.sys", "signed": true, "signature": "Microsoft Windows", "signature_status": "Valid"}}
+  - desc: "driver under a Templates folder (not \\Temp\\)"
+    events:
+      - {"name": "DriverLoad", "platform": "windows", "module": {"path": "C:\\ProgramData\\Vendor\\Templates\\filter.sys", "signed": true, "signature": "Vendor", "signature_status": "Valid"}}

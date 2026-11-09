@@ -122,8 +122,11 @@ func Map(r *Record) (*event.Event, error) {
 		e.Target = m.proc("TargetProcessId", "TargetProcessGuid", "TargetImage", "TargetUser")
 		m.arg(e, "new_thread_id", "NewThreadId")
 		m.arg(e, "start_address", "StartAddress")
-		m.arg(e, "start_module", "StartModule")
-		m.arg(e, "start_function", "StartFunction")
+		// Always present (empty when Sysmon reports "-"): a thread that does
+		// not start in a known module is itself a signal, and Sigma rules
+		// test StartModule for null (converted as evt.arg[start_module] = '').
+		e.Args["start_module"] = m.s("StartModule")
+		e.Args["start_function"] = m.s("StartFunction")
 	case 10:
 		// Event 10 spells the GUID fields "SourceProcessGUID" (upper case).
 		e.Name = event.OpenProcess

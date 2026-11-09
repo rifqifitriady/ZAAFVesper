@@ -1,0 +1,35 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Suspicious File Downloaded From Direct IP Via Certutil.EXE
+id: 13e6fe51-d478-4c7e-b0f2-6da9b400a829
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects the execution of certutil with certain flags that allow the utility to download files from direct IPs.
+
+  Converted from Sigma rule 13e6fe51-d478-4c7e-b0f2-6da9b400a829 by zaafvesper sigma convert. Sigma author: Nasreddine Bencherchali (Nextron Systems).
+labels:
+  sigma.author: Nasreddine Bencherchali (Nextron Systems)
+  sigma.id: 13e6fe51-d478-4c7e-b0f2-6da9b400a829
+  sigma.level: high
+  sigma.source: rules/windows/process_creation/proc_creation_win_certutil_download_direct_ip.yml
+  sigma.status: test
+  sigma.tags: attack.stealth, attack.t1027, attack.command-and-control, attack.t1105
+  sigma.title: Suspicious File Downloaded From Direct IP Via Certutil.EXE
+  tactic.id: TA0005, TA0011
+  tactic.name: Stealth, Command and Control
+  technique.id: T1027, T1105
+references:
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/certutil
+  - https://forensicitguy.github.io/agenttesla-vba-certutil-download/
+  - https://news.sophos.com/en-us/2021/04/13/compromised-exchange-server-hosting-cryptojacker-targeting-other-exchange-servers/
+  - https://twitter.com/egre55/status/1087685529016193025
+  - https://lolbas-project.github.io/lolbas/Binaries/Certutil/
+  - https://twitter.com/_JohnHammond/status/1708910264261980634
+  - https://www.hexacorn.com/blog/2020/08/23/certutil-one-more-gui-lolbin
+condition: evt.name in ('CreateProcess') and (((ps.exe iendswith '\\certutil.exe' or ps.original_name iin ('CertUtil.exe')) and ps.cmdline icontains ('urlcache ', 'verifyctl ', 'URL ') and ps.cmdline icontains ('://1', '://2', '://3', '://4', '://5', '://6', '://7', '://8', '://9')) and not (ps.cmdline icontains '://7-'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Nasreddine Bencherchali (Nextron Systems))'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

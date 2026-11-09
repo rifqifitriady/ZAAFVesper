@@ -1,0 +1,8 @@
+spec_ref: sigma-rules-specification.md#condition
+description: Precedence or < and < not < x-of < parentheses; `1 of`/`all of` patterns; `them` excludes identifiers starting with `_`; a condition list is OR-ed; `not` applies to a whole `1 of` expression (matches when no `sel_*` is true).
+expected:
+  - [c020-list, c020-oneof, c020-prec]
+  - [c020-list, c020-oneof]
+  - [c020-allof, c020-list, c020-oneof, c020-parens, c020-prec]
+  - [c020-allof, c020-list, c020-oneof, c020-prec, c020-them]
+  - [c020-notone]

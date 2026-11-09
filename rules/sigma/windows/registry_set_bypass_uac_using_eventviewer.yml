@@ -1,0 +1,30 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Bypass UAC Using Event Viewer
+id: 674202d0-b22a-4af4-ae5f-2eda1f3da1af
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Bypasses User Account Control using Event Viewer and a relevant Windows Registry modification
+
+  Converted from Sigma rule 674202d0-b22a-4af4-ae5f-2eda1f3da1af by zaafvesper sigma convert. Sigma author: frack113.
+labels:
+  sigma.author: frack113
+  sigma.id: 674202d0-b22a-4af4-ae5f-2eda1f3da1af
+  sigma.level: high
+  sigma.source: rules/windows/registry/registry_set/registry_set_bypass_uac_using_eventviewer.yml
+  sigma.status: test
+  sigma.tags: attack.privilege-escalation, attack.persistence, attack.t1547.010
+  sigma.title: Bypass UAC Using Event Viewer
+  tactic.id: TA0003, TA0004
+  tactic.name: Persistence, Privilege Escalation
+  technique.id: T1547.010
+references:
+  - https://enigma0x3.net/2016/08/15/fileless-uac-bypass-using-eventvwr-exe-and-registry-hijacking/
+  - https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1548.002/T1548.002.md#atomic-test-1---bypass-uac-using-event-viewer-cmd
+condition: evt.name in ('RegistrySetValue') and (registry.key iendswith '_Classes\\mscfile\\shell\\open\\command\\(Default)' and not (registry.data istartswith '%SystemRoot%\\system32\\mmc.exe "%1" %'))
+output: '%ps.exe (pid %ps.pid) matched on %evt.name (Sigma rule by frack113)'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

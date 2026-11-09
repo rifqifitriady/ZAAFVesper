@@ -1,0 +1,7 @@
+spec_ref: sigma-appendix-modifiers.md#ip-internet-protocol-modifiers
+description: IPv4 and IPv6 CIDR ranges; non-IP values never match.
+expected:
+  - [c014-v4]
+  - [c014-v6]
+  - []
+  - []

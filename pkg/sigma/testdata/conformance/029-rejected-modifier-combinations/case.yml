@@ -1,0 +1,5 @@
+spec_ref: sigma-rules-specification.md#value-modifiers
+description: 'Interpretation 10: modifier combinations whose effect would be silently ignored are rule errors, one each (two comparison modifiers, two time modifiers, an encoding on `cidr`, `exists` with another modifier, `fieldref` with two string modifiers, a string modifier on `re`, a string modifier on a numeric comparison, a string modifier on a time modifier). Every invalid rule would match the event if it were wrongly accepted, so a wrongly accepted rule shows up as an unexpected match. The valid rule still runs.'
+compile_errors: 8
+expected:
+  - [c029-good]

@@ -1,0 +1,38 @@
+name: Binary without developer identity in a temp folder connects out
+id: d00bcda7-6791-4889-ba0c-2e60caca96f8
+version: 1.0.0
+platforms: [macos]
+description: |
+  A process whose executable lives in a temp or shared folder (/tmp, /var/tmp,
+  /Users/Shared or a per-user $TMPDIR) and that has no verified developer identity
+  (not an Apple platform binary, no Team ID with a Developer ID or App Store signing
+  category: unsigned, ad-hoc, self-signed or a forged Team ID) opens an outbound
+  connection to a public address. Droppers and second stages are staged in these
+  folders and beacon out at once. Developer ID signed installer helpers that run from
+  temp folders carry a verified Team ID and do not match.
+  Known benign: unsigned or ad-hoc signed developer builds and test binaries run from
+  /tmp or $TMPDIR that talk to the internet (CI runners, local builds).
+  The identity must come from the exec event (the process table): a process the
+  poller only knows from the kernel (started before ZAAFVesper, or its exec event
+  was lost) carries no signing data and is not matched, so this rule misses such
+  processes rather than flagging every signed helper.
+labels:
+  tactic.id: TA0011
+  tactic.name: Command and Control
+  technique.id: T1071
+  technique.name: Application Layer Protocol
+references:
+  - https://attack.mitre.org/techniques/T1071/
+  - https://attack.mitre.org/techniques/T1204/002/
+condition: >
+  evt.name = 'NetworkConnect' and net.direction = 'outbound'
+  and net_dst_public
+  and ps.exe imatches net_temp_globs
+  and no_developer_identity
+  and not net_identity_unverified
+output: "%ps.exe (pid %ps.pid, signing %ps.signing_id) connected to %net.dip:%net.dport (%net.proto)"
+severity: high
+action: []
+tests:
+  atomic: []
+min-engine-version: 0.1.0

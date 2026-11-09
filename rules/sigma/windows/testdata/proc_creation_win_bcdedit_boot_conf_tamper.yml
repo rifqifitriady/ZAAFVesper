@@ -1,0 +1,15 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "recovery disabled (ART T1490)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6228, "ppid": 4000, "exe": "C:\\Windows\\System32\\bcdedit.exe", "name": "bcdedit.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "bcdedit.exe /set {default} recoveryenabled No", "original_name": "bcdedit.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "boot failures ignored"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6229, "ppid": 4000, "exe": "C:\\Windows\\System32\\bcdedit.exe", "name": "bcdedit.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "bcdedit.exe /set {default} bootstatuspolicy ignoreallfailures", "original_name": "bcdedit.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - bcdedit /enum"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6240, "ppid": 4000, "exe": "C:\\Windows\\System32\\bcdedit.exe", "name": "bcdedit.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "bcdedit.exe /enum", "original_name": "bcdedit.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "recovery switched back on"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6241, "ppid": 4000, "exe": "C:\\Windows\\System32\\bcdedit.exe", "name": "bcdedit.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "bcdedit.exe /set {current} recoveryenabled Yes", "original_name": "bcdedit.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

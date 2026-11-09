@@ -31,7 +31,7 @@ captures from a live host. Each has a reviewed `.golden.json`.
 | 5 | Process terminated | TerminateProcess | `ps.*` |
 | 6 | Driver loaded | DriverLoad | `image.path`, `image.signed`, `image.signature`, `image.signature_status`, `image.hashes` (no process) |
 | 7 | Image loaded | ImageLoad | `ps.*`, `image.*`; the module's version info in `evt.arg[file_version|description|product|company|original_file_name]` |
-| 8 | CreateRemoteThread | CreateRemoteThread | source `ps.*`, `target.ps.*`, `evt.arg[start_address|start_module|start_function|new_thread_id]` |
+| 8 | CreateRemoteThread | CreateRemoteThread | source `ps.*`, `target.ps.*`, `evt.arg[start_address|start_module|start_function|new_thread_id]` (`start_module` and `start_function` are always set, empty when Sysmon reports `-`) |
 | 10 | ProcessAccess | OpenProcess | source `ps.*`, `target.ps.*`, `evt.arg[granted_access|call_trace|source_thread_id]` |
 | 11 | FileCreate | CreateFile | `file.path`, `evt.arg[creation_utc_time]` |
 | 12 | Registry object create/delete | RegistryCreateKey / RegistryDeleteKey (EventType Create*/Delete*) | `registry.key`, `registry.value` (DeleteValue), `evt.arg[event_type]` |

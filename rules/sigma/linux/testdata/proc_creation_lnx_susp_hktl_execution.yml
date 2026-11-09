@@ -1,0 +1,15 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "nuclei scanner started"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24101, "ppid": 24090, "exe": "/usr/local/bin/nuclei", "name": "nuclei", "uid": -1, "euid": -1, "username": "alice", "cmdline": "nuclei -u https://target.example", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "msfconsole started"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24102, "ppid": 24090, "exe": "/opt/metasploit/msfconsole", "name": "msfconsole", "uid": -1, "euid": -1, "username": "alice", "cmdline": "msfconsole -q", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}
+nomatch:
+  - desc: "benign lookalike - curl"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24110, "ppid": 24090, "exe": "/usr/bin/curl", "name": "curl", "uid": -1, "euid": -1, "username": "alice", "cmdline": "curl -I https://example.org", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "ssh"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24111, "ppid": 24090, "exe": "/usr/bin/ssh", "name": "ssh", "uid": -1, "euid": -1, "username": "alice", "cmdline": "ssh build@ci.internal", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}

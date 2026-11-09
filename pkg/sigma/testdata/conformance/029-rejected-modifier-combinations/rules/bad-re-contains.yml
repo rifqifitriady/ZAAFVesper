@@ -1,0 +1,7 @@
+title: bad-re-contains
+id: c029-6
+logsource: {product: test}
+detection:
+    selection:
+        R|re|contains: a
+    condition: selection

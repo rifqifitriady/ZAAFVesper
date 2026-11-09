@@ -1,0 +1,29 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: JXA In-memory Execution Via OSAScript
+id: f1408a58-0e94-4165-b80a-da9f96cf6fc3
+version: 1.0.0
+platforms: [macos]
+description: |-
+  Detects possible malicious execution of JXA in-memory via OSAScript
+
+  Converted from Sigma rule f1408a58-0e94-4165-b80a-da9f96cf6fc3 by zaafvesper sigma convert. Sigma author: Sohan G (D4rkCiph3r).
+labels:
+  sigma.author: Sohan G (D4rkCiph3r)
+  sigma.id: f1408a58-0e94-4165-b80a-da9f96cf6fc3
+  sigma.level: high
+  sigma.source: rules/macos/process_creation/proc_creation_macos_jxa_in_memory_execution.yml
+  sigma.status: test
+  sigma.tags: attack.t1059.002, attack.t1059.007, attack.execution
+  sigma.title: JXA In-memory Execution Via OSAScript
+  tactic.id: TA0002
+  tactic.name: Execution
+  technique.id: T1059.002, T1059.007
+references:
+  - https://redcanary.com/blog/applescript/
+condition: evt.name in ('CreateProcess') and ((ps.cmdline icontains 'osascript' and ps.cmdline icontains ' -e ' and ps.cmdline icontains 'eval' and ps.cmdline icontains 'NSData.dataWithContentsOfURL') and ((ps.cmdline icontains ' -l ' and ps.cmdline icontains 'JavaScript') or ps.cmdline icontains '.js'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Sohan G (D4rkCiph3r))'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'
