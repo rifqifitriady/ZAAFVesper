@@ -33,6 +33,10 @@ probe() { # name subscription...
 	printf '%s\tlines=%s exec=%s tree_hits=%s launchd_hits=%s\n' "$name" "$lines" "$execs" "$tree" "$launchd" >>"$out/esdiag.tsv"
 	head -c 4000 "$out/es-$name.json" >"$out/es-$name.head"; rm -f "$out/es-$name.json"
 }
+# Which clients the runner's TCC database grants Full Disk Access (the
+# reason eslogger may run here at all).
+sudo /usr/bin/sqlite3 "/Library/Application Support/com.apple.TCC/TCC.db" \
+	"select client, auth_value from access where service='kTCCServiceSystemPolicyAllFiles'" >"$out/tcc-full-disk-access.txt" 2>&1
 probe exec-only exec
 probe sensor-set btm_launch_item_add close create deleteextattr exec exit fork get_task kextload open remote_thread_create rename trace unlink xp_malware_detected
 cat "$out/esdiag.tsv"

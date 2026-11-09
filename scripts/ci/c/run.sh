@@ -41,6 +41,7 @@ cleanup() {
 	return 0
 }
 trap cleanup EXIT
+trap 'cleanup; exit 143' TERM # a cancelled step or the job timeout
 status() { printf '%s\t%s\n' "$1" "$2" >>"$ART/status.tsv"; }
 # alive_for PID SECONDS: wait up to SECONDS for PID to exit; 0 when it did.
 alive_for() {
@@ -163,7 +164,11 @@ if ! alive_for "$pipe" 30; then
 else
 	status sensor_stop "stopped cleanly on SIGINT"
 fi
-wait "$pipe" 2>/dev/null || true
+# The pipe's status: the sensor's exit code, or zaaf's when the sensor's is 0
+# (pipefail). Both must be 0 after a clean SIGINT.
+pipe_rc=0
+wait "$pipe" 2>/dev/null || pipe_rc=$?
+status pipe_exit "$pipe_rc"
 kill "$(cat "$work/receiver.pid")" 2>/dev/null || true
 sudo /bin/cp -R "$OUTDIR" "$ART/outdir"
 sudo /usr/sbin/chown -R "$(id -u)" "$ART/outdir"

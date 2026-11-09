@@ -49,6 +49,10 @@ for l in read_lines(os.path.join(art, "esdiag", "esdiag.tsv")):
     name, _, counts = l.partition("\t")
     add("eslogger", f"diagnosis ({name} subscription)", True, counts + " (tree = this job's processes, launchd = a launchd job)", "INFO")
 add("eslogger", "zaafvesper run as root", status.get("sensor") == "started as root", status.get("sensor", "missing"))
+add("eslogger", "sensor stopped cleanly on SIGINT", status.get("sensor_stop") == "stopped cleanly on SIGINT", status.get("sensor_stop", "missing"))
+add("eslogger", "sensor | tee | zaaf pipe exited 0", status.get("pipe_exit") == "0", "exit " + status.get("pipe_exit", "missing"))
+tcc = read_lines(os.path.join(art, "esdiag", "tcc-full-disk-access.txt"))
+add("eslogger", "runner TCC: Full Disk Access for /bin/bash", any(l.startswith("/bin/bash|2") for l in tcc), "; ".join(tcc[:8]) or "no TCC listing", "INFO")
 
 alert_files = [f for f in glob.glob(os.path.join(art, "outdir", "alerts-*.jsonl")) if "alerts-high-" not in f]
 alerts = [a for f in sorted(alert_files) for a in jsonl(f)]
