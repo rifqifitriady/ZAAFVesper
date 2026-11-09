@@ -177,7 +177,11 @@ func (s *Syslog) Send(ctx context.Context, recs []Record) error {
 		buf.WriteByte(' ')
 		buf.Write(msg)
 	}
-	_ = s.conn.SetWriteDeadline(time.Now().Add(sendTimeout))
+	deadline := time.Now().Add(sendTimeout)
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		deadline = d // a bounded caller (the final flush at Close) is not held up
+	}
+	_ = s.conn.SetWriteDeadline(deadline)
 	if _, err := s.conn.Write(buf.Bytes()); err != nil {
 		_ = s.conn.Close()
 		s.conn = nil

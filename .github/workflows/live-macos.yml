@@ -1,0 +1,85 @@
+# Live validation of ZAAFVesper on a throw-away GitHub macOS runner (v0.3 C).
+# Runs the sensor as root with eslogger, fires safe local actions, checks
+# socket polling, syslog/TLS and HTTPS webhook delivery with the spool, and
+# the ZAAFElegia pipe. Results: job summary and the live-macos-results
+# artifact; docs/validation/macos.md records them. No secrets, read-only
+# token, every action pinned to a commit SHA.
+name: live-macos
+on:
+  workflow_dispatch:
+  push:
+    branches: ['validate/**']
+permissions:
+  contents: read
+concurrency:
+  group: live-macos-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  # ZAAFElegia 0.0.1, pinned by commit (the same commit the integration
+  # example was verified with).
+  ZAAFELEGIA_REPO: https://github.com/rifqifitriady/ZAAFElegia.git
+  ZAAFELEGIA_COMMIT: c2e02128894084b4ac673fa4fc7206dca53add06
+  # Rust used to build zaaf (rustup checks the sha256 of anything it fetches
+  # against the channel manifest). Overrides ZAAFElegia's "stable" channel.
+  RUSTUP_TOOLCHAIN: 1.99.1
+  # Go, from go.dev, pinned by version and verified by sha256 (the image has
+  # no Go). The checksum is the one go.dev publishes for this archive.
+  GO_VERSION: go1.27.3
+  GO_SHA256: dd3908cf20959d798c1e06ebe5b72213f0505ce01373b40ce3110975a6cd99c2
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  live:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Go (pinned, sha256-verified)
+        run: |
+          archive="$GO_VERSION.darwin-arm64.tar.gz"
+          curl -fsSL --proto '=https' --tlsv1.2 -o "$RUNNER_TEMP/$archive" "https://go.dev/dl/$archive"
+          echo "$GO_SHA256  $RUNNER_TEMP/$archive" | shasum -a 256 -c -
+          tar -C "$RUNNER_TEMP" -xzf "$RUNNER_TEMP/$archive"
+          echo "$RUNNER_TEMP/go/bin" >> "$GITHUB_PATH"
+          echo "GOTOOLCHAIN=local" >> "$GITHUB_ENV"
+      - name: Build ZAAFVesper and the test helpers
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/bin/zaafvesper" ./cmd/zaafvesper
+          go build -o "$RUNNER_TEMP/bin/receiver" ./scripts/ci/c/receiver
+          go build -o "$RUNNER_TEMP/bin/dropped" ./scripts/ci/c/dropped
+      - name: Build zaaf (ZAAFElegia) at the pinned commit
+        run: |
+          src="$RUNNER_TEMP/zaafelegia"
+          git init -q "$src"
+          git -C "$src" fetch -q --depth 1 "$ZAAFELEGIA_REPO" "$ZAAFELEGIA_COMMIT"
+          git -C "$src" -c advice.detachedHead=false checkout -q FETCH_HEAD
+          test "$(git -C "$src" rev-parse HEAD)" = "$ZAAFELEGIA_COMMIT"
+          rustc --version
+          (cd "$src" && cargo build --release --locked -p zaaf-cli)
+          cp "$src/target/release/zaaf" "$RUNNER_TEMP/bin/zaaf"
+          "$RUNNER_TEMP/bin/zaaf" --version
+      - name: Live validation (root)
+        env:
+          BIN: ${{ runner.temp }}/bin
+          ART: ${{ runner.temp }}/live-macos-results
+        run: scripts/ci/c/run.sh
+      - name: Check results
+        if: always()
+        env:
+          ART: ${{ runner.temp }}/live-macos-results
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set +e
+          python3 scripts/ci/c/check.py "$ART" "$GITHUB_WORKSPACE" "$RUN_URL"
+          rc=$?
+          [ -f "$ART/results.md" ] && cat "$ART/results.md" >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: live-macos-results
+          path: ${{ runner.temp }}/live-macos-results
+          retention-days: 30

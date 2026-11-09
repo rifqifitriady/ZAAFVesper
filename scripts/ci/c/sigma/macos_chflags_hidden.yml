@@ -1,0 +1,21 @@
+title: File hidden with chflags (macOS)
+id: 5f0a7c3e-1d2b-4e6f-a8c9-7b3d2e1f0a64
+status: experimental
+description: chflags hidden sets the hidden flag on a file. Live-validation rule for ZAAFVesper --elegia-out.
+author: ZAAFVesper live validation
+references:
+  - https://attack.mitre.org/techniques/T1564/001/
+tags:
+  - attack.defense-evasion
+  - attack.t1564.001
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image: /usr/bin/chflags
+    CommandLine|contains: ' hidden '
+  condition: selection
+falsepositives:
+  - Users hiding their own files
+level: low
