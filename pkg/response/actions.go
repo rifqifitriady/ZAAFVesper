@@ -63,8 +63,6 @@ var (
 
 // Defaults of the action settings.
 const (
-	DefaultVaultDir           = "/private/var/db/zaafvesper/quarantine"
-	DefaultStateDir           = "/private/var/db/zaafvesper"
 	DefaultMaxQuarantineBytes = 128 << 20
 	DefaultIsolationTTL       = time.Hour
 	DefaultSuspendFor         = 30 * time.Second
@@ -79,16 +77,15 @@ const (
 	maxBundleDepth = 3
 )
 
-// Pinned binaries. Only these are ever run, with fixed argument vectors and
-// an empty environment.
+// The macOS binaries the actions run. Only binaries in pinnedBins (per
+// platform: paths_<os>.go) are ever run, with fixed argument vectors and an
+// empty environment (Windows: SystemRoot only).
 const (
 	PfctlBin     = "/sbin/pfctl"
 	LaunchctlBin = "/bin/launchctl"
 	CodesignBin  = "/usr/bin/codesign"
 	RouteBin     = "/sbin/route"
 )
-
-var pinnedBins = map[string]bool{PfctlBin: true, LaunchctlBin: true, CodesignBin: true, RouteBin: true}
 
 // ExitError is a command that ran and exited with a non-zero status.
 type ExitError struct {
@@ -114,8 +111,9 @@ func RunPinned(ctx context.Context, bin string, args []string, stdin []byte) ([]
 	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = []string{}
-	cmd.Dir = "/"
+	cmd.Env = pinnedEnv()
+	cmd.Dir = pinnedDir()
+	hideWindow(cmd)
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)
 	}
@@ -146,19 +144,6 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// ProtectedFilePrefixes are path prefixes no file action touches (compared
-// with Unicode case folding: APFS is normally case-insensitive). /usr/local
-// is the one exception under /usr.
-var ProtectedFilePrefixes = []string{
-	"/System/", "/usr/", "/bin/", "/sbin/", "/Library/Apple/",
-	"/private/var/db/", "/var/db/", "/private/etc/", "/etc/", "/dev/",
-	"/Library/Application Support/com.apple.TCC/",
-	"/Library/LaunchDaemons/com.apple.", "/Library/LaunchAgents/com.apple.",
-}
-
-// unprotectedUnder are exceptions to ProtectedFilePrefixes.
-var unprotectedUnder = []string{"/usr/local/"}
-
 // bundleSuffixes mark bundle directories; a file inside an Apple-signed
 // bundle is never acted on.
 var bundleSuffixes = []string{".app", ".framework", ".bundle", ".kext", ".plugin", ".xpc", ".appex",
@@ -186,13 +171,6 @@ func hasSuffixFold(s, suffix string) bool {
 	return len(s) >= len(suffix) && strings.EqualFold(s[len(s)-len(suffix):], suffix)
 }
 
-func checkCleanAbs(p string) error {
-	if p == "" || p[0] != '/' || filepath.Clean(p) != p || strings.ContainsRune(p, 0) || !utf8.ValidString(p) {
-		return fmt.Errorf("path %q is not absolute and clean", p)
-	}
-	return nil
-}
-
 // protectedPath returns why the file at p must not be touched, or "".
 // extra are the sensor's own files and directories (Config.ProtectPaths).
 func protectedPath(p string, extra []string) string {
@@ -204,7 +182,7 @@ func protectedPath(p string, extra []string) string {
 			continue
 		}
 		x = filepath.Clean(x)
-		if strings.EqualFold(p, x) || hasPrefixFold(p, strings.TrimSuffix(x, "/")+"/") {
+		if strings.EqualFold(p, x) || hasPrefixFold(p, strings.TrimSuffix(x, sep)+sep) {
 			return "ZAAFVesper's own file or directory " + x
 		}
 	}
@@ -214,11 +192,24 @@ func protectedPath(p string, extra []string) string {
 		}
 	}
 	for _, pre := range ProtectedFilePrefixes {
-		if hasPrefixFold(p, pre) || strings.EqualFold(p+"/", pre) {
+		if hasPrefixFold(p, pre) || strings.EqualFold(p+sep, pre) {
 			return "protected path " + pre
 		}
 	}
 	return ""
+}
+
+// dirOf returns the directory of the clean absolute path p ("/" or a
+// drive root "C:\" at the top).
+func dirOf(p string) string {
+	i := strings.LastIndex(p, sep)
+	if i <= 0 {
+		return sep
+	}
+	if p[i-1] == ':' {
+		return p[:i+1]
+	}
+	return p[:i]
 }
 
 // bundlesOf returns the bundle directories that contain p, outermost first.
@@ -430,9 +421,8 @@ const (
 	// requarantine): that process must not be seeded or unverified, and its
 	// platform flag must be known.
 	preWriter
-	// preUntrustedWriter: preWriter, and the writer must be untrusted: no
-	// verified identity, or an Apple tool (cp, sh) in an untrusted chain
-	// (untrustedChain; owner decision 9 Nov 2026) (remove_persistence).
+	// preUntrustedWriter: preWriter, and the writer must be untrusted
+	// (trustedWriter, per platform) (remove_persistence).
 	preUntrustedWriter
 	// preExecutable: the file is the executable of the event's process
 	// (quarantine_file target process): preWriter, and never an Apple
@@ -469,11 +459,8 @@ func (r *Responder) preflight(e *event.Event, target string, kind int) (*event.P
 			return ref(refused(OutcomeSigningUnknown, ErrUnknownProc, "signing category unreported"))
 		}
 	case preUntrustedWriter:
-		switch {
-		case p.IsPlatform && !untrustedChain(p):
-			return ref(refused(OutcomeWriterNotUntrusted, ErrProtected, "written by an Apple platform binary whose parent and ancestors are trusted"))
-		case !p.IsPlatform && verifiedVendor(p):
-			return ref(refused(OutcomeWriterNotUntrusted, ErrProtected, "written by a process with a verified Developer ID or App Store identity"))
+		if why := trustedWriter(p); why != "" {
+			return ref(refused(OutcomeWriterNotUntrusted, ErrProtected, "%s", why))
 		}
 	case preExecutable:
 		if p.IsPlatform {

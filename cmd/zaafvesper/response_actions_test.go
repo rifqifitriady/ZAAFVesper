@@ -272,7 +272,7 @@ func TestIsolationCLI(t *testing.T) {
 	}
 	defer func() { cliRunner = old }()
 	code, out, _ := runCLI(t, "isolation", "list", "--state-dir", state)
-	if code != 0 || !strings.Contains(out, "203.0.113.5") || !strings.Contains(out, "whole Mac") {
+	if code != 0 || !strings.Contains(out, "203.0.113.5") || !strings.Contains(out, "whole host") {
 		t.Fatalf("list: %d %q", code, out)
 	}
 	if code, _, errs := runCLI(t, "isolation", "release", "1.2.3.4;pass", "--state-dir", state); code != 1 || len(cmds) != 0 {

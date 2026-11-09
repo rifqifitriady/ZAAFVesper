@@ -2,7 +2,6 @@ package main
 
 import (
 	"io"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -12,9 +11,9 @@ import (
 // cliRunner is the Runner of the isolation CLI; tests replace it.
 var cliRunner response.Runner = response.RunPinned
 
-// stateDirFlag registers --state-dir (default /private/var/db/zaafvesper).
-// As root the directory (and the vault in it) must be owned by root and
-// closed to group and others.
+// stateDirFlag registers --state-dir (default response.DefaultStateDir).
+// As root (an elevated administrator on Windows) the directory and the
+// vault in it must be private to root (SYSTEM and Administrators).
 func stateDirFlag(name string) (*stateDirOpts, func([]string, io.Writer) ([]string, bool)) {
 	o := &stateDirOpts{}
 	fs := newFlagSet(name)
@@ -38,11 +37,11 @@ func stateDirFlag(name string) (*stateDirOpts, func([]string, io.Writer) ([]stri
 type stateDirOpts struct{ dir string }
 
 func (o *stateDirOpts) vault() response.Vault {
-	return response.Vault{Dir: filepath.Join(o.dir, "quarantine"), RequireRootOwned: os.Geteuid() == 0}
+	return response.Vault{Dir: filepath.Join(o.dir, "quarantine"), RequireRootOwned: checkPrivileges() == nil}
 }
 
 func (o *stateDirOpts) store() response.IsolationStore {
-	return response.IsolationStore{Dir: o.dir, RequireRootOwned: os.Geteuid() == 0}
+	return response.IsolationStore{Dir: o.dir, RequireRootOwned: checkPrivileges() == nil}
 }
 
 // cmdQuarantine: zaafvesper quarantine list | restore <id>.
@@ -132,13 +131,13 @@ func cmdIsolation(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		if len(isos) == 0 {
-			say(stdout, "no isolated address (pf anchor %s)", response.PFAnchor)
+			say(stdout, "no isolated address (%s)", response.FirewallName)
 			return 0
 		}
 		for _, iso := range isos {
 			say(stdout, "%s  until %s  (rule %s, pid %d %s)", iso.Addr, iso.Expires.UTC().Format(time.RFC3339), iso.Rule, iso.PID, iso.Exe)
 		}
-		say(stdout, "pf blocks these addresses for the whole Mac (anchor %s, table %s)", response.PFAnchor, response.PFTable)
+		say(stdout, "these addresses are blocked for the whole host (%s)", response.FirewallName)
 		return 0
 	case "release":
 		if len(rest) != 1 {

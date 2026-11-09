@@ -156,6 +156,6 @@ func fileRetryKey(action, rule string, e *event.Event, target string) string {
 	if e == nil {
 		return action + "|" + rule
 	}
-	path, dev, ino, _ := fileTarget(e, target)
-	return fmt.Sprintf("%s|%s|%s|%d|%d", action, rule, path, dev, ino)
+	path, b, _ := fileTarget(e, target)
+	return fmt.Sprintf("%s|%s|%s|%s", action, rule, path, b)
 }

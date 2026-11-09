@@ -235,7 +235,7 @@ type Responder struct {
 	stats   map[string]uint64
 
 	// actMu serialises the file and network actions and guards their state
-	// (isolated, saved, pfToken, pfLoaded). It is held across their slow
+	// (isolated, saved, fwToken, fwLoaded). It is held across their slow
 	// steps (copies, pfctl, launchctl, codesign); mu is only taken inside it
 	// for budgets, stats and logs, so kill and suspend never wait for them.
 	// Lock order: actMu before mu.
@@ -246,8 +246,8 @@ type Responder struct {
 	retries   map[string]*retryEntry // slow actions refused by the budget, to try again (retry.go)
 	isolated  map[string]*Isolation  // blocked peers by address (isolate.go)
 	saved     map[string]bool        // addresses in the state file at the last save
-	pfToken   string                 // pfctl -E reference token, released at Close
-	pfLoaded  bool                   // the anchor's table and rules are loaded
+	fwToken   string                 // macOS: pfctl -E reference token, released at Close
+	fwLoaded  bool                   // the firewall objects (pf anchor, nftables table) are loaded
 	// lastNeverCheck is when isolated addresses were last checked against
 	// the never-block set (isolate.go recheckNeverBlock).
 	lastNeverCheck time.Time
@@ -305,10 +305,10 @@ func New(cfg Config) *Responder {
 		cfg.LocalAddrs = interfaceAddrs
 	}
 	if cfg.Resolvers == nil {
-		cfg.Resolvers = resolvConfAddrs
+		cfg.Resolvers = defaultResolvers
 	}
 	if cfg.Gateways == nil {
-		cfg.Gateways = routeGateways(cfg.Runner)
+		cfg.Gateways = defaultGateways(cfg.Runner)
 	}
 	if cfg.SuspendFor <= 0 {
 		cfg.SuspendFor = DefaultSuspendFor
