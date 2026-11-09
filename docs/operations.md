@@ -90,26 +90,41 @@ Releases are built by GitHub Actions, not on anyone's Mac. Pushing a tag `v*` ru
 
 Every one of these files gets a signed build-provenance attestation (SLSA provenance, signed through Sigstore with the workflow's own identity). The workflow then opens a **draft** release; a person reviews it and publishes it. The workflow uses no repository secrets, every action is pinned to a commit, and only the final job can write.
 
-Check a download before you use it, ideally on a machine or account you trust:
+Check a download before you use it, on a machine and account you trust (not the account the sensor will protect; see below). Replace `v0.3.0` with the release you downloaded:
 
 ```bash
-# 1. Provenance: built by this repository's release workflow, from a tagged commit
-gh attestation verify ZAAFVesper-0.3.0.pkg --repo rifqifitriady/ZAAFVesper \
-  --signer-workflow rifqifitriady/ZAAFVesper/.github/workflows/release.yml
-# 2. Checksums: SHA256SUMS is attested too, so verify it first, then the files against it
-gh attestation verify SHA256SUMS --repo rifqifitriady/ZAAFVesper \
-  --signer-workflow rifqifitriady/ZAAFVesper/.github/workflows/release.yml
-shasum -a 256 -c SHA256SUMS --ignore-missing
+TAG=v0.3.0
+# 1. The commit the tag points to, looked up on its own (not taken from the download)
+COMMIT=$(git ls-remote https://github.com/rifqifitriady/ZAAFVesper "refs/tags/$TAG" "refs/tags/$TAG^{}" |
+  awk '{c=$1} $2 ~ /\^\{\}$/ {p=$1} END {print (p ? p : c)}')   # the commit, also for an annotated tag
+echo "$TAG -> $COMMIT"     # compare with the commit shown on the release page
+
+# 2. Provenance of each file: built by release.yml on GitHub's own runners,
+#    from exactly that tag and that commit
+for f in SHA256SUMS ZAAFVesper-${TAG#v}.pkg; do
+  gh attestation verify "$f" --repo rifqifitriady/ZAAFVesper \
+    --signer-workflow rifqifitriady/ZAAFVesper/.github/workflows/release.yml \
+    --source-ref "refs/tags/$TAG" --source-digest "$COMMIT" \
+    --deny-self-hosted-runners || echo "STOP: $f failed verification"
+done
+
+# 3. Every file against the verified SHA256SUMS
+shasum -a 256 -c SHA256SUMS --ignore-missing          # macOS
+# sha256sum -c SHA256SUMS --ignore-missing            # Linux
+# Get-FileHash .\zaafvesper-<version>-windows-amd64.exe -Algorithm SHA256   # Windows: compare with SHA256SUMS
 ```
 
-`gh attestation verify` prints the source commit and the workflow run; check that the commit is the one the tag points to. Then install the package as described above, comparing the SHA-256 that **root** computes on its own copy (`sudo /usr/bin/shasum -a 256 ...`) with the line for that file in the verified `SHA256SUMS`.
+Without `--source-ref` and `--source-digest`, `gh attestation verify` accepts any file ever attested by `release.yml`, from any tag or branch, and its normal output does not show the commit. Keep both flags. A tag that was deleted and pushed again points at a new commit, so a file from the old build fails the digest check, as it should.
+
+Then install the package as described above, comparing the SHA-256 that **root** computes on its own copy (`sudo /usr/bin/shasum -a 256 ...`) with the line for that file in the verified `SHA256SUMS`.
 
 **What this does for finding H1, and what it does not.**
 
-- *Fixed:* the build no longer runs on the account it protects. Malware in your account can no longer change the sources, the Go toolchain or the staged files of a release build, nor the hash printed for it. The attestation ties each file to the commit and the workflow run that produced it, so a swapped or rebuilt file fails `gh attestation verify`.
-- *Not fixed:* the package is still **not signed with an Apple Developer ID and not notarized**. Gatekeeper and `pkgutil --check-signature` see an unsigned package, and nothing Apple ships checks the attestation for you. Closing H1 still needs a Developer ID Installer certificate in CI and notarization (an owner decision).
-- *Trust moves, it does not disappear:* you now trust GitHub's runners and their images, the pinned actions, the Go module proxy and checksum database, and Sigstore. A compromised GitHub account with write access can push a tag; the draft step and the commit shown by the attestation are the checks against that.
-- *Verification runs where you run it:* `gh` is not an Apple binary. If you verify inside an account you suspect, that account can lie to you. Verify on another machine or account, then let root compare hashes with `/usr/bin/shasum`.
+- *What moves:* the release build no longer runs on a Mac. Sources, Go toolchain, staged files and the printed hash are produced on a fresh GitHub runner from a tagged commit, and each file's attestation ties it to that commit and that workflow run. A file swapped or rebuilt after the run fails `gh attestation verify`.
+- *What does not move: whoever can push to the repository can still produce a genuinely attested release.* Malware in an account that holds the owner's GitHub credentials (for example a `gh` login or a Git credential in the keychain of the Mac this sensor protects) can push a commit and a `v*` tag; the workflow then builds and attests it like any other release, and can publish the draft. The attestation proves *where and from which commit* a file was built, not that the commit is benign. Before installing, review on a clean machine what changed since the last release you trusted (`git log` and `git diff` between the two tags), and keep the repository's push credentials off the machine the sensor protects (see the owner decisions in [security/open-findings.md](security/open-findings.md)).
+- *Not fixed:* the package is still **not signed with an Apple Developer ID and not notarized**. Gatekeeper and `pkgutil --check-signature` report it as unsigned, and nothing Apple ships checks the attestation. Closing H1 still needs a Developer ID Installer certificate in CI and notarization (an owner decision).
+- *The verifier is not an Apple binary:* `gh` and `git` run as a normal user. In an account you suspect they can lie to you, which is why the steps above belong on another machine or account; root then only compares hashes with `/usr/bin/shasum`.
+- *Trust moves to other parties:* GitHub's runners and images, the pinned actions, the Go module proxy and checksum database (for the SBOM tool), and Sigstore.
 - *No YARA in release builds:* the released binaries and package are pure Go. A static YARA package is still built locally with `make package YARA=1`, with the same-account risk described above. CI does test the static YARA build on a macOS runner.
 
 ## Response

@@ -35,15 +35,16 @@ jobs:
         # the script, and must look like a version.
         env:
           TAG: ${{ github.ref_name }}
+        shell: bash
         run: |
-          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
-            echo "tag '$TAG' is not vMAJOR.MINOR.PATCH[-suffix]"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "tag is not vMAJOR.MINOR.PATCH[-suffix]"
             exit 1
           fi
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
   binaries:
-    name: Binaries and SBOM
+    name: Binaries
     needs: version
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -69,16 +70,39 @@ jobs:
               -o "dist/zaafvesper-$VERSION-$os-$arch$ext" ./cmd/zaafvesper
           done
           ls -l dist
-      - name: SBOM (CycloneDX, Go modules of the binary)
-        env:
-          VERSION: ${{ needs.version.outputs.version }}
-        run: |
-          go run "$CYCLONEDX_GOMOD" app -json -licenses -main cmd/zaafvesper \
-            -output "dist/zaafvesper-$VERSION.cdx.json"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: binaries
           path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  sbom:
+    # A job of its own: the third-party SBOM tool never shares a filesystem
+    # with the release binaries.
+    name: SBOM
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: SBOM (CycloneDX, Go modules of the binary)
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          mkdir -p sbom
+          go run "$CYCLONEDX_GOMOD" app -json -licenses -main cmd/zaafvesper \
+            -output "sbom/zaafvesper-$VERSION.cdx.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: sbom/
           if-no-files-found: error
           retention-days: 7
 
@@ -116,7 +140,7 @@ jobs:
 
   release:
     name: Checksums, provenance and draft release
-    needs: [version, binaries, package]
+    needs: [version, binaries, sbom, package]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -144,6 +168,8 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG" --draft --verify-tag --title "$TAG" \
+          pre=""
+          case "$TAG" in *-*) pre="--prerelease" ;; esac
+          gh release create "$TAG" --draft $pre --verify-tag --title "$TAG" \
             --notes "Built by GitHub Actions from $TAG. Unsigned by Apple: no Developer ID signature and no notarization. Verify every file before use: see docs/operations.md, 'Verify a download'." \
             dist/*
