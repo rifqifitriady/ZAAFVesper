@@ -1226,7 +1226,12 @@ func TestCloseResumesFirstAndDropsQueue(t *testing.T) {
 // Apple's 17.0.0.0/8 are never blocked; private RFC 1918 peers can be (owner
 // decision 9 Nov 2026); a gateway lookup that cannot run refuses.
 func TestIsolateNeverBlockSet(t *testing.T) {
-	g := newRig(t, false, func(c *Config) { c.Gateways = nil })
+	// Resolvers are pinned empty: the host's real /etc/resolv.conf may list
+	// 192.168.1.1, which would report it as a resolver instead of a gateway.
+	g := newRig(t, false, func(c *Config) {
+		c.Gateways = nil
+		c.Resolvers = func() []netip.Addr { return nil }
+	})
 	g.r.cfg.Gateways = routeGateways(g.r.cfg.Runner)
 	g.run = func(bin string, args []string) ([]byte, error) {
 		if bin == RouteBin {
