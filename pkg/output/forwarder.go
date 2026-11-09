@@ -22,6 +22,8 @@ const (
 	DefaultQueueBytes = 32 << 20
 	minBackoff        = time.Second
 	maxBackoff        = time.Minute
+	// finalFlushTimeout bounds the last delivery attempt at Close.
+	finalFlushTimeout = 3 * time.Second
 )
 
 // Conditions of the SensorDegraded events a forwarder reports.
@@ -216,7 +218,9 @@ func (f *Forwarder) loop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			// Close: whatever is queued or batched goes to the spool.
+			// Close: whatever is queued or batched is delivered in one last
+			// bounded attempt when the endpoint is up, and spooled otherwise
+			// (or when that attempt fails), so it is sent at the next start.
 			for {
 				select {
 				case r := <-f.queue:
@@ -227,7 +231,13 @@ func (f *Forwarder) loop(ctx context.Context) {
 				}
 				break
 			}
-			f.toSpool(batch)
+			if len(batch) > 0 && !f.down.Load() && !time.Now().Before(retryAt) {
+				fctx, cancel := context.WithTimeout(context.Background(), finalFlushTimeout)
+				f.deliver(fctx, batch) // spools what it could not send
+				cancel()
+			} else {
+				f.toSpool(batch)
+			}
 			return
 		case r := <-f.queue:
 			f.queuedBytes.Add(-int64(len(r.Body)))

@@ -628,3 +628,39 @@ func TestSpoolDirSymlinkRefused(t *testing.T) {
 		t.Fatal("a symbolic link as the spool directory was accepted")
 	}
 }
+
+// A record still queued when the forwarder closes is delivered in a last
+// bounded attempt while the endpoint is up, not left in the spool (found by
+// the live-macos validation: an alert raised just before shutdown waited in
+// the spool for the next start).
+func TestForwarderFinalFlushOnClose(t *testing.T) {
+	sp, _ := OpenSpool(filepath.Join(t.TempDir(), "sp"), 1<<20, false)
+	tr := &flaky{}
+	f := NewForwarder(ForwarderConfig{Transport: tr, Spool: sp, FlushEvery: time.Hour})
+	_ = f.Send(testAlert("last words"))
+	time.Sleep(20 * time.Millisecond) // the record is in the loop's batch or queue
+	if err := f.Close(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	tr.mu.Lock()
+	n := len(tr.got)
+	tr.mu.Unlock()
+	if n != 1 || f.Stats()["spooled"] != 0 {
+		t.Fatalf("delivered %d, stats %v", n, f.Stats())
+	}
+	// While the endpoint is down the record is spooled at Close instead.
+	sp2, _ := OpenSpool(filepath.Join(t.TempDir(), "sp2"), 1<<20, false)
+	down := &flaky{down: true}
+	f2 := NewForwarder(ForwarderConfig{Transport: down, Spool: sp2, FlushEvery: 20 * time.Millisecond})
+	_ = f2.Send(testAlert("one"))
+	deadline := time.Now().Add(3 * time.Second)
+	for f2.Stats()["failed_batches"] == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	_ = f2.Send(testAlert("two"))
+	start := time.Now()
+	_ = f2.Close(5 * time.Second)
+	if f2.Stats()["spooled"] != 2 || time.Since(start) > 2*time.Second {
+		t.Fatalf("down at close: stats %v after %v", f2.Stats(), time.Since(start))
+	}
+}

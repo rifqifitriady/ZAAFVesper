@@ -122,6 +122,11 @@ for b in ("defense_impairment_quarantine_attribute_removed", "stealth_hidden_fil
     add("siem", f"alerts raised while down were delivered later: {b}",
         sys_c.get(rid, 0) >= 2 and web_c.get(rid, 0) >= 2 and all_c.get(rid, 0) >= 2,
         f"alerts {all_c.get(rid, 0)}, syslog {sys_c.get(rid, 0)}, webhook {web_c.get(rid, 0)}")
+left = {}
+for m in re.finditer(r"stats: output (\w+): .*?spool_files=(\d+)", log_text := (open(os.path.join(art, "sensor.log"), errors="replace").read() if os.path.exists(os.path.join(art, "sensor.log")) else "")):
+    left[m.group(1)] = int(m.group(2))
+add("siem", "nothing left in the spool at shutdown (last alerts flushed)", left != {} and all(v == 0 for v in left.values()),
+    f"spool files at shutdown: {left or 'no stats'}")
 tl = status.get("token_in_outputs", "missing")
 add("siem", "webhook token absent from the sensor log, events and alert files", tl == "no", tl)
 
