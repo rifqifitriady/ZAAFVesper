@@ -153,13 +153,13 @@
       "id": "inline-java-child",
       "inline": {
         "executor": "bash",
-        "command": "mkdir -p /tmp/zaafvesper && printf 'public class Z { public static void main(String[] a) throws Exception { new ProcessBuilder(\"/bin/sh\",\"-c\",\"id\").inheritIO().start().waitFor(); } }\\n' > /tmp/zaafvesper/Z.java && java /tmp/zaafvesper/Z.java",
+        "command": "mkdir -p /tmp/zaafvesper && printf 'public class Z { public static void main(String[] a) throws Exception { new ProcessBuilder(\"/bin/sh\",\"-c\",\"id\").inheritIO().start().waitFor(); Thread.sleep(3000); } }\\n' > /tmp/zaafvesper/Z.java && java /tmp/zaafvesper/Z.java",
         "cleanup": "rm -f /tmp/zaafvesper/Z.java"
       },
       "expect": [
         "Suspicious Java Children Processes"
       ],
-      "note": "Needs a JDK on the runner image (single-file source launch)."
+      "note": "Needs a JDK on the runner image (single-file source launch). The JVM stays up 3 s after its child, as a server would: Sysmon for Linux reports the forking thread as the parent, and the sensor maps it to the JVM through /proc only while that thread exists."
     },
     {
       "id": "inline-webshell-parent",

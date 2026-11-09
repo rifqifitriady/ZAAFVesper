@@ -128,3 +128,24 @@ func TestReportRows(t *testing.T) {
 		t.Fatalf("%s", md)
 	}
 }
+
+// An incomplete run is an error with a banner, never a quiet "not tested".
+func TestReportRefusesIncompleteRun(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "linux.md")
+	args := []string{"-plan", "../linux-plan.json", "-alerts", dir, "-rules", "../../../../rules", "-platform", "linux", "-out", out}
+	if err := cmdReport(append([]string{"-results", filepath.Join(dir, "missing.json")}, args...)); err == nil {
+		t.Fatal("missing results accepted")
+	}
+	part := filepath.Join(dir, "part.json")
+	if err := os.WriteFile(part, []byte(`[{"id":"art-T1053.003-078e69eb","kind":"atomic","command":"x"}]`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdReport(append([]string{"-results", part}, args...)); err == nil || !strings.Contains(err.Error(), "1 of") {
+		t.Fatalf("partial results: %v", err)
+	}
+	md, _ := os.ReadFile(out)
+	if !strings.Contains(string(md), "INCOMPLETE RUN") {
+		t.Fatalf("no banner:\n%s", md)
+	}
+}

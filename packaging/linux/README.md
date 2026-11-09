@@ -49,6 +49,10 @@ Run as root. Paths match the macOS layout.
    Debian and Ubuntu `/var/log` is group-writable by `syslog`, and ZAAFVesper refuses an output
    folder whose parents another account can change. The v0.3 live run on an Ubuntu runner found this.)
 
+Upgrading from v0.2: the alert files moved from `/var/log/zaafvesper/` to
+`/var/lib/zaafvesper/logs/`. Point any log shipper at the new folder; old files stay
+where they were until you remove them.
+
 Uninstall: `systemctl disable --now zaafvesper`, then remove the files above.
 
 ## The unit's hardening

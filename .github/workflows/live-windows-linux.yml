@@ -4,6 +4,14 @@
 # for real (Windows service, systemd unit), run pinned Atomic Red Team tests
 # and documented local equivalents, and record per rule whether it fired.
 # Results: the job summary, the "validation-*" artifacts, docs/validation/.
+#
+# A job is red when setup, the test run or the report broke (an incomplete
+# run is never shown as a result). A rule that did not fire does not make it
+# red: that is a result, reported per rule.
+#
+# Token safety: actions/checkout runs with persist-credentials: false, and no
+# step may put a token on a command line or in a file: the tests run as
+# SYSTEM/root and their command lines end up in the public artifacts.
 name: live-windows-linux
 
 on:
@@ -64,6 +72,7 @@ jobs:
         shell: pwsh
         run: ./scripts/ci/b/windows-setup.ps1
       - name: Run the tests
+        id: run
         shell: pwsh
         continue-on-error: true
         run: |
@@ -86,8 +95,10 @@ jobs:
           Get-Content out\sysmon-event-counts.txt
           if (Test-Path out\alerts\service.log) { Get-Content out\alerts\service.log -Tail 60 }
       - name: Report
+        id: report
         if: always()
         shell: pwsh
+        continue-on-error: true
         run: |
           .\build\artrun.exe report -plan scripts\ci\b\windows-plan.json -results out\results.json -alerts out\alerts -rules rules -platform windows -run-url $env:RUN_URL -out out\windows.md -json out\windows.json
           Get-Content out\windows.md | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
@@ -97,6 +108,15 @@ jobs:
           name: validation-windows
           path: out
           retention-days: 30
+      - name: Fail if the run was incomplete
+        if: always() && (steps.run.outcome != 'success' || steps.report.outcome != 'success')
+        shell: pwsh
+        run: |
+          Write-Host "test run: ${env:RUN_OUTCOME}, report: ${env:REPORT_OUTCOME}"
+          exit 1
+        env:
+          RUN_OUTCOME: ${{ steps.run.outcome }}
+          REPORT_OUTCOME: ${{ steps.report.outcome }}
 
   linux:
     runs-on: ubuntu-24.04
@@ -125,14 +145,16 @@ jobs:
             t="${file%.yaml}"
             curl -fsSL --retry 3 -o "atomics/$file" "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/$ART_COMMIT/atomics/$t/$file"
           done < scripts/ci/b/atomics.sha256
-          (cd atomics && sha256sum -c ../scripts/ci/b/atomics.sha256 --ignore-missing --strict)
+          (cd atomics && sha256sum -c --strict ../scripts/ci/b/atomics.sha256)
       - name: Install Sysmon for Linux and the ZAAFVesper unit
         run: ./scripts/ci/b/linux-setup.sh
       - name: Run the tests
+        id: run
         continue-on-error: true
         run: |
           mkdir -p out
-          sudo env "PATH=$PATH" ./build/artrun run -plan scripts/ci/b/linux-plan.json -atomics atomics -out out/results.json
+          # System folders first; java from the runner's JDK (JAVA_HOME).
+          sudo env "PATH=/usr/sbin:/usr/bin:/sbin:/bin:$JAVA_HOME/bin" ./build/artrun run -plan scripts/ci/b/linux-plan.json -atomics atomics -out out/results.json
       - name: Collect
         if: always()
         run: |
@@ -146,7 +168,9 @@ jobs:
           cat out/sysmon-event-counts.txt
           tail -60 out/alerts/zaafvesper-journal.txt
       - name: Report
+        id: report
         if: always()
+        continue-on-error: true
         run: |
           ./build/artrun report -plan scripts/ci/b/linux-plan.json -results out/results.json -alerts out/alerts -rules rules -platform linux -run-url "$RUN_URL" -out out/linux.md -json out/linux.json
           cat out/linux.md >> "$GITHUB_STEP_SUMMARY"
@@ -156,3 +180,11 @@ jobs:
           name: validation-linux
           path: out
           retention-days: 30
+      - name: Fail if the run was incomplete
+        if: always() && (steps.run.outcome != 'success' || steps.report.outcome != 'success')
+        run: |
+          echo "test run: $RUN_OUTCOME, report: $REPORT_OUTCOME"
+          exit 1
+        env:
+          RUN_OUTCOME: ${{ steps.run.outcome }}
+          REPORT_OUTCOME: ${{ steps.report.outcome }}

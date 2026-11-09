@@ -60,6 +60,9 @@ func cmdRun(args []string) error {
 			}
 			results = append(results, r)
 			fmt.Printf("%-40s not run: %s\n", t.ID, r.NotRun)
+			if err := writeResults(*out, results); err != nil {
+				return err
+			}
 			continue
 		}
 		step := t.Inline
@@ -72,6 +75,9 @@ func cmdRun(args []string) error {
 				r.Error = err.Error()
 				results = append(results, r)
 				fmt.Printf("%-40s ERROR %v\n", t.ID, err)
+				if err := writeResults(*out, results); err != nil {
+					return err
+				}
 				continue
 			}
 		}
@@ -95,10 +101,26 @@ func cmdRun(args []string) error {
 		}
 		fmt.Printf("%-40s exit=%d %s\n", t.ID, code, r.Error)
 		results = append(results, r)
+		// Written after every test, so a run that dies part way leaves the
+		// results of the tests that ran (and report sees how many are missing).
+		if err := writeResults(*out, results); err != nil {
+			return err
+		}
 		time.Sleep(2 * time.Second) // keep the tests apart in the event stream
 	}
-	b, _ := json.MarshalIndent(results, "", "  ")
-	return os.WriteFile(*out, b, 0o644)
+	return writeResults(*out, results)
+}
+
+func writeResults(path string, results []Result) error {
+	b, err := json.MarshalIndent(results, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 func missingTools(tools []string) string {

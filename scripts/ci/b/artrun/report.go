@@ -57,8 +57,13 @@ func cmdReport(args []string) error {
 		return err
 	}
 	var results []Result
-	if b, err := os.ReadFile(*resultsPath); err == nil {
-		_ = json.Unmarshal(b, &results)
+	var broken string
+	if b, err := os.ReadFile(*resultsPath); err != nil {
+		broken = "the results file could not be read: " + err.Error()
+	} else if err := json.Unmarshal(b, &results); err != nil {
+		broken = "the results file is not valid JSON: " + err.Error()
+	} else if len(results) != len(p.Tests) {
+		broken = fmt.Sprintf("the test run stopped early: %d of %d tests have results", len(results), len(p.Tests))
 	}
 	fired, firstOutput, alerts, err := readAlerts(*alertsDir)
 	if err != nil {
@@ -70,6 +75,9 @@ func cmdReport(args []string) error {
 	}
 	rows := buildRows(p, results, fired, firstOutput, alerts, rs, *platform)
 	md := render(rows, p, results, *platform, *runURL, fired)
+	if broken != "" {
+		md = "> **INCOMPLETE RUN:** " + broken + ". The rows below are not a valid result.\n\n" + md
+	}
 	fmt.Print(md)
 	if *out != "" {
 		if err := os.WriteFile(*out, []byte(md), 0o644); err != nil {
@@ -78,7 +86,12 @@ func cmdReport(args []string) error {
 	}
 	if *jsonOut != "" {
 		b, _ := json.MarshalIndent(rows, "", "  ")
-		return os.WriteFile(*jsonOut, b, 0o644)
+		if err := os.WriteFile(*jsonOut, b, 0o644); err != nil {
+			return err
+		}
+	}
+	if broken != "" {
+		return fmt.Errorf("incomplete run: %s", broken)
 	}
 	return nil
 }
