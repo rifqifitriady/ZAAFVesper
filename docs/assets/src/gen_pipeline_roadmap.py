@@ -114,13 +114,14 @@ css = '''.draw { stroke-dasharray: 360; animation: draw 2.6s ease-out forwards; 
 r = [head(W, H, "ZAAFVesper roadmap",
           "Roadmap: v0.1 Foundation and v0.2 Platform are done, v0.3 Prove it live is in progress, v0.4 Trust and v0.5 Prevent are planned and need an Apple developer account and entitlement.", css)]
 nodes = [
-    ("v0.1", "Foundation", "DONE · 7 NOV", TEAL, "done", ["eslogger + rule engine", "41 macOS rules · YARA", "Installer · LaunchDaemon"]),
-    ("v0.2", "Platform", "DONE · 9 NOV", TEAL, "done", ["Windows + Linux (Sysmon)", "Sigma import · network", "SIEM · ZAAFElegia · contain"]),
-    ("v0.3", "Prove it live", "IN PROGRESS", MAGENTA, "now", ["CI + signed provenance", "Live tests on runners", "Atomic Red Team proof"]),
-    ("v0.4", "Trust", "PLANNED", VIOLET, "plan", ["Developer ID signing", "Notarized package", "Needs Apple account"]),
-    ("v0.5", "Prevent", "PLANNED", VIOLET, "plan", ["AUTH blocking (ES)", "DNS via NetworkExtension", "Needs Apple entitlement"]),
+    ("v0.1", "Foundation", "DONE · 7 NOV", TEAL, "done", ["eslogger + rule engine", "41 macOS rules", "Installer + daemon"]),
+    ("v0.2", "Platform", "DONE · 9 NOV", TEAL, "done", ["Windows + Linux", "Sigma · network", "SIEM · contain"]),
+    ("v0.3", "Prove it live", "NOW", MAGENTA, "now", ["CI + provenance", "Live tests on runners", "Atomic Red Team"]),
+    ("v0.4", "Reach", "NEXT", BLUE, "plan", ["Contain on Win/Linux", "Linux via eBPF", "ZAAFElegia · 90+ TTPs"]),
+    ("v0.5", "Trust", "PLANNED", VIOLET, "plan", ["Developer ID signing", "Notarized package", "Apple account"]),
+    ("v0.6", "Prevent", "PLANNED", VIOLET, "plan", ["AUTH blocking", "DNS via NetExt", "Apple entitlement"]),
 ]
-xs = [92, 256, 420, 584, 748]
+xs = [82, 217, 352, 487, 622, 757]
 LY = 96
 r.append(f'<text x="40" y="44" font-size="13" font-weight="700" letter-spacing="2.4" fill="#5EF0D6">ROADMAP</text>')
 r.append(f'<path d="M{xs[0]} {LY} H{xs[-1]}" stroke="#262B5E" stroke-width="4" stroke-linecap="round"/>')
@@ -138,27 +139,27 @@ for i, ((ver, name, chip, col, state, bullets), x) in enumerate(zip(nodes, xs)):
     if state == "done":
         r.append(f'<path d="M{x - 5} {LY} l3.5 3.5 l6.5 -7" fill="none" stroke="{NAVY}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>')
     r.append(f'<text x="{x}" y="{LY - 24}" text-anchor="middle" font-size="15" font-weight="800" fill="{col}">{ver}</text>')
-    cx0, cw = x - 76, 152
+    cx0, cw = x - 62, 124
     delay = 0.3 + i * 0.25
     r.append(f'<g class="card" style="animation-delay:{delay:.2f}s">')
     r.append(f'<rect x="{cx0}" y="{LY + 34}" width="{cw}" height="208" rx="14" fill="#12163A" stroke="{col}" stroke-width="{2 if state != "plan" else 1.5}"{da}/>')
-    r.append(f'<text x="{cx0 + 14}" y="{LY + 64}" class="ttl">{name}</text>')
-    chip_bg = {"done": "#0F3B3A", "now": "#3F1240", "plan": "#221F4D"}[state]
-    r.append(f'<rect x="{cx0 + 14}" y="{LY + 76}" width="{len(chip) * 7.4 + 14:.0f}" height="22" rx="11" fill="{chip_bg}"/>')
-    r.append(f'<text x="{cx0 + 21}" y="{LY + 91}" class="chip" fill="{col}">{chip}</text>')
+    r.append(f'<text x="{cx0 + 12}" y="{LY + 64}" class="ttl" font-size="14">{name}</text>')
+    chip_bg = {"done": "#0F3B3A", "now": "#3F1240", "plan": "#221F4D"}[state] if ver != "v0.4" else "#13244D"
+    r.append(f'<rect x="{cx0 + 12}" y="{LY + 76}" width="{len(chip) * 7.2 + 12:.0f}" height="22" rx="11" fill="{chip_bg}"/>')
+    r.append(f'<text x="{cx0 + 18}" y="{LY + 91}" class="chip" fill="{col}">{chip}</text>')
     for j, bt in enumerate(bullets):
         y = LY + 128 + j * 40
-        r.append(f'<circle cx="{cx0 + 18}" cy="{y - 4}" r="3" fill="{col}"/>')
+        r.append(f'<circle cx="{cx0 + 15}" cy="{y - 4}" r="3" fill="{col}"/>')
         # wrap at ~20 chars into two lines
         words, lines, cur = bt.split(), [], ""
         for w_ in words:
-            if len(cur) + len(w_) + 1 > 19 and cur:
+            if len(cur) + len(w_) + 1 > 14 and cur:
                 lines.append(cur); cur = w_
             else:
                 cur = (cur + " " + w_).strip()
         lines.append(cur)
         for k, ln in enumerate(lines[:2]):
-            r.append(f'<text x="{cx0 + 28}" y="{y + k * 16}" class="b">{ln.replace("&", "&amp;")}</text>')
+            r.append(f'<text x="{cx0 + 24}" y="{y + k * 15}" class="b" font-size="12">{ln.replace("&", "&amp;")}</text>')
     r.append('</g>')
 r.append(tail(W, H))
 open(os.path.join(OUT, "roadmap.svg"), "w").write("".join(r))

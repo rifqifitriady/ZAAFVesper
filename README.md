@@ -213,15 +213,16 @@ Every finding and the tests behind it are tracked in [docs/security/open-finding
 
 ## Roadmap
 
-<p align="center"><img src="docs/assets/roadmap.svg" width="100%" alt="Roadmap: v0.1 Foundation and v0.2 Platform done, v0.3 Prove it live in progress, v0.4 Trust and v0.5 Prevent planned"></p>
+<p align="center"><img src="docs/assets/roadmap.svg" width="100%" alt="Roadmap: v0.1 Foundation and v0.2 Platform done, v0.3 Prove it live in progress, v0.4 Reach next, v0.5 Trust and v0.6 Prevent planned"></p>
 
 | Version | Theme | What it brings |
 |---|---|---|
 | v0.1 · done | Foundation | eslogger, rule engine, 41 macOS rules, YARA, installer and LaunchDaemon |
 | v0.2 · done | Platform | Windows and Linux (Sysmon), Sigma import, network telemetry, SIEM and ZAAFElegia outputs, active response |
 | v0.3 · in progress | Prove it live | CI and releases built on GitHub with signed provenance; live tests on macOS, Windows and Linux runners with Atomic Red Team |
-| v0.4 · planned | Trust | Developer ID signed, notarized package (needs an Apple Developer account) |
-| v0.5 · planned | Prevent | Blocking before execution with Endpoint Security AUTH events, DNS through a NetworkExtension (needs Apple's entitlements) |
+| v0.4 · next | Reach | Containment on Windows and Linux; a Linux source without Sysmon (eBPF); deeper ZAAFElegia integration; detection coverage from 63 to 90+ ATT&CK techniques |
+| v0.5 · planned | Trust | Developer ID signed, notarized package (needs an Apple Developer account) |
+| v0.6 · planned | Prevent | Blocking before execution with Endpoint Security AUTH events, DNS through a NetworkExtension (needs Apple's entitlements) |
 
 ## License
 
