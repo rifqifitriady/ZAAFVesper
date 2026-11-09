@@ -1,4 +1,4 @@
-//go:build darwin || linux
+//go:build zaafvesper_validate && (darwin || linux)
 
 package main
 

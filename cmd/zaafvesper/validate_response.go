@@ -1,11 +1,17 @@
+//go:build zaafvesper_validate
+
 package main
 
 // `zaafvesper validate-response` is the LIVE VALIDATION HARNESS of the
 // response actions (v0.3 workstream D, docs/validation/response.md). It is
-// not part of the normal CLI: it is not in the usage text, it refuses to run
-// unless the environment variable ZAAFVESPER_VALIDATE_RESPONSE is
-// "throwaway-runner" (only .github/workflows/live-response.yml sets it), and
-// it needs root (or an elevated administrator on Windows).
+// not part of the normal CLI: it is compiled in only with the build tag
+// zaafvesper_validate (release and package builds never have it), it is not
+// in the usage text, and it refuses to run unless the environment variable
+// ZAAFVESPER_VALIDATE_RESPONSE is "throwaway-runner" on a GitHub-hosted
+// runner (GITHUB_ACTIONS=true, RUNNER_ENVIRONMENT=github-hosted), with root
+// (or an elevated administrator on Windows), and with no ZAAFVesper
+// installed (platformAccidentGuard). These are guards against an accident,
+// not a security boundary: the binary that has them is never shipped.
 //
 // It drives the real responder of pkg/response with no stubs: real signals,
 // the real kernel identity reads, the real quarantine vault, /bin/launchctl
@@ -26,10 +32,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
@@ -89,20 +97,40 @@ type vHarness struct {
 	cleanup []func()
 	// pfWasEnabled: pf's state before the run (macOS).
 	pfWasEnabled bool
+	closeOnce    sync.Once
 	stdout       io.Writer
 }
 
-func cmdValidateResponse(args []string, stdout, stderr io.Writer) int {
+func init() { hiddenCommands["validate-response"] = cmdValidateResponse }
+
+// validateGuard refuses unless this is a throw-away GitHub-hosted runner.
+func validateGuard() error {
+	switch {
+	case os.Getenv(validateGuardEnv) != validateGuardValue:
+		return errors.New("zaafvesper validate-response is the live validation harness of the response actions: it kills, suspends and quarantines test objects and changes pf and launchd. It runs only on a throw-away GitHub-hosted runner (set up by .github/workflows/live-response.yml)")
+	case os.Getenv("GITHUB_ACTIONS") != "true" || os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted":
+		return errors.New("zaafvesper validate-response runs only on a GitHub-hosted runner (GITHUB_ACTIONS=true, RUNNER_ENVIRONMENT=github-hosted)")
+	}
+	return nil
+}
+
+func cmdValidateResponse(args []string, stdout, stderr io.Writer) (code int) {
+	if err := validateGuard(); err != nil {
+		say(stderr, "%v", err)
+		return 2
+	}
 	if len(args) > 0 && args[0] == "sleeper" {
 		return validateSleeper(args[1:], stderr)
+	}
+	// The harness itself also refuses where ZAAFVesper is installed: it
+	// would flush the live sensor's pf anchor and write into its vault.
+	if err := platformAccidentGuard(); err != nil {
+		say(stderr, "zaafvesper validate-response: %v", err)
+		return 2
 	}
 	fs := newFlagSet("validate-response")
 	out := fs.String("out", "", "write the results as JSON to this file")
 	if !parseFlags(fs, args, stderr) {
-		return 2
-	}
-	if os.Getenv(validateGuardEnv) != validateGuardValue {
-		say(stderr, "zaafvesper validate-response is the live validation harness of the response actions: it kills, suspends and quarantines test objects and changes pf and launchd. It runs only on a throw-away machine, with %s=%s (set by .github/workflows/live-response.yml).", validateGuardEnv, validateGuardValue)
 		return 2
 	}
 	if err := checkPrivileges(); err != nil {
@@ -115,8 +143,27 @@ func cmdValidateResponse(args []string, stdout, stderr io.Writer) int {
 		say(stderr, "zaafvesper validate-response: %v", err)
 		return 1
 	}
-	h.runCommon()
-	h.runPlatform()
+	// A cancel (SIGINT, SIGTERM) or a panic still cleans up and reports.
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(stop)
+	go func() {
+		if _, ok := <-stop; ok {
+			say(stderr, "zaafvesper validate-response: interrupted; cleaning up")
+			h.close()
+			os.Exit(1)
+		}
+	}()
+	func() {
+		defer func() {
+			if p := recover(); p != nil {
+				h.results = append(h.results, vResult{Action: "harness", Case: "panic", Verdict: vFailed, Detail: fmt.Sprint(p)})
+				say(stderr, "zaafvesper validate-response: panic: %v", p)
+			}
+		}()
+		h.runCommon()
+		h.runPlatform()
+	}()
 	h.close()
 	h.writeTable(stdout)
 	if *out != "" {
@@ -135,24 +182,23 @@ func cmdValidateResponse(args []string, stdout, stderr io.Writer) int {
 }
 
 // validateSleeper is the test process: it sleeps (at most maxSleeper), and
-// with --exec-after it replaces itself with --exec after that delay.
+// with --exec-sleep-after it replaces itself with /bin/sleep after that
+// delay (the exec-into-platform case). No other program can be run.
 func validateSleeper(args []string, stderr io.Writer) int {
 	fs := flag.NewFlagSet("sleeper", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	d := fs.Duration("for", 2*time.Minute, "")
-	after := fs.Duration("exec-after", 0, "")
-	path := fs.String("exec", "", "")
-	arg := fs.String("exec-arg", "", "")
+	after := fs.Duration("exec-sleep-after", -1, "")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if *d > maxSleeper {
 		*d = maxSleeper
 	}
-	if *path != "" {
-		time.Sleep(*after)
-		if err := sysExec(*path, []string{*path, *arg}); err != nil {
-			say(stderr, "sleeper: exec %s: %v", *path, err)
+	if *after >= 0 {
+		time.Sleep(min(*after, time.Minute))
+		if err := sysExec("/bin/sleep", []string{"/bin/sleep", "120"}); err != nil {
+			say(stderr, "sleeper: exec /bin/sleep: %v", err)
 			return 1
 		}
 	}
@@ -203,8 +249,12 @@ func newVHarness(stdout io.Writer) (*vHarness, error) {
 }
 
 // close stops every test process still running, runs the platform cleanup
-// and removes the temporary directory.
+// and removes the temporary directory. It runs once.
 func (h *vHarness) close() {
+	h.closeOnce.Do(h.doClose)
+}
+
+func (h *vHarness) doClose() {
 	for i := len(h.cleanup) - 1; i >= 0; i-- {
 		h.cleanup[i]()
 	}

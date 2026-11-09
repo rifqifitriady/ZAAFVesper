@@ -1,4 +1,4 @@
-//go:build darwin
+//go:build zaafvesper_validate && darwin
 
 package main
 
@@ -26,7 +26,7 @@ import (
 const (
 	// vLabelPrefix names every launch item the harness creates.
 	vLabelPrefix = "com.rifqifitriady.zaafvesper-validate."
-	// vAlias is a loopback alias added by scripts/ci/d/live-response.sh:
+	// vAlias is a loopback alias added by scripts/ci/d/live-response-macos.sh:
 	// traffic to it never leaves the runner, so blocking it in pf cannot cut
 	// the runner's own connectivity.
 	vAlias = "10.254.254.2"
@@ -122,6 +122,16 @@ func (h *vHarness) writer() (*event.Proc, error) {
 	return procOf(s.pid)
 }
 
+// mustEvent is fileEvent for cases whose setup just created path; a failure
+// is a harness failure and panics (recorded as a failed result).
+func (h *vHarness) mustEvent(name, path string, p *event.Proc) *event.Event {
+	e, err := fileEvent(name, path, p)
+	if err != nil {
+		panic(fmt.Sprintf("event for %s: %v", path, err))
+	}
+	return e
+}
+
 func fileEvent(name, path string, p *event.Proc) (*event.Event, error) {
 	var st unix.Stat_t
 	if err := unix.Lstat(path, &st); err != nil {
@@ -141,7 +151,7 @@ func (h *vHarness) execIntoPlatform() {
 		{response.ESSource, "exec into /bin/sleep after detection (eslogger event)", expectAct},
 		{"fixture", "exec into /bin/sleep, platform flag not from eslogger", expectDeny},
 	} {
-		s, err := h.spawn("--exec-after", "2s", "--exec", "/bin/sleep", "--exec-arg", "120")
+		s, err := h.spawn("--exec-sleep-after", "2s")
 		if err != nil {
 			h.untestable("kill", c.kase, err.Error())
 			continue
@@ -209,9 +219,11 @@ func (h *vHarness) quarantineCases() {
 	if err := os.WriteFile(path, body, 0o755); err == nil {
 		_ = os.Chmod(path, 0o755)
 		_ = unix.Setxattr(path, "com.rifqifitriady.validate", []byte("v1"), 0)
-		e, _ := fileEvent(event.CreateFile, path, w)
-		h.reset()
-		err := h.r.QuarantineFile(e, response.TargetFile, "validate-quarantine", "validation: quarantine_file")
+		e, err := fileEvent(event.CreateFile, path, w)
+		if err == nil {
+			h.reset()
+			err = h.r.QuarantineFile(e, response.TargetFile, "validate-quarantine", "validation: quarantine_file")
+		}
 		moved := err == nil && !exists(path)
 		h.record("quarantine_file", "file moved into /var/db/zaafvesper/quarantine", expectAct, moved && h.decision().Outcome == response.OutcomeQuarantined, "")
 		if moved {
@@ -237,10 +249,17 @@ func (h *vHarness) quarantineCases() {
 	dropped := filepath.Join(dir, "dropped")
 	if b, err := os.ReadFile(h.subject); err == nil && os.WriteFile(dropped, b, 0o755) == nil {
 		s, err := h.spawnCmd(exec.Command(dropped, "validate-response", "sleeper", "--for", "2m"))
+		var p *event.Proc
 		if err == nil {
-			p, _ := procOf(s.pid)
-			var st unix.Stat_t
-			_ = unix.Stat(dropped, &st)
+			p, err = procOf(s.pid)
+		}
+		var st unix.Stat_t
+		if err == nil {
+			err = unix.Stat(dropped, &st)
+		}
+		if err != nil {
+			h.untestable("quarantine_file", "executable of a running process (target process)", err.Error())
+		} else {
 			p.ExeDev, p.ExeIno = uint64(uint32(st.Dev)), st.Ino
 			h.reset()
 			err := h.r.QuarantineFile(&event.Event{Name: event.CreateProcess, Source: response.ESSource, Proc: p}, response.TargetProcess, "validate-quarantine", "validation: dropped binary")
@@ -258,7 +277,7 @@ func (h *vHarness) quarantineCases() {
 	// Refused: the file was replaced after the event (dev/ino differ).
 	repl := filepath.Join(dir, "replaced")
 	if os.WriteFile(repl, []byte("one"), 0o644) == nil {
-		e, _ := fileEvent(event.CreateFile, repl, w)
+		e := h.mustEvent(event.CreateFile, repl, w)
 		_ = os.Remove(repl)
 		_ = os.WriteFile(repl, []byte("two"), 0o644)
 		h.reset()
@@ -268,7 +287,7 @@ func (h *vHarness) quarantineCases() {
 	// Refused: a symbolic link (to a file the harness owns).
 	target, link := filepath.Join(dir, "target"), filepath.Join(dir, "link")
 	if os.WriteFile(target, []byte("t"), 0o644) == nil && os.Symlink(target, link) == nil {
-		e, _ := fileEvent(event.CreateFile, link, w)
+		e := h.mustEvent(event.CreateFile, link, w)
 		h.reset()
 		err := h.r.QuarantineFile(e, response.TargetFile, "validate-quarantine", "validation: symlink")
 		h.record("quarantine_file", "symbolic link", expectDeny, errors.Is(err, response.ErrFileCheck) && exists(target) && exists(link), "")
@@ -324,7 +343,7 @@ func (h *vHarness) requarantineCases() {
 		}
 		_ = unix.Setxattr(path, response.QuarantineXattr, []byte("0083;00000000;Safari;"), 0)
 		_ = unix.Removexattr(path, response.QuarantineXattr)
-		e, _ := fileEvent(event.DeleteXattr, path, c.remover)
+		e := h.mustEvent(event.DeleteXattr, path, c.remover)
 		e.Args = map[string]string{"xattr": response.QuarantineXattr}
 		h.reset()
 		err := h.r.Requarantine(e, "validate-requarantine", "validation: "+c.kase)
@@ -356,10 +375,21 @@ func loaded(domain, label string) bool {
 // launchItem writes a test plist at path owned by uid and bootstraps it in
 // domain unless load is false; cleanup boots it out and removes the file.
 func (h *vHarness) launchItem(domain, path, label string, uid int, load bool) error {
-	if err := os.WriteFile(path, plistXML(label), 0o644); err != nil {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o644)
+	if err != nil {
 		return err
 	}
-	_ = os.Chown(path, uid, 0)
+	_, werr := f.Write(plistXML(label))
+	if werr == nil {
+		werr = f.Chown(uid, 0)
+	}
+	if err := f.Close(); werr == nil {
+		werr = err
+	}
+	if werr != nil {
+		_ = os.Remove(path)
+		return werr
+	}
 	h.cleanup = append(h.cleanup, func() {
 		_, _ = run(response.LaunchctlBin, "bootout", domain+"/"+label)
 		_ = os.Remove(path)
@@ -389,7 +419,7 @@ func (h *vHarness) persistenceCases() {
 	if err := h.launchItem("system", path, label, 0, true); err != nil {
 		h.untestable("remove_persistence", "LaunchDaemon in the system domain", err.Error())
 	} else {
-		e, _ := fileEvent(event.CreateFile, path, w)
+		e := h.mustEvent(event.CreateFile, path, w)
 		h.reset()
 		err := h.r.RemovePersistence(e, "validate-persistence", "validation: LaunchDaemon")
 		gone, out := !loaded("system", label), !exists(path)
@@ -417,7 +447,7 @@ func (h *vHarness) persistenceCases() {
 	} else if err := h.launchItem("system", pathB, labelA, 0, false); err != nil {
 		h.untestable("remove_persistence", "borrowed label", err.Error())
 	} else {
-		e, _ := fileEvent(event.CreateFile, pathB, w)
+		e := h.mustEvent(event.CreateFile, pathB, w)
 		h.reset()
 		err := h.r.RemovePersistence(e, "validate-persistence", "validation: borrowed label")
 		stillLoaded := loaded("system", labelA)
@@ -431,7 +461,7 @@ func (h *vHarness) persistenceCases() {
 	if err := h.launchItem("system", pathT, labelT, 0, true); err == nil {
 		cp := &event.Proc{PID: w.PID, PPID: 1, Exe: "/bin/cp", Name: "cp", IsPlatform: true, UniqueID: w.UniqueID, StartTime: w.StartTime,
 			Parent: &event.Proc{PID: 1, Exe: "/sbin/launchd", Name: "launchd", IsPlatform: true}}
-		e, _ := fileEvent(event.CreateFile, pathT, cp)
+		e := h.mustEvent(event.CreateFile, pathT, cp)
 		h.reset()
 		err := h.r.RemovePersistence(e, "validate-persistence", "validation: trusted chain")
 		h.record("remove_persistence", "written by /bin/cp under a trusted chain", expectDeny,
@@ -443,8 +473,11 @@ func (h *vHarness) persistenceCases() {
 		h.untestable("remove_persistence", "LaunchAgent in the console user's gui domain", err.Error())
 		return
 	}
-	dir := filepath.Join(home, "Library", "LaunchAgents")
-	_ = os.MkdirAll(dir, 0o755)
+	dir, err := userDirNoFollow(home, uid, "Library", "LaunchAgents")
+	if err != nil {
+		h.untestable("remove_persistence", "LaunchAgent in the console user's gui domain", err.Error())
+		return
+	}
 	labelG := vLabelPrefix + "g" + randID()
 	pathG := filepath.Join(dir, labelG+".plist")
 	domain := fmt.Sprintf("gui/%d", uid)
@@ -452,7 +485,7 @@ func (h *vHarness) persistenceCases() {
 		h.untestable("remove_persistence", "LaunchAgent in the console user's gui domain", err.Error())
 		return
 	}
-	e, _ := fileEvent(event.CreateFile, pathG, w)
+	e := h.mustEvent(event.CreateFile, pathG, w)
 	h.reset()
 	err = h.r.RemovePersistence(e, "validate-persistence", "validation: LaunchAgent")
 	gone := !loaded(domain, labelG)
@@ -483,7 +516,7 @@ func consoleUser() (int, string, error) {
 func (h *vHarness) isolateCases() {
 	say(h.stdout, "--- isolate_process")
 	if !hasAddr(vAlias) {
-		h.untestable("isolate_process", "all cases", "loopback alias "+vAlias+" missing (scripts/ci/d/live-response.sh adds it)")
+		h.untestable("isolate_process", "all cases", "loopback alias "+vAlias+" missing (scripts/ci/d/live-response-macos.sh adds it)")
 		return
 	}
 	ln, err := net.Listen("tcp", vAlias+":0")
@@ -634,4 +667,50 @@ func resolvers() []string {
 		}
 	}
 	return out
+}
+
+// platformAccidentGuard refuses where ZAAFVesper is installed or has state:
+// the harness would flush the live sensor's pf anchor and write into its
+// vault and isolation store.
+func platformAccidentGuard() error {
+	if exists(daemonPlistPath) {
+		return fmt.Errorf("%s exists: ZAAFVesper is installed here; the harness runs only on a throw-away runner", daemonPlistPath)
+	}
+	if loaded("system", daemonLabel) {
+		return errors.New("the ZAAFVesper LaunchDaemon is loaded here; the harness runs only on a throw-away runner")
+	}
+	if isos, err := (response.IsolationStore{Dir: response.DefaultStateDir}).Load(); err == nil && len(isos) > 0 {
+		return errors.New("the isolation store holds addresses: a sensor has isolated something here")
+	}
+	if ents, err := os.ReadDir(response.DefaultVaultDir); err == nil && len(ents) > 0 {
+		return errors.New("the quarantine vault is not empty: a sensor has quarantined files here")
+	}
+	return nil
+}
+
+// userDirNoFollow returns dir (under the console user's home) for writing as
+// root, refusing a symbolic link or a folder that does not belong to uid on
+// the way, and creating missing folders owned by uid.
+func userDirNoFollow(home string, uid int, rel ...string) (string, error) {
+	p := home
+	for i := -1; i < len(rel); i++ {
+		if i >= 0 {
+			p = filepath.Join(p, rel[i])
+			if err := os.Mkdir(p, 0o755); err == nil {
+				if err := os.Lchown(p, uid, -1); err != nil {
+					return "", err
+				}
+			} else if !os.IsExist(err) {
+				return "", err
+			}
+		}
+		fi, err := os.Lstat(p)
+		if err != nil {
+			return "", err
+		}
+		if fi.Mode()&os.ModeSymlink != 0 || !fi.IsDir() || int(fi.Sys().(*syscall.Stat_t).Uid) != uid {
+			return "", fmt.Errorf("%s is a symbolic link, not a directory, or not owned by uid %d", p, uid)
+		}
+	}
+	return p, nil
 }

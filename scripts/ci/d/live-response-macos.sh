@@ -39,4 +39,5 @@ echo "anchors in the main ruleset:"
 sudo /sbin/pfctl -s Anchors 2>/dev/null || true
 echo "::endgroup::"
 
-sudo /usr/bin/env ZAAFVESPER_VALIDATE_RESPONSE=throwaway-runner "$bin" validate-response --out "$out"
+sudo /usr/bin/env ZAAFVESPER_VALIDATE_RESPONSE=throwaway-runner GITHUB_ACTIONS="$GITHUB_ACTIONS" \
+	RUNNER_ENVIRONMENT="${RUNNER_ENVIRONMENT:-}" "$bin" validate-response --out "$out"

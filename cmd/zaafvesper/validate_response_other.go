@@ -1,4 +1,4 @@
-//go:build !darwin && !linux && !windows
+//go:build zaafvesper_validate && !darwin && !linux && !windows
 
 package main
 
@@ -16,3 +16,4 @@ func validateTempRoot() string                      { return os.TempDir() }
 func waitState(int32, bool, time.Duration) bool     { return false }
 func (h *vHarness) platformConfig(*response.Config) {}
 func (h *vHarness) runPlatform()                    {}
+func platformAccidentGuard() error                  { return nil }

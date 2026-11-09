@@ -1,3 +1,5 @@
+//go:build zaafvesper_validate
+
 package response
 
 // KernelIdentity reads pid's identity from the kernel exactly as the

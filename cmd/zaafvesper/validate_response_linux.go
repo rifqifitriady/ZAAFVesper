@@ -1,4 +1,4 @@
-//go:build linux
+//go:build zaafvesper_validate && linux
 
 package main
 
@@ -42,4 +42,14 @@ func (h *vHarness) runPlatform() {
 	for _, a := range []string{"quarantine_file", "requarantine", "remove_persistence", "isolate_process"} {
 		h.untestable(a, "all cases", "macOS only: refused-unsupported on Linux (run_linux.go supportedActions)")
 	}
+}
+
+// platformAccidentGuard refuses where ZAAFVesper is installed as a service.
+func platformAccidentGuard() error {
+	for _, p := range []string{"/etc/systemd/system/zaafvesper.service", "/lib/systemd/system/zaafvesper.service", "/usr/lib/systemd/system/zaafvesper.service"} {
+		if exists(p) {
+			return fmt.Errorf("%s exists: ZAAFVesper is installed here; the harness runs only on a throw-away runner", p)
+		}
+	}
+	return nil
 }
