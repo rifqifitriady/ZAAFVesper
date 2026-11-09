@@ -111,11 +111,16 @@ func defaultGateways(Runner) func() ([]netip.Addr, error) {
 	}
 }
 
+// resolvConfFiles are read by defaultResolvers; a variable so that a test
+// can point them at temporary files. On Ubuntu the first lists only the
+// stub 127.0.0.53 and the real resolvers are in the second.
+var resolvConfFiles = []string{"/etc/resolv.conf", "/run/systemd/resolve/resolv.conf"}
+
 // defaultResolvers are the nameservers of /etc/resolv.conf and, behind
 // systemd-resolved's stub, of /run/systemd/resolve/resolv.conf.
 func defaultResolvers() []netip.Addr {
 	var out []netip.Addr
-	for _, f := range []string{"/etc/resolv.conf", "/run/systemd/resolve/resolv.conf"} {
+	for _, f := range resolvConfFiles {
 		if b, err := os.ReadFile(f); err == nil {
 			out = append(out, parseResolvConf(b)...)
 		}

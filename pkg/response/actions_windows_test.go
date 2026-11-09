@@ -35,7 +35,7 @@ type wrig struct {
 	state string
 }
 
-func newWRig(t *testing.T) *wrig {
+func newWRig(t *testing.T, dry bool) *wrig {
 	t.Helper()
 	d, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -53,7 +53,7 @@ func newWRig(t *testing.T) *wrig {
 	}
 	closeFD(pfd)
 	g.r = New(Config{
-		Now: func() time.Time { return g.now }, Log: func(dd Decision) { g.logs = append(g.logs, dd) },
+		DryRun: dry, Now: func() time.Time { return g.now }, Log: func(dd Decision) { g.logs = append(g.logs, dd) },
 		StateDir: g.state, VaultDir: g.vault,
 		Runner: func(_ context.Context, bin string, args []string, _ []byte) ([]byte, error) {
 			g.cmds = append(g.cmds, filepath.Base(bin)+" "+strings.Join(args, " "))
@@ -130,7 +130,7 @@ func winEvent(path string, birth time.Time, exe string) *event.Event {
 func wexists(p string) bool { _, err := os.Lstat(p); return err == nil }
 
 func TestWindowsVaultIsPrivate(t *testing.T) {
-	g := newWRig(t)
+	g := newWRig(t, false)
 	fd, err := openDirNoFollow(g.state)
 	if err != nil {
 		t.Fatal(err)
@@ -156,7 +156,7 @@ func TestWindowsVaultIsPrivate(t *testing.T) {
 }
 
 func TestWindowsQuarantineByCreationTime(t *testing.T) {
-	g := newWRig(t)
+	g := newWRig(t, false)
 	p := filepath.Join(g.dir, "drop", "payload.exe")
 	b := winWrite(t, p)
 	if err := g.r.QuarantineFile(winEvent(p, b, `C:\Users\x\AppData\Local\Temp\evil.exe`), TargetFile, "r", "r"); err != nil {
@@ -179,7 +179,7 @@ func TestWindowsQuarantineByCreationTime(t *testing.T) {
 }
 
 func TestWindowsQuarantineRefusals(t *testing.T) {
-	g := newWRig(t)
+	g := newWRig(t, false)
 	p := filepath.Join(g.dir, "d", "f.exe")
 	b := winWrite(t, p)
 	check := func(name string, e *event.Event, outcome string) {
@@ -275,7 +275,7 @@ func TestWindowsTrustedWriter(t *testing.T) {
 // item 8), and a refresh of the rules lists every isolated address in
 // the two rules.
 func TestWindowsNeverBlockAzure(t *testing.T) {
-	g := newWRig(t)
+	g := newWRig(t, false)
 	if why := g.r.blockable(netip.MustParseAddr("168.63.129.16"), nil); why != "cloud platform address 168.63.129.16/32" {
 		t.Fatalf("WireServer: %q", why)
 	}
@@ -285,7 +285,7 @@ func TestWindowsNeverBlockAzure(t *testing.T) {
 }
 
 func TestWindowsIsolateNetsh(t *testing.T) {
-	g := newWRig(t)
+	g := newWRig(t, false)
 	e := &event.Event{Name: event.NetworkConnect, Source: "sysmon", Args: map[string]string{},
 		Proc: &event.Proc{PID: 5000, UniqueID: 55, StartTime: time.Unix(1, 0), Exe: `C:\Users\a\evil.exe`, UID: -1, EUID: -1},
 		Net:  &event.Net{Direction: "outbound", SrcIP: "10.0.0.5", DstIP: "192.0.2.7"}}

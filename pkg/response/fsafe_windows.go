@@ -386,11 +386,21 @@ func isLocalFS(fd int) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	switch windows.GetDriveType(root) {
+	return localDriveType(driveTypeOf(root)), nil
+}
+
+// driveTypeOf is windows.GetDriveType; a variable so that a test can
+// report a network drive without mapping one.
+var driveTypeOf = windows.GetDriveType
+
+// localDriveType: fixed, removable and RAM disks are local; DRIVE_REMOTE,
+// CD-ROMs and unknown types are not.
+func localDriveType(t uint32) bool {
+	switch t {
 	case windows.DRIVE_FIXED, windows.DRIVE_REMOVABLE, windows.DRIVE_RAMDISK:
-		return true, nil
+		return true
 	}
-	return false, nil
+	return false
 }
 
 // privateDir checks the directory's security descriptor: owned by SYSTEM

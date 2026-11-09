@@ -88,10 +88,16 @@ var remoteFS = map[int64]string{
 	0x564c: "ncp", 0x01021997: "9p", 0x00c36400: "ceph", 0x47504653: "gpfs", 0x0bd00bd0: "lustre", 0x5346414f: "afs", 0x6b414653: "afs",
 }
 
+// fstatfs is unix.Fstatfs; a variable so that a test can report a network
+// file system without mounting one.
+type unixStatfs = unix.Statfs_t
+
+var fstatfs = func(fd int, st *unixStatfs) error { return unix.Fstatfs(fd, st) }
+
 // isLocalFS reports whether the open file lives on a local file system.
 func isLocalFS(fd int) (bool, error) {
 	var st unix.Statfs_t
-	if err := unix.Fstatfs(fd, &st); err != nil {
+	if err := fstatfs(fd, &st); err != nil {
 		return false, err
 	}
 	_, remote := remoteFS[int64(st.Type)]

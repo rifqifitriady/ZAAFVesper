@@ -3,6 +3,7 @@
 package response
 
 import (
+	"errors"
 	"net/netip"
 	"strings"
 	"syscall"
@@ -98,31 +99,66 @@ var firewallProfiles = []struct{ name, key string }{
 // fwWarn reports profiles whose firewall is off (a block rule does nothing
 // there); all off makes the isolation partial.
 func (r *Responder) fwWarn() (string, bool) {
-	var off []string
+	var off, unknown []string
 	for _, p := range firewallProfiles {
-		if !firewallEnabled(p.key) {
+		switch firewallState(p.key, readFirewallValue) {
+		case fwOff:
 			off = append(off, p.name)
+		case fwUnknown:
+			unknown = append(unknown, p.name)
 		}
 	}
-	if len(off) == 0 {
+	var msgs []string
+	if len(off) > 0 {
+		msgs = append(msgs, "Windows Firewall is off for the "+strings.Join(off, ", ")+" profile(s): the rules do nothing there")
+	}
+	if len(unknown) > 0 {
+		msgs = append(msgs, "isolation not verified: the Windows Firewall state of the "+strings.Join(unknown, ", ")+" profile(s) could not be read")
+	}
+	if len(msgs) == 0 {
 		return "", false
 	}
-	return "Windows Firewall is off for the " + strings.Join(off, ", ") + " profile(s): the rules do nothing there", len(off) == len(firewallProfiles)
+	// Unknown state fails closed: the isolation is reported partial.
+	return strings.Join(msgs, "; "), len(off) == len(firewallProfiles) || len(unknown) > 0
 }
 
-func firewallEnabled(profile string) bool {
+type fwStatus int
+
+const (
+	fwOn fwStatus = iota
+	fwOff
+	fwUnknown
+)
+
+// readFirewallValue reads EnableFirewall below HKLM\<base>.
+func readFirewallValue(base string) (uint64, error) {
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, base, registry.QUERY_VALUE)
+	if err != nil {
+		return 0, err
+	}
+	defer k.Close()
+	v, _, err := k.GetIntegerValue("EnableFirewall")
+	return v, err
+}
+
+// firewallState: the policy key first, then the local setting. Not
+// configured (key or value absent) is on, Windows' default; any other
+// read error (access denied...) is unknown, not on.
+func firewallState(profile string, read func(base string) (uint64, error)) fwStatus {
 	for _, base := range []string{`SOFTWARE\Policies\Microsoft\WindowsFirewall\`, `SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\`} {
-		k, err := registry.OpenKey(registry.LOCAL_MACHINE, base+profile, registry.QUERY_VALUE)
-		if err != nil {
+		v, err := read(base + profile)
+		switch {
+		case err == nil && v != 0:
+			return fwOn
+		case err == nil:
+			return fwOff
+		case errors.Is(err, registry.ErrNotExist):
 			continue
-		}
-		v, _, err := k.GetIntegerValue("EnableFirewall")
-		k.Close()
-		if err == nil {
-			return v != 0
+		default:
+			return fwUnknown
 		}
 	}
-	return true // not configured: Windows defaults to on
+	return fwOn // not configured: Windows defaults to on
 }
 
 // adapterAddrs walks GetAdaptersAddresses (gateways and DNS servers
