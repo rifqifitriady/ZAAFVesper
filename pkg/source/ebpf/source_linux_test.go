@@ -479,7 +479,12 @@ func TestLiveKernelModule(t *testing.T) {
 		t.Skip("set ZAAF_EBPF_TEST_MODULE to a module that is safe to load (throw-away machines only)")
 	}
 	c := startSource(t, Config{}, []string{event.DriverLoad}, 1<<16)
-	modprobe := lookPath(t, "modprobe")
+	// Not lookPath: modprobe is a link to kmod, which dispatches on the
+	// name it is run as.
+	modprobe, err := exec.LookPath("modprobe")
+	if err != nil {
+		t.Skip("modprobe not installed")
+	}
 	if out, err := exec.Command(modprobe, mod).CombinedOutput(); err != nil {
 		t.Fatalf("modprobe %s: %v: %s", mod, err, out)
 	}

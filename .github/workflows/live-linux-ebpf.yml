@@ -69,6 +69,7 @@ jobs:
           go test -c -race -o build/ebpf.test ./pkg/source/ebpf
       - name: Kernel-program tests (root, must not skip)
         id: ktests
+        continue-on-error: true # the rule run below still runs; the last step fails the job
         run: |
           # A loadable module that is not built in and not loaded yet, for
           # TestLiveKernelModule (changes only this throw-away kernel).

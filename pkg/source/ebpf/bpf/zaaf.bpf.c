@@ -387,15 +387,20 @@ static __always_inline u32 put_file_path(struct evbuf *eb, u32 pos, struct file 
 	return put_path(eb, pos, pb, off);
 }
 
+/* Since Linux 6.13 ("multigrain timestamps") the top bit of the stored
+ * nanoseconds is a flag (I_CTIME_QUERIED); a real value is below 1e9 < 2^30,
+ * so masking it is safe on every version. */
+#define CTIME_NSEC_MASK 0x7fffffff
+
 static __always_inline s64 inode_ctime_ns(struct inode *ino)
 {
 	if (bpf_core_field_exists(ino->i_ctime_sec))
-		return BPF_CORE_READ(ino, i_ctime_sec) * 1000000000LL + BPF_CORE_READ(ino, i_ctime_nsec);
+		return BPF_CORE_READ(ino, i_ctime_sec) * 1000000000LL + (BPF_CORE_READ(ino, i_ctime_nsec) & CTIME_NSEC_MASK);
 	if (bpf_core_field_exists(ino->__i_ctime))
-		return BPF_CORE_READ(ino, __i_ctime.tv_sec) * 1000000000LL + BPF_CORE_READ(ino, __i_ctime.tv_nsec);
+		return BPF_CORE_READ(ino, __i_ctime.tv_sec) * 1000000000LL + (BPF_CORE_READ(ino, __i_ctime.tv_nsec) & CTIME_NSEC_MASK);
 	struct inode___pre66 *old = (void *)ino;
 	if (bpf_core_field_exists(old->i_ctime))
-		return BPF_CORE_READ(old, i_ctime.tv_sec) * 1000000000LL + BPF_CORE_READ(old, i_ctime.tv_nsec);
+		return BPF_CORE_READ(old, i_ctime.tv_sec) * 1000000000LL + (BPF_CORE_READ(old, i_ctime.tv_nsec) & CTIME_NSEC_MASK);
 	return 0;
 }
 
