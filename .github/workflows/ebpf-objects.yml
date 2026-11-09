@@ -1,0 +1,72 @@
+# Proves that the committed eBPF objects (pkg/source/ebpf/zaaf_*_bpfel.o and
+# their Go files) are exactly what the reviewed C source compiles to: it
+# regenerates them with the pinned toolchain (pkg/source/ebpf/bpf/regen.sh)
+# and fails on any byte of difference. It also checks the vendored libbpf
+# headers against their recorded hashes and runs govulncheck.
+# Read-only token, no secrets, actions pinned to full commit SHAs.
+name: eBPF objects
+
+on:
+  push:
+    paths:
+      - "pkg/source/ebpf/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/ebpf-objects.yml"
+  pull_request:
+    paths:
+      - "pkg/source/ebpf/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/ebpf-objects.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ebpf-objects-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reproduce:
+    name: Regenerate and compare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Vendored libbpf headers match their recorded hashes
+        working-directory: pkg/source/ebpf/bpf/libbpf
+        run: sha256sum --strict -c SHA256SUMS
+      - name: Regenerate with the pinned toolchain
+        run: pkg/source/ebpf/bpf/regen.sh
+      - name: Committed objects are byte-identical
+        run: |
+          git status --porcelain -- pkg/source/ebpf
+          if ! git diff --exit-code --stat -- pkg/source/ebpf; then
+            echo "::error::The committed eBPF objects do not match zaaf.bpf.c. Run pkg/source/ebpf/bpf/regen.sh and commit the result."
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain -- pkg/source/ebpf)" ]; then
+            echo "::error::regen.sh created files that are not committed."
+            exit 1
+          fi
+          sha256sum pkg/source/ebpf/zaaf_*_bpfel.o
+
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # On Linux, so the eBPF loader is in the analysed build. go.mod is
+      # read-only by default.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...

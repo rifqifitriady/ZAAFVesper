@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -15,16 +16,41 @@ import (
 	"github.com/rifqifitriady/ZAAFVesper/pkg/config"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/rules"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/source"
+	"github.com/rifqifitriady/ZAAFVesper/pkg/source/ebpf"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/source/sysmonlinux"
 )
 
 var liveHint = "For live use install the systemd unit in packaging/linux and run: sudo systemctl enable --now zaafvesper"
 
-// checkPrivileges: run needs root to read the system journal, /proc of
-// every process and to kill.
+// Event sources on Linux (--source).
+const (
+	sourceEBPF   = "ebpf"
+	sourceSysmon = "sysmon"
+)
+
+// linuxSource is the --source value. The default is the eBPF source, which
+// needs no Sysmon. There is no automatic fallback: when the eBPF programs
+// cannot run, run stops and says to use --source sysmon, so a sensor never
+// silently runs on other telemetry than the one it was set up for.
+var linuxSource = sourceEBPF
+
+func registerSourceFlag(fs *flag.FlagSet) {
+	linuxSource = sourceEBPF
+	fs.Func("source", "event source: ebpf (kernel programs, no Sysmon needed; the default) or sysmon (Sysmon for Linux through the system journal)", func(v string) error {
+		switch v {
+		case sourceEBPF, sourceSysmon:
+			linuxSource = v
+			return nil
+		}
+		return fmt.Errorf("unknown source %q: use ebpf or sysmon", v)
+	})
+}
+
+// checkPrivileges: run needs root to load the eBPF programs (or read the
+// system journal), to read /proc of every process and to kill.
 func checkPrivileges() error {
 	if os.Geteuid() != 0 {
-		return errors.New("needs root (system journal, /proc and kill). Use 'zaafvesper replay' to test rules without root.")
+		return errors.New("needs root (eBPF programs or the system journal, /proc and kill). Use 'zaafvesper replay' to test rules without root.")
 	}
 	return nil
 }
@@ -40,20 +66,32 @@ func stdinIsTerminal() bool {
 	return err == nil
 }
 
-// checkSourceBinary: as root, journalctl and every directory above it must
-// be root-owned and not group/world writable, like the rules and config.
+// checkSourceBinary: with --source sysmon, as root, journalctl and every
+// directory above it must be root-owned and not group/world writable, like
+// the rules and config. The eBPF source runs no other program.
 func checkSourceBinary(*config.Config) error {
+	if linuxSource != sourceSysmon {
+		return nil
+	}
 	if err := config.CheckOwnership(sysmonlinux.Journalctl); err != nil {
 		return fmt.Errorf("%s is not safe to run as root:\n%w", sysmonlinux.Journalctl, err)
 	}
 	return nil
 }
 
-// newSource builds the journald source for Sysmon for Linux. The current
-// journalctl child is protected from kills through the responder's
-// DynamicPIDs (the source's PID method), only while it runs, so a pid it
-// leaves behind after a restart is not protected forever.
+// newSource builds the eBPF source, or with --source sysmon the journald
+// source for Sysmon for Linux. The current journalctl child is protected
+// from kills through the responder's DynamicPIDs (the source's PID method),
+// only while it runs, so a pid it leaves behind after a restart is not
+// protected forever.
 func newSource(_ *config.Config, _ *pipeline, stderr io.Writer) source.Source {
+	if linuxSource == sourceEBPF {
+		return ebpf.New(ebpf.Config{
+			Logf: func(format string, args ...any) {
+				say(stderr, "%s", fmt.Sprintf(format, args...))
+			},
+		})
+	}
 	return sysmonlinux.New(sysmonlinux.Config{
 		Logf: func(format string, args ...any) {
 			say(stderr, "sysmon: %s", fmt.Sprintf(format, args...))

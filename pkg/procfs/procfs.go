@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -155,13 +156,29 @@ func (fs FS) TaskStat(pid, tid int32) (Stat, error) {
 	return st, nil
 }
 
-// BootTime reads btime from /proc/stat.
+// bootTimes caches btime per proc root (see BootTime).
+var bootTimes sync.Map // root string -> int64
+
+// BootTime returns btime from /proc/stat, read once per proc root and then
+// cached. The kernel derives btime from the current wall clock minus the
+// time since boot, so two reads can differ by a second; every part of
+// ZAAFVesper (event sources, process table, responder) must convert start
+// ticks with the same value, or the responder's start-time check (1 ms
+// tolerance) would refuse a kill because of the rounding alone.
 func (fs FS) BootTime() (int64, error) {
+	if v, ok := bootTimes.Load(fs.Root); ok {
+		return v.(int64), nil
+	}
 	b, err := readBounded(filepath.Join(fs.Root, "stat"), maxProcStatSize)
 	if err != nil && !errors.Is(err, errTruncated) {
 		return 0, err
 	}
-	return ParseBootTime(b)
+	bt, err := ParseBootTime(b)
+	if err != nil {
+		return 0, err
+	}
+	v, _ := bootTimes.LoadOrStore(fs.Root, bt)
+	return v.(int64), nil
 }
 
 // Exe returns the target of /proc/<pid>/exe and whether the kernel marked

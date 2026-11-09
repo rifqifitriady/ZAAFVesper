@@ -1,6 +1,6 @@
 name: ZAAFVesper sensor degraded
 id: 85209f13-79f8-4818-aa97-d009e5610957
-version: 1.2.0
+version: 1.2.1
 description: |
   ZAAFVesper reported that its own telemetry is degraded (synthetic SensorDegraded
   event). Conditions: proctable_pressure (the process table is over its byte budget and
@@ -10,6 +10,9 @@ description: |
   exec/file scans are being skipped because the queue is full), yara_skipped_nonlocal
   (an executable on a network or otherwise non-local filesystem was not scanned),
   es_events_dropped (eslogger's global sequence number skipped: events were lost),
+  ebpf_events_dropped (Linux eBPF source: the kernel ring buffer was full and events
+  were lost; counted in the kernel), ebpf_events_unreadable (Linux eBPF source: a
+  record could not be decoded and was not evaluated),
   response_rate_limited (a kill budget was exhausted), aggregate_sources_exhausted
   (a rule saw 64 alert sources in one minute, so further new sources are only
   summarised: decoys may be hiding a real alert), degraded_suppressed (summary of

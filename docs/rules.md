@@ -399,6 +399,20 @@ except `kext_id`, whose absence makes the kext rule alert:
 | `condition` | ZAAFVesper sensor degraded; Executable replaced right after exec | one of `proctable_pressure`, `alerts_capped`, `capture_capped`, `yara_queue_full`, `yara_exec_replaced`, `yara_skipped_nonlocal` (synthetic `SensorDegraded` event). A missing `condition` still alerts on the medium rule. |
 | `detail` | same (output only) | free text from the sensor; may contain an attacker-chosen path |
 
+Keys set by the Linux eBPF source (`evt.source = ebpf`; agreed for v0.4, no rule uses
+them yet except the `SetUID` ones, which are part of the event contract):
+
+| Key | Events | Value |
+|---|---|---|
+| `old_uid`, `old_euid`, `new_uid`, `new_euid` | `SetUID` | decimal uids before and after the change; `ps.uid`/`ps.euid` are the values before |
+| `exit_status` | `TerminateProcess` | the kernel's wait status, decimal (exit code × 256, or the signal number), as for eslogger |
+| `args_truncated` | `CreateProcess` | `true` when the command line was longer than 4 KiB or unreadable (only the first 4 KiB are in `ps.cmdline`) |
+| `path_incomplete` | any event with a path | `true` when a path (executable, file, rename destination, working directory) was deeper than 64 levels or longer than 4 KiB; the value is then the trailing part |
+| `truncated` | `CreateFile` | `true` when an existing file was opened for writing with `O_TRUNC` (its content replaced) rather than newly created |
+| `syscall` | `Ptrace`, `OpenProcess` | `ptrace_attach`, `ptrace_seize`, `process_vm_readv` or `process_vm_writev` |
+| `module_name` | `DriverLoad` | the kernel module's name, e.g. `dummy` |
+| `module_source` | `DriverLoad` | `file` (from a file, path in `image.path`), `memory` (init_module from a buffer; `image.path` empty) or `unknown` |
+
 Signing category: `ps.cs_category`, `ps.parent.cs_category` (values are the `event.CS*`
 constants: `developer_id`, `app_store`, `local_signing`, `platform`, ...; nil when not
 reported). Ancestry trust: `ps.ancestors_untrusted` (bool, computed by pkg/ps). Fork-time parent: `ps.original_ppid` (password-prompt double-fork check; nil

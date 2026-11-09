@@ -91,6 +91,14 @@ func TestFSReaders(t *testing.T) {
 	if err != nil || bt != 100 {
 		t.Fatalf("BootTime %d %v", bt, err)
 	}
+	// btime is read once per root: a later read that the kernel rounded
+	// differently must not change start times already computed.
+	if err := os.WriteFile(filepath.Join(fs.Root, "stat"), []byte("btime 101\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if bt, err := fs.BootTime(); err != nil || bt != 100 {
+		t.Fatalf("BootTime after change %d %v, want the cached 100", bt, err)
+	}
 	pids, err := fs.PIDs()
 	if err != nil || len(pids) != 1 || pids[0] != 77 {
 		t.Fatalf("PIDs %v %v", pids, err)

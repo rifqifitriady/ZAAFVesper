@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"io"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/config"
@@ -47,3 +48,6 @@ func unsupportedAction(name string) string {
 	}
 	return "action " + name + " is not supported on this platform (macOS only)"
 }
+
+// registerSourceFlag: only one event source here, so there is no --source.
+func registerSourceFlag(*flag.FlagSet) {}

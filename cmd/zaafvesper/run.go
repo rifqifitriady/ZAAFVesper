@@ -109,6 +109,7 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 	fs.Int64Var(&o.captureMaxBytes, "capture-max-bytes", capture.DefaultMaxBytes, "stop capturing after this many uncompressed bytes")
 	fs.DurationVar(&o.dedupWindow, "dedup-window", alert.DefaultDedupWindow, "suppress repeats of the same rule for the same pid within this window")
 	o.netout.register(fs)
+	registerSourceFlag(fs) // --source on Linux (run_<os>.go)
 	if !parseFlags(fs, args, stderr) {
 		return 2
 	}
