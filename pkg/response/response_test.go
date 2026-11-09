@@ -267,71 +267,71 @@ func TestExecIntoPlatformBinary(t *testing.T) {
 			return p
 		}, nil, "exec'd into an Apple platform binary after detection"},
 		{"untrusted at event, now /usr/bin/osascript: killed", func(h *harness) *event.Proc {
-			p := h.proc(4301, "/Users/Shared/.svc/svc")
-			platformNow(h, 4301, "/usr/bin/osascript")
+			p := h.proc(testPID(4301), "/Users/Shared/.svc/svc")
+			platformNow(h, testPID(4301), "/usr/bin/osascript")
 			return p
 		}, nil, `executable now "/usr/bin/osascript"`},
 		{"platform at event, still platform: refused", func(h *harness) *event.Proc {
-			p := h.proc(4302, "/bin/zsh")
+			p := h.proc(testPID(4302), "/bin/zsh")
 			p.IsPlatform = true
-			platformNow(h, 4302, "/bin/zsh")
+			platformNow(h, testPID(4302), "/bin/zsh")
 			return p
 		}, ErrProtected, "Apple platform binary"},
 		{"platform at event, now an untrusted image: refused (event-time image decides)", func(h *harness) *event.Proc {
-			p := h.proc(4303, "/bin/zsh")
+			p := h.proc(testPID(4303), "/bin/zsh")
 			p.IsPlatform = true
-			h.ids[4303] = Identity{CSKnown: true, StartTime: start, Exe: "/tmp/payload"}
+			h.ids[testPID(4303)] = Identity{CSKnown: true, StartTime: start, Exe: "/tmp/payload"}
 			return p
 		}, ErrProtected, "Apple platform binary"},
 		{"now under /usr/libexec: refused", func(h *harness) *event.Proc {
-			p := h.proc(4304, "/tmp/payload")
-			platformNow(h, 4304, "/usr/libexec/sshd-keygen-wrapper")
+			p := h.proc(testPID(4304), "/tmp/payload")
+			platformNow(h, testPID(4304), "/usr/libexec/sshd-keygen-wrapper")
 			return p
 		}, ErrProtected, "protected path /usr/libexec/"},
 		{"now under /System: refused", func(h *harness) *event.Proc {
-			p := h.proc(4305, "/tmp/payload")
-			platformNow(h, 4305, "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder")
+			p := h.proc(testPID(4305), "/tmp/payload")
+			platformNow(h, testPID(4305), "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder")
 			return p
 		}, ErrProtected, "protected path /System/"},
 		{"now under /sbin: refused", func(h *harness) *event.Proc {
-			p := h.proc(4306, "/tmp/payload")
-			platformNow(h, 4306, "/sbin/launchd")
+			p := h.proc(testPID(4306), "/tmp/payload")
+			platformNow(h, testPID(4306), "/sbin/launchd")
 			return p
 		}, ErrProtected, "protected path /sbin/"},
 		{"now /usr/sbin: refused", func(h *harness) *event.Proc {
-			p := h.proc(4307, "/tmp/payload")
-			platformNow(h, 4307, "/usr/sbin/sshd")
+			p := h.proc(testPID(4307), "/tmp/payload")
+			platformNow(h, testPID(4307), "/usr/sbin/sshd")
 			return p
 		}, ErrProtected, "protected path /usr/sbin/"},
 		{"now eslogger: refused", func(h *harness) *event.Proc {
-			p := h.proc(4308, "/tmp/payload")
-			platformNow(h, 4308, "/usr/bin/eslogger")
+			p := h.proc(testPID(4308), "/tmp/payload")
+			platformNow(h, testPID(4308), "/usr/bin/eslogger")
 			return p
 		}, ErrProtected, "protected executable"},
 		{"now a platform image with a protected name: refused", func(h *harness) *event.Proc {
-			p := h.proc(4309, "/tmp/payload")
-			platformNow(h, 4309, "/private/var/x/WindowServer")
+			p := h.proc(testPID(4309), "/tmp/payload")
+			platformNow(h, testPID(4309), "/private/var/x/WindowServer")
 			return p
 		}, ErrProtected, "protected name WindowServer"},
 		{"kernel unique id differs: refused", func(h *harness) *event.Proc {
-			p := h.proc(4310, "/tmp/payload")
-			platformNow(h, 4310, "/bin/zsh")
-			h.uniqNow[4310] = uniq(4310) + 7
+			p := h.proc(testPID(4310), "/tmp/payload")
+			platformNow(h, testPID(4310), "/bin/zsh")
+			h.uniqNow[testPID(4310)] = uniq(testPID(4310)) + 7
 			return p
 		}, ErrMismatch, "kernel unique id"},
 		{"start time differs: refused", func(h *harness) *event.Proc {
-			p := h.proc(4311, "/tmp/payload")
-			h.ids[4311] = Identity{CSKnown: true, CSFlags: csPlatformBinary, StartTime: start.Add(2 * time.Millisecond), Exe: "/bin/zsh"}
+			p := h.proc(testPID(4311), "/tmp/payload")
+			h.ids[testPID(4311)] = Identity{CSKnown: true, CSFlags: csPlatformBinary, StartTime: start.Add(2 * time.Millisecond), Exe: "/bin/zsh"}
 			return p
 		}, ErrMismatch, "start time"},
 		{"path of the platform image unreadable: refused", func(h *harness) *event.Proc {
-			p := h.proc(4312, "/tmp/payload")
-			h.ids[4312] = Identity{CSKnown: true, CSFlags: csPlatformBinary, StartTime: start, ExeErr: syscall.EPERM}
+			p := h.proc(testPID(4312), "/tmp/payload")
+			h.ids[testPID(4312)] = Identity{CSKnown: true, CSFlags: csPlatformBinary, StartTime: start, ExeErr: syscall.EPERM}
 			return p
 		}, ErrUnknownProc, "protection unknown"},
 		{"unlinked platform image: killed", func(h *harness) *event.Proc {
-			p := h.proc(4314, "/tmp/payload")
-			h.ids[4314] = Identity{CSKnown: true, CSFlags: csPlatformBinary, StartTime: start, ExeErr: ErrExeUnlinked}
+			p := h.proc(testPID(4314), "/tmp/payload")
+			h.ids[testPID(4314)] = Identity{CSKnown: true, CSFlags: csPlatformBinary, StartTime: start, ExeErr: ErrExeUnlinked}
 			return p
 		}, nil, "exec'd into an Apple platform binary after detection"},
 		{"pid 1: refused", func(h *harness) *event.Proc {
@@ -346,9 +346,9 @@ func TestExecIntoPlatformBinary(t *testing.T) {
 			return p
 		}, ErrProtected, "protected pid"},
 		{"launchd by name at event: refused", func(h *harness) *event.Proc {
-			p := h.proc(4313, "/tmp/payload")
+			p := h.proc(testPID(4313), "/tmp/payload")
 			p.Name = "launchd"
-			platformNow(h, 4313, "/bin/zsh")
+			platformNow(h, testPID(4313), "/bin/zsh")
 			return p
 		}, ErrProtected, "protected name launchd"},
 	}
@@ -1022,4 +1022,41 @@ func TestKillEvasionRealProcesses(t *testing.T) {
 			t.Fatalf("pid reuse: %v %v %+v", err, killed, logs)
 		}
 	})
+}
+
+// testPID maps a fixed test pid away from this test process's own pid and
+// its parent's, which every Responder protects. CI runners hand out small
+// pids, so a fixed pid such as 4308 can be one of them; the test would then
+// see "protected pid" instead of the refusal it checks.
+func testPID(n int32) int32 { return avoidPIDs(n, int32(os.Getpid()), int32(os.Getppid())) }
+
+func avoidPIDs(n, own, parent int32) int32 {
+	for n == own || n == parent {
+		n += 100000
+	}
+	return n
+}
+
+func TestTestPIDAvoidsOwnAndParent(t *testing.T) {
+	for _, c := range []struct{ own, parent int32 }{
+		{int32(os.Getpid()), int32(os.Getppid())}, // this run
+		{4308, 1},      // the CI collision
+		{4301, 4314},   // both ends of the range
+		{4305, 104305}, // the first remap collides too
+	} {
+		seen := map[int32]bool{}
+		for n := int32(4301); n <= 4314; n++ {
+			m := avoidPIDs(n, c.own, c.parent)
+			if m == c.own || m == c.parent {
+				t.Errorf("own %d parent %d: %d -> %d is protected", c.own, c.parent, n, m)
+			}
+			if seen[m] {
+				t.Errorf("own %d parent %d: %d -> %d is not unique", c.own, c.parent, n, m)
+			}
+			seen[m] = true
+			if n != c.own && n != c.parent && m != n {
+				t.Errorf("%d changed to %d without a collision", n, m)
+			}
+		}
+	}
 }

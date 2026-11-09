@@ -605,8 +605,14 @@ func TestSyslogDownThenUpDeliversSpool(t *testing.T) {
 			t.Fatalf("spooled alerts not delivered after the receiver came back: %v, stats %v", got, f.Stats())
 		}
 	}
+	// The forwarder removes a spooled alert after the receiver has it, so
+	// the spool empties a moment after the last message arrives.
+	emptyBy := time.Now().Add(2 * time.Second)
+	for !sp.Empty() && time.Now().Before(emptyBy) {
+		time.Sleep(10 * time.Millisecond)
+	}
 	if !sp.Empty() {
-		t.Fatal("spool not empty after delivery")
+		t.Fatal("spool not empty 2 s after delivery")
 	}
 }
 
