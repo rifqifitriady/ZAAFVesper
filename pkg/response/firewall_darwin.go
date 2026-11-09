@@ -195,7 +195,7 @@ func (r *Responder) fwClose() error {
 func (r *Responder) fwWarn() (string, bool) { return "", false }
 
 // fwRelease removes addrs (all when nil) from the table, for the CLI.
-func fwRelease(run Runner, addrs []string) error {
+func fwRelease(run Runner, addrs, _ []string) error {
 	args := []string{"-a", PFAnchor, "-t", PFTable, "-T", "flush"}
 	if addrs != nil {
 		args = append([]string{"-a", PFAnchor, "-t", PFTable, "-T", "delete"}, addrs...)

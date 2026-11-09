@@ -3,9 +3,6 @@
 package response
 
 import (
-	"context"
-	"errors"
-	"fmt"
 	"net/netip"
 	"strings"
 	"syscall"
@@ -25,98 +22,71 @@ const (
 	firewallScope = "Windows Firewall blocks these addresses for the whole host, not only this process; connections already open are not cut"
 )
 
-// NeverBlockNetworks: none beyond the built-in set; use
-// response.isolation_allow for your own servers.
-var NeverBlockNetworks []netip.Prefix
+// NeverBlockNetworks are networks isolate_process never blocks on Windows:
+// the cloud platform addresses a virtual machine depends on that are not
+// link-local (cloudPlatformNetworks: Azure's WireServer). Use
+// response.isolation_allow for your own servers, load-balancer health
+// checks and VPN gateways.
+var NeverBlockNetworks = cloudPlatformNetworks
 
-const neverBlockLabel = "never-block network "
-
-func (r *Responder) netsh(args []string) ([]byte, error) {
-	return r.cfg.Runner(context.Background(), NetshBin, args, nil)
-}
-
-// netshDelete deletes the rules of a (every ZAAFVesper rule when a is
-// invalid). netsh answers "No rules match" with a non-zero exit, in the
-// system's language, so a failed delete is checked with a listing: it is an
-// error only when a rule for a (any rule, for all) is still listed.
-func netshDelete(run Runner, a netip.Addr) error {
-	_, err := run(context.Background(), NetshBin, netshDeleteArgs(a), nil)
-	if err == nil {
-		return nil
-	}
-	out, serr := run(context.Background(), NetshBin, netshShowArgs, nil)
-	var ee *ExitError
-	switch {
-	case errors.As(serr, &ee):
-		return nil // no ZAAFVesper rule at all
-	case serr != nil:
-		return fmt.Errorf("%v; listing the rules failed: %v", err, serr)
-	case !a.IsValid() || netshListsAddr(string(out), a):
-		return err
-	}
-	return nil
-}
+const neverBlockLabel = "cloud platform address "
 
 func (r *Responder) fwEnsure() error {
 	r.fwLoaded = true
 	return nil
 }
 
-// fwAdd adds an outbound and an inbound block rule per address (after
-// removing older rules of the same address, so a refresh leaves one pair).
-// Windows rules have no time to live: Tick deletes them at expiry, and
-// StartResponse deletes every ZAAFVesper rule an earlier run left.
-func (r *Responder) fwAdd(items []fwItem) error {
-	for _, it := range items {
-		_ = netshDelete(r.cfg.Runner, it.Addr)
-		for _, dir := range []string{"out", "in"} {
-			if _, err := r.netsh(netshAddArgs(it.Addr, dir)); err != nil {
-				_ = netshDelete(r.cfg.Runner, it.Addr)
-				return fmt.Errorf("add rule %s %s: %w", dir, it.Addr, err)
-			}
+// isolatedWith returns the isolated addresses plus add, minus drop: the
+// list the rules must hold after a change. Caller holds actMu.
+func (r *Responder) isolatedWith(add []fwItem, drop []string) []string {
+	gone := map[string]bool{}
+	for _, a := range drop {
+		gone[a] = true
+	}
+	var out []string
+	for a := range r.isolated {
+		if !gone[a] {
+			out = append(out, a)
 		}
 	}
-	return nil
+	for _, it := range add {
+		out = append(out, it.Addr.Unmap().String())
+	}
+	return out
 }
 
+// fwAdd puts the addresses into ZAAFVesper's two rules (one per
+// direction), which list every isolated address: two netsh runs, however
+// many addresses are isolated. Windows rules have no time to live: the
+// isolation upkeep (Tick, on the worker) removes an address at its expiry,
+// and StartResponse deletes every ZAAFVesper rule an earlier run left.
+func (r *Responder) fwAdd(items []fwItem) error {
+	return netshSync(r.cfg.Runner, NetshBin, r.isolatedWith(items, nil))
+}
+
+// fwDelete removes addrs from the rules (the rest of the isolated
+// addresses stay in them, without a gap); no address left deletes them.
 func (r *Responder) fwDelete(addrs []string) error {
-	var errs []error
-	for _, s := range addrs {
-		a, err := netip.ParseAddr(s)
-		if err != nil || a.Zone() != "" {
-			continue
-		}
-		if err := netshDelete(r.cfg.Runner, a); err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", a, err))
-		}
-	}
-	return errors.Join(errs...)
+	return netshSync(r.cfg.Runner, NetshBin, r.isolatedWith(nil, addrs))
 }
 
 // fwFlush deletes every rule named ZAAFVesper-isolation (nothing else).
 func (r *Responder) fwFlush() error {
 	r.fwLoaded = false
-	return netshDelete(r.cfg.Runner, netip.Addr{})
+	return netshDeleteAll(r.cfg.Runner, NetshBin)
 }
 
 func (r *Responder) fwClose() error { return r.fwFlush() }
 
-// fwRelease removes addrs (all when nil), for the CLI.
-func fwRelease(run Runner, addrs []string) error {
+// fwRelease removes addrs (all when nil), for the CLI: the rules are set
+// to keep, the addresses that stay isolated in the state file. A running
+// sensor that isolated another address meanwhile puts it back at its next
+// state save (the CLI's release shows up there as a change).
+func fwRelease(run Runner, addrs, keep []string) error {
 	if addrs == nil {
-		return netshDelete(run, netip.Addr{})
+		return netshDeleteAll(run, NetshBin)
 	}
-	var errs []error
-	for _, s := range addrs {
-		a, err := netip.ParseAddr(s)
-		if err != nil {
-			continue
-		}
-		if err := netshDelete(run, a); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	return errors.Join(errs...)
+	return netshSync(run, NetshBin, keep)
 }
 
 // firewallProfiles are the Windows Firewall profiles and their registry

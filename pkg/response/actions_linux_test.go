@@ -5,6 +5,7 @@ package response
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/netip"
 	"os"
 	"os/exec"
@@ -66,6 +67,9 @@ func newLRig(t *testing.T, dry bool) *lrig {
 		Resolvers:  func() []netip.Addr { return []netip.Addr{netip.MustParseAddr("10.0.0.53")} },
 	})
 	g.r.launchRoot = d
+	// The events' writer pids are made up: the mount namespace check has
+	// its own tests (TestLinuxWriterMountNamespace).
+	g.r.writerNS = func(*event.Proc) error { return nil }
 	return g
 }
 
@@ -432,5 +436,125 @@ func TestLinuxReleaseCLI(t *testing.T) {
 	}
 	if _, err := ReleaseIsolation(IsolationStore{Dir: g.r.cfg.StateDir}, gone, "all"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestLinuxWeakBindingNeedsOwner: a file bound by its creation time must
+// belong to the user of the writer process (WS E finding 2): in /tmp or
+// /dev/shm another user can create the path first, within the 2 s
+// tolerance, and root must not quarantine that user's file.
+func TestLinuxWeakBindingNeedsOwner(t *testing.T) {
+	g := newLRig(t, false)
+	p := filepath.Join(g.dir, "shared", "f")
+	b := write(t, p, "victim")
+	e := fileEvent(t, p, b, "/tmp/evil", "")
+	e.Proc.Username = "nobody"
+	if u, err := user.Lookup("nobody"); err != nil || u.Uid == strconv.Itoa(os.Getuid()) {
+		t.Skip("no user nobody distinct from the test user")
+	}
+	_ = g.r.QuarantineFile(e, TargetFile, "r", "r")
+	if d := g.last(); d.Outcome != OutcomeFileCheck || !strings.Contains(d.Detail, "not to the user of the process") || !exists(p) {
+		t.Fatalf("another user's file: %+v exists=%v", d, exists(p))
+	}
+	// The same file, the writer's own: quarantined.
+	if err := g.r.QuarantineFile(fileEvent(t, p, b, "/tmp/evil", ""), TargetFile, "r2", "r"); err != nil || exists(p) {
+		t.Fatalf("own file: %v %+v", err, g.last())
+	}
+}
+
+// TestLinuxWriterMountNamespace: a file bound by its creation time is
+// acted on only when its writer runs in the host mount namespace; a
+// writer in another one (a container), or one that is gone, is refused
+// (WS E finding 2).
+func TestLinuxWriterMountNamespace(t *testing.T) {
+	g := newLRig(t, false)
+	p := filepath.Join(g.dir, "f")
+	b := write(t, p, "x")
+	g.r.writerNS = func(*event.Proc) error { return errors.New("the writer (pid 4242) runs in another mount namespace") }
+	_ = g.r.QuarantineFile(fileEvent(t, p, b, "/tmp/evil", ""), TargetFile, "r", "r")
+	if d := g.last(); d.Outcome != OutcomeFileCheck || !strings.Contains(d.Detail, "another mount namespace") || !exists(p) {
+		t.Fatalf("%+v", d)
+	}
+
+	// The real check, on real processes (reading another process's
+	// namespace needs root).
+	g.r.writerNS = g.r.writerMountNS
+	g.r.cfg.Identify = identify
+	host, err := os.Readlink("/proc/1/ns/mnt")
+	if err != nil {
+		t.Skipf("cannot read /proc/1/ns/mnt (%v): not root", err)
+	}
+	if self, _ := os.Readlink("/proc/self/ns/mnt"); self != host {
+		t.Skip("the test does not run in the host mount namespace")
+	}
+	start := func(name string, args ...string) (*exec.Cmd, *event.Proc) {
+		t.Helper()
+		cmd := exec.Command(name, args...)
+		if err := cmd.Start(); err != nil {
+			t.Skip(err)
+		}
+		t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+		id, err := identify(int32(cmd.Process.Pid))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cmd, &event.Proc{PID: int32(cmd.Process.Pid), UniqueID: id.UniqueID}
+	}
+	_, same := start("sleep", "30")
+	if err := g.r.writerMountNS(same); err != nil {
+		t.Fatalf("writer in the host namespace refused: %v", err)
+	}
+	other := *same
+	other.UniqueID++
+	if err := g.r.writerMountNS(&other); err == nil {
+		t.Fatal("another incarnation of the pid accepted")
+	}
+	if err := g.r.writerMountNS(&event.Proc{PID: same.PID}); err == nil {
+		t.Fatal("a writer without start identity accepted")
+	}
+	if _, err := exec.LookPath("unshare"); err == nil {
+		cmd, inner := start("unshare", "--mount", "--propagation", "private", "sleep", "30")
+		moved := false
+		for deadline := time.Now().Add(3 * time.Second); !moved && time.Now().Before(deadline); {
+			ns, _ := os.Readlink(fmt.Sprintf("/proc/%d/ns/mnt", cmd.Process.Pid))
+			if moved = ns != "" && ns != host; !moved {
+				time.Sleep(20 * time.Millisecond)
+			}
+		}
+		switch err := g.r.writerMountNS(inner); {
+		case !moved:
+			t.Log("unshare --mount did not get a namespace of its own here (no CAP_SYS_ADMIN?): the other-namespace case is not run")
+		case err == nil || !strings.Contains(err.Error(), "another mount namespace"):
+			t.Fatalf("writer in another mount namespace: %v", err)
+		}
+	} else {
+		t.Log("no unshare: the other-namespace case is not run")
+	}
+	gone := exec.Command("true")
+	if err := gone.Start(); err != nil {
+		t.Skip(err)
+	}
+	id, _ := identify(int32(gone.Process.Pid))
+	_ = gone.Wait()
+	if err := g.r.writerMountNS(&event.Proc{PID: int32(gone.Process.Pid), UniqueID: id.UniqueID}); err == nil {
+		t.Fatal("a writer that exited accepted")
+	}
+}
+
+// TestLinuxNeverBlockAzure: Azure's WireServer is never blocked (WS E
+// item 8); its neighbours are.
+func TestLinuxNeverBlockAzure(t *testing.T) {
+	g := newLRig(t, false)
+	if why := g.r.blockable(netip.MustParseAddr("168.63.129.16"), nil); why != "cloud platform address 168.63.129.16/32" {
+		t.Fatalf("WireServer: %q", why)
+	}
+	if why := g.r.blockable(netip.MustParseAddr("168.63.129.17"), nil); why != "" {
+		t.Fatalf("neighbour: %q", why)
+	}
+	g.r.Observe(netEv("168.63.129.16"))
+	_ = g.r.IsolateProcess(netEv("192.0.2.7"), TargetProcess, "r", "r")
+	if d := g.last(); d.Outcome != OutcomeIsolated || strings.Contains(strings.Join(g.stdins, ""), "168.63.129.16") ||
+		!strings.Contains(d.Detail, "168.63.129.16 (cloud platform address") {
+		t.Fatalf("%+v %q", d, g.stdins)
 	}
 }

@@ -20,11 +20,14 @@ const (
 	firewallScope = "nftables drops these addresses for the whole host (also forwarded container traffic), not only this process"
 )
 
-// NeverBlockNetworks: Linux has no vendor network that must stay reachable;
-// use response.isolation_allow for your own servers.
-var NeverBlockNetworks []netip.Prefix
+// NeverBlockNetworks are networks isolate_process never blocks on Linux:
+// the cloud platform addresses a virtual machine depends on that are not
+// link-local (cloudPlatformNetworks: Azure's WireServer). Use
+// response.isolation_allow for your own servers, load-balancer health
+// checks and VPN gateways.
+var NeverBlockNetworks = cloudPlatformNetworks
 
-const neverBlockLabel = "never-block network "
+const neverBlockLabel = "cloud platform address "
 
 // nft runs /usr/sbin/nft -f - with script on stdin.
 func (r *Responder) nft(script string) error {
@@ -65,9 +68,10 @@ func (r *Responder) fwClose() error { return r.fwFlush() }
 
 func (r *Responder) fwWarn() (string, bool) { return "", false }
 
-// fwRelease removes addrs (all when nil) from the sets, for the CLI. A
-// missing table (the sensor is not running) has nothing to release.
-func fwRelease(run Runner, addrs []string) error {
+// fwRelease removes addrs (all when nil) from the sets, for the CLI (the
+// addresses kept are not needed here). A missing table (the sensor is not
+// running) has nothing to release.
+func fwRelease(run Runner, addrs, _ []string) error {
 	_, err := run(context.Background(), NftBin, []string{"list", "table", "inet", NftTable}, nil)
 	var ee *ExitError
 	if errors.As(err, &ee) && strings.Contains(ee.Output, "No such file or directory") {

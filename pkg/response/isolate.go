@@ -410,19 +410,40 @@ func (r *Responder) StartResponse() error {
 }
 
 // Tick runs the timed parts of the actions: suspended processes whose time
-// is over are resumed, isolations whose time-to-live is over are released.
-// run calls it every 2 seconds.
+// is over are resumed, and the isolation upkeep (expiry, the never-block
+// recheck, the pick-up of releases done with the CLI) is handed to the
+// slow-action worker. run calls it every 2 seconds, on the event loop, so
+// Tick never waits for a slow action and never starts a process itself
+// (netsh, nft, pfctl, route): a Windows expiry once ran netsh per address
+// here, up to 256 times with a 10 s timeout each.
 func (r *Responder) Tick(now time.Time) {
 	r.mu.Lock()
 	r.tickSuspended(now)
 	r.mu.Unlock()
 	r.tickRetries(now)
-	// The event loop calls Tick: never wait for a slow action. When one is
-	// running, isolation expiry waits for the next tick (2 s later).
 	if !r.actMu.TryLock() {
+		return // a slow action runs; the upkeep waits for the next tick
+	}
+	due := len(r.isolated) > 0
+	r.actMu.Unlock()
+	if !due || !r.queueHasRoom() || !r.upkeepQueued.CompareAndSwap(false, true) {
 		return
 	}
-	defer r.actMu.Unlock()
+	if !r.Go(func() {
+		defer r.upkeepQueued.Store(false)
+		r.actMu.Lock()
+		defer r.actMu.Unlock()
+		r.isolationUpkeep(now)
+	}) {
+		r.upkeepQueued.Store(false)
+	}
+}
+
+// isolationUpkeep releases the isolations that are now never-block or
+// whose time to live is over, in one firewall call, and saves the state
+// (which picks up releases done with the CLI). It runs on the worker (or
+// inline without one). Caller holds actMu.
+func (r *Responder) isolationUpkeep(now time.Time) {
 	r.recheckNeverBlock(now)
 	var expired []string
 	for a, iso := range r.isolated {
@@ -633,22 +654,24 @@ func ReleaseIsolation(store IsolationStore, run Runner, addr string) ([]string, 
 		}
 		keep := []Isolation{}
 		if target == "" {
-			if err := fwRelease(run, nil); err != nil {
+			if err := fwRelease(run, nil, nil); err != nil {
 				return fmt.Errorf("%s flush: %w", firewallKind, err)
 			}
 			for _, iso := range isos {
 				released = append(released, iso.Addr)
 			}
 		} else {
-			if err := fwRelease(run, []string{target}); err != nil {
-				return fmt.Errorf("%s delete: %w", firewallKind, err)
-			}
-			released = []string{target}
+			var rest []string
 			for _, iso := range isos {
 				if iso.Addr != target {
 					keep = append(keep, iso)
+					rest = append(rest, iso.Addr)
 				}
 			}
+			if err := fwRelease(run, []string{target}, rest); err != nil {
+				return fmt.Errorf("%s delete: %w", firewallKind, err)
+			}
+			released = []string{target}
 		}
 		return saveIsolationsAt(dfd, keep)
 	})

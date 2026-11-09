@@ -1,12 +1,17 @@
 package response
 
 import (
+	"context"
 	"net/netip"
+	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode/utf16"
+
+	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
 )
 
 // Platform-neutral parts of the Linux and Windows actions (persistkind.go,
@@ -156,19 +161,210 @@ func TestNftScripts(t *testing.T) {
 }
 
 func TestNetshArgs(t *testing.T) {
-	a := netip.MustParseAddr("::ffff:192.0.2.9")
-	if got := strings.Join(netshAddArgs(a, "out"), " "); got != "advfirewall firewall add rule name=ZAAFVesper-isolation dir=out action=block enable=yes profile=any remoteip=192.0.2.9" {
+	if got := netshRemoteList([]string{"::ffff:192.0.2.9", "2001:db8::5", "192.0.2.10", "192.0.2.9", "1.2.3.4;x", "fe80::1%eth0"}); got != "192.0.2.9,192.0.2.10,2001:db8::5" {
 		t.Fatal(got)
 	}
-	if got := strings.Join(netshDeleteArgs(a), " "); got != "advfirewall firewall delete rule name=ZAAFVesper-isolation remoteip=192.0.2.9" {
+	if got := strings.Join(netshAddArgs("192.0.2.9,192.0.2.10", "out"), " "); got != "advfirewall firewall add rule name=ZAAFVesper-isolation dir=out action=block enable=yes profile=any remoteip=192.0.2.9,192.0.2.10" {
 		t.Fatal(got)
 	}
-	if got := strings.Join(netshDeleteArgs(netip.Addr{}), " "); got != "advfirewall firewall delete rule name=ZAAFVesper-isolation" {
+	if got := strings.Join(netshSetArgs("192.0.2.9", "in"), " "); got != "advfirewall firewall set rule name=ZAAFVesper-isolation dir=in new action=block enable=yes profile=any remoteip=192.0.2.9" {
 		t.Fatal(got)
 	}
-	out := "Rule Name:   ZAAFVesper-isolation\r\nDirection:  Out\r\nRemoteIP:   192.0.2.9/32\r\n\r\nRemoteIP:   2001:db8::5/128\r\n"
-	if !netshListsAddr(out, a) || !netshListsAddr(out, netip.MustParseAddr("2001:db8::5")) || netshListsAddr(out, netip.MustParseAddr("192.0.2.90")) {
-		t.Fatal("netshListsAddr")
+	if got := strings.Join(netshDeleteArgs, " "); got != "advfirewall firewall delete rule name=ZAAFVesper-isolation" {
+		t.Fatal(got)
+	}
+}
+
+// netshStub records netsh runs and answers them like netsh: set and show
+// fail with "No rules match" while no rule of that direction exists.
+type netshStub struct {
+	cmds  []string
+	rules map[string]string // direction -> remoteip list
+	deny  bool              // every change fails with "Access is denied."
+}
+
+func (n *netshStub) run(_ context.Context, bin string, args []string, _ []byte) ([]byte, error) {
+	n.cmds = append(n.cmds, strings.Join(args, " "))
+	arg := func(k string) string {
+		for _, a := range args {
+			if v, ok := strings.CutPrefix(a, k+"="); ok {
+				return v
+			}
+		}
+		return ""
+	}
+	noRule := &ExitError{Code: 1, Output: "No rules match the specified criteria."}
+	if n.deny && args[2] != "show" {
+		return nil, &ExitError{Code: 1, Output: "Access is denied."}
+	}
+	switch args[2] {
+	case "set":
+		if _, ok := n.rules[arg("dir")]; !ok {
+			return nil, noRule
+		}
+		n.rules[arg("dir")] = arg("remoteip")
+	case "add":
+		n.rules[arg("dir")] = arg("remoteip")
+	case "delete":
+		if len(n.rules) == 0 {
+			return nil, noRule
+		}
+		n.rules = map[string]string{}
+	case "show":
+		if d := arg("dir"); d != "" {
+			if _, ok := n.rules[d]; !ok {
+				return nil, noRule
+			}
+		} else if len(n.rules) == 0 {
+			return nil, noRule
+		}
+		return []byte("Rule Name: ZAAFVesper-isolation\r\n"), nil
+	}
+	return []byte("Ok."), nil
+}
+
+// TestNetshSyncBatches: Windows isolation keeps one rule per direction
+// with the whole remoteip list, so a change of any size is two netsh runs
+// (security review WS E finding 1: 256 expiring addresses meant up to 512
+// netsh runs with a 10 s timeout each).
+func TestNetshSyncBatches(t *testing.T) {
+	n := &netshStub{rules: map[string]string{}}
+	var addrs []string
+	for i := 0; i < maxIsolated; i++ {
+		addrs = append(addrs, netip.AddrFrom4([4]byte{198, 51, byte(i / 250), byte(1 + i%250)}).String())
+	}
+	if err := netshSync(n.run, "netsh.exe", addrs); err != nil {
+		t.Fatal(err)
+	}
+	// First time: set fails, show finds none, add, per direction.
+	if len(n.cmds) != 6 || len(strings.Split(n.rules["out"], ",")) != maxIsolated || n.rules["in"] != n.rules["out"] {
+		t.Fatalf("%d runs, rules %d", len(n.cmds), len(n.rules))
+	}
+	n.cmds = nil
+	if err := netshSync(n.run, "netsh.exe", addrs[:1]); err != nil {
+		t.Fatal(err)
+	}
+	if len(n.cmds) != 2 || n.rules["out"] != addrs[0] || n.rules["in"] != addrs[0] || !strings.Contains(n.cmds[0], " set rule ") {
+		t.Fatalf("%q %v", n.cmds, n.rules)
+	}
+	n.cmds = nil
+	if err := netshSync(n.run, "netsh.exe", nil); err != nil || len(n.rules) != 0 || len(n.cmds) != 1 {
+		t.Fatalf("%v %q %v", err, n.cmds, n.rules)
+	}
+	// Deleting when nothing is there is not an error.
+	if err := netshSync(n.run, "netsh.exe", nil); err != nil {
+		t.Fatal(err)
+	}
+	// A rule that exists but cannot be changed is an error (it keeps its
+	// old list), not a second rule.
+	n = &netshStub{rules: map[string]string{"out": "192.0.2.7", "in": "192.0.2.7"}, deny: true}
+	if err := netshSync(n.run, "netsh.exe", []string{"192.0.2.8"}); err == nil || strings.Contains(strings.Join(n.cmds, "|"), " add rule ") {
+		t.Fatalf("%v %q", err, n.cmds)
+	}
+	if err := netshSync(n.run, "netsh.exe", nil); err == nil {
+		t.Fatal("failed delete with a rule still listed reported as done")
+	}
+}
+
+// TestASCIIFoldPrefix: trust decisions compare ASCII-only (WS E finding
+// 3b): U+017F (long s) folds to s under Unicode simple folding.
+func TestASCIIFoldPrefix(t *testing.T) {
+	if !hasPrefixFold(`C:\Program Fileſ\x.exe`, `C:\Program Files\`) {
+		t.Fatal("hasPrefixFold no longer folds U+017F; the protection direction relies on it")
+	}
+	for s, want := range map[string]bool{
+		`C:\Program Files\x.exe`: true,
+		`c:\PROGRAM FILES\x.exe`: true,
+		`C:\Program Fileſ\x.exe`: false,
+		`C:\Program FileS\x.exe`: true,
+		`C:\Program File\x.exe`:  false,
+		`C:\Program Files`:       false,
+		`C:\Program Files\ü.exe`: true, // past the compared region
+	} {
+		if got := hasPrefixASCIIFold(s, `C:\Program Files\`); got != want {
+			t.Errorf("%q: %v", s, got)
+		}
+	}
+	if !equalASCIIFold(`C:\WINDOWS\system32\svchost.exe`, `C:\Windows\System32\svchost.exe`) ||
+		equalASCIIFold(`C:\Windows\Syſtem32\svchost.exe`, `C:\Windows\System32\svchost.exe`) {
+		t.Fatal("equalASCIIFold")
+	}
+}
+
+// TestWinSystemImageFailsClosed: the Windows trust test (WS E finding 3):
+// user-writable folders under C:\Windows are not system folders, nor are
+// look-alike folders a user can create at the root of C:.
+func TestWinSystemImageFailsClosed(t *testing.T) {
+	progs := []string{`C:\Program Files`, `C:\Program Files (x86)`}
+	def := `C:\ProgramData\Microsoft\Windows Defender\Platform`
+	for exe, want := range map[string]bool{
+		`C:\Windows\System32\reg.exe`:                                         true,
+		`C:\WINDOWS\system32\svchost.exe`:                                     true,
+		`C:\Windows\explorer.exe`:                                             true,
+		`C:\Windows\SysWOW64\cmd.exe`:                                         true,
+		`C:\Program Files\Vendor\app.exe`:                                     true,
+		`C:\Program Files (x86)\Vendor\app.exe`:                               true,
+		`C:\Program Files\Vendör\app.exe`:                                     true,
+		`C:\ProgramData\Microsoft\Windows Defender\Platform\4.18\MsMpEng.exe`: true,
+		// 3a: user-writable folders under the Windows directory.
+		`C:\Windows\Tasks\evil.exe`:                                  false,
+		`C:\Windows\Temp\evil.exe`:                                   false,
+		`C:\Windows\tracing\evil.exe`:                                false,
+		`C:\Windows\TRACING\evil.exe`:                                false,
+		`C:\Windows\Registration\CRMLog\evil.exe`:                    false,
+		`C:\Windows\System32\spool\drivers\color\evil.exe`:           false,
+		`C:\Windows\System32\spool\PRINTERS\evil.exe`:                false,
+		`C:\Windows\System32\FxsTmp\evil.exe`:                        false,
+		`C:\Windows\System32\com\dmp\evil.exe`:                       false,
+		`C:\Windows\System32\Microsoft\Crypto\RSA\MachineKeys\e.exe`: false,
+		`C:\Windows\System32\Tasks\evil.exe`:                         false,
+		`C:\Windows\SysWOW64\Tasks\evil.exe`:                         false,
+		`C:\Windows\debug\WIA\evil.exe`:                              false,
+		`C:\ProgramData\Microsoft\Crypto\RSA\MachineKeys\evil.exe`:   false,
+		`C:\ProgramData\Microsoft\Windows\evil.exe`:                  false,
+		`C:\ProgramData\evil.exe`:                                    false,
+		// Short names and non-ASCII under the Windows directory.
+		`C:\Windows\REGIST~1\CRMLog\evil.exe`: false,
+		`C:\Windows\Taſks\evil.exe`:           false,
+		// 3b: look-alike folders at the root of C:.
+		`C:\Program Fileſ\evil.exe`: false,
+		`C:\Windowſ\System32\x.exe`: false,
+		`C:\PROGRA~1\Vendor\x.exe`:  false,
+		`C:\Users\a\evil.exe`:       false,
+	} {
+		if got := winSystemImage(exe, `C:\Windows`, progs, def); got != want {
+			t.Errorf("%s: system=%v", exe, got)
+		}
+	}
+}
+
+// TestRegistryRetryKeys: two budget-refused registry removals of one rule
+// (Run values and services carry no file) are retried separately (WS E
+// finding 4; regression of the N2 decoy fix).
+func TestRegistryRetryKeys(t *testing.T) {
+	r := New(Config{Now: func() time.Time { return time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC) }, Log: func(Decision) {}})
+	proc := &event.Proc{PID: 4242, UniqueID: 7}
+	reg := func(key, data string, p *event.Proc) *event.Event {
+		return &event.Event{Name: event.RegistrySetValue, Proc: p, Registry: &event.Registry{Key: key, Data: data}}
+	}
+	run := `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\`
+	evs := []*event.Event{
+		reg(run+"Decoy1", `C:\Users\a\d1.exe`, proc),
+		reg(run+"Real", `C:\Users\a\real.exe`, proc),
+		reg(`HKLM\System\CurrentControlSet\Services\Evil\ImagePath`, `C:\Users\a\svc.exe`, proc),
+		reg(run+"Real", `C:\Users\a\other.exe`, proc),                               // same value, other data
+		reg(run+"Real", `C:\Users\a\real.exe`, &event.Proc{PID: 4243, UniqueID: 8}), // another writer
+	}
+	for _, e := range evs {
+		_ = r.retryOnLimit(fileRetryKey(ActionRemovePersistence, "rule-run", e, TargetFile), "rule-run", "r", ErrRateLimited, func() error { return nil })
+	}
+	if n := r.Retries(); n != len(evs) {
+		t.Fatalf("%d retries for %d refused registry removals", n, len(evs))
+	}
+	// The same event again is the same entry.
+	_ = r.retryOnLimit(fileRetryKey(ActionRemovePersistence, "rule-run", evs[1], TargetFile), "rule-run", "r", ErrRateLimited, func() error { return nil })
+	if n := r.Retries(); n != len(evs) {
+		t.Fatalf("a repeat made a new entry: %d", n)
 	}
 }
 
@@ -243,5 +439,73 @@ func TestDirOf(t *testing.T) {
 				t.Errorf("dirOf(%s) = %s", in, dirOf(in))
 			}
 		}
+	}
+}
+
+// TestTickHandsExpiryToWorker: 256 isolations expire at once while the
+// worker is busy. Tick (on the event loop) returns at once and runs no
+// firewall command; the worker then releases them all in one or two runs,
+// and a second Tick queues no second upkeep (WS E finding 1: the Windows
+// expiry ran netsh per address inside Tick).
+func TestTickHandsExpiryToWorker(t *testing.T) {
+	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
+	var mu sync.Mutex
+	var cmds []string
+	r := New(Config{
+		Now: func() time.Time { return now }, Log: func(Decision) {},
+		StateDir: filepath.Join(t.TempDir(), "absent", "state"),
+		Runner: func(_ context.Context, bin string, args []string, _ []byte) ([]byte, error) {
+			mu.Lock()
+			cmds = append(cmds, bin+" "+strings.Join(args, " "))
+			mu.Unlock()
+			return nil, nil
+		},
+		LocalAddrs: func() ([]netip.Addr, error) { return nil, nil },
+		Gateways:   func() ([]netip.Addr, error) { return nil, nil },
+		Resolvers:  func() []netip.Addr { return nil },
+	})
+	r.fwLoaded = true
+	for i := 0; i < maxIsolated; i++ {
+		a := netip.AddrFrom4([4]byte{198, 51, byte(i / 250), byte(1 + i%250)}).String()
+		r.isolated[a] = &Isolation{Addr: a, Added: now.Add(-time.Hour), Expires: now.Add(-time.Second), Rule: "r"}
+	}
+	r.StartWorker(4)
+	defer r.StopWorker()
+	gate, busy := make(chan struct{}), make(chan struct{})
+	var open sync.Once
+	release := func() { open.Do(func() { close(gate) }) }
+	defer release()                            // before StopWorker (deferred above), so a failure does not hang
+	if !r.Go(func() { close(busy); <-gate }) { // the worker is busy with a slow action
+		t.Fatal("queue")
+	}
+	<-busy
+	done := make(chan struct{})
+	go func() {
+		r.Tick(now)
+		r.Tick(now.Add(2 * time.Second))
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		release()
+		t.Fatal("Tick blocked on the isolation expiry")
+	}
+	mu.Lock()
+	ran := len(cmds)
+	mu.Unlock()
+	if ran != 0 {
+		t.Fatalf("Tick ran %d commands on the event loop: %q", ran, cmds)
+	}
+	if w := r.work.Load(); len(w.ch) != 1 {
+		t.Fatalf("%d upkeeps queued, want 1", len(w.ch))
+	}
+	release()
+	r.Wait()
+	if n := len(r.Isolations()); n != 0 {
+		t.Fatalf("%d isolations left", n)
+	}
+	if len(cmds) < 1 || len(cmds) > 2 {
+		t.Fatalf("expiry of %d addresses took %d firewall runs: %q", maxIsolated, len(cmds), cmds)
 	}
 }

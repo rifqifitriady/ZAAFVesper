@@ -251,6 +251,15 @@ type Responder struct {
 	// lastNeverCheck is when isolated addresses were last checked against
 	// the never-block set (isolate.go recheckNeverBlock).
 	lastNeverCheck time.Time
+	// upkeepQueued: an isolation upkeep (expiry, never-block recheck,
+	// pick-up of CLI releases) is queued on the worker and has not finished;
+	// Tick queues no second one meanwhile (isolate.go).
+	upkeepQueued atomic.Bool
+
+	// writerNS checks, for a file bound by creation time or hash, that the
+	// writer process sees the same file system as this sensor (Linux: the
+	// host mount namespace). Default writerMountNS; tests replace it.
+	writerNS func(p *event.Proc) error
 
 	// launchRoot, set only by tests, is a fake root for the persistence
 	// directories of remove_persistence (launch items, systemd, cron, rc).
@@ -322,6 +331,7 @@ func New(cfg Config) *Responder {
 		budgets: [2]*budget{{name: "kill/suspend", perRule: map[string][]time.Time{}}, {name: "file/network action", perRule: map[string][]time.Time{}}},
 		logged:  map[string]time.Time{}, stats: map[string]uint64{},
 		suspended: map[int32]*suspension{}, retries: map[string]*retryEntry{}, isolated: map[string]*Isolation{}, peers: map[string]*peerSet{}}
+	r.writerNS = r.writerMountNS
 	r.protected[int32(os.Getpid())] = true
 	r.protected[int32(os.Getppid())] = true
 	for _, p := range cfg.ProtectPIDs {

@@ -97,9 +97,29 @@ func winWrite(t *testing.T, path string) time.Time {
 	return fi.Birth
 }
 
+// winUser is the test's user as Sysmon names it (DOMAIN\name) and the
+// integrity level Sysmon would report (an elevated administrator's files
+// are owned by Administrators).
+func winUser() (name, integrity string) {
+	integrity = "Medium"
+	if elevated() {
+		integrity = "High"
+	}
+	u, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		return "", integrity
+	}
+	acct, dom, _, err := u.User.Sid.LookupAccount("")
+	if err != nil {
+		return "", integrity
+	}
+	return dom + `\` + acct, integrity
+}
+
 func winEvent(path string, birth time.Time, exe string) *event.Event {
+	name, il := winUser()
 	e := &event.Event{Name: event.CreateFile, Source: "sysmon", Args: map[string]string{},
-		Proc: &event.Proc{PID: 4242, UniqueID: 99, StartTime: time.Unix(1, 0), Exe: exe, UID: -1, EUID: -1},
+		Proc: &event.Proc{PID: 4242, UniqueID: 99, StartTime: time.Unix(1, 0), Exe: exe, UID: -1, EUID: -1, Username: name, Integrity: il},
 		File: &event.File{Path: path}}
 	if !birth.IsZero() {
 		e.Args["creation_utc_time"] = birth.UTC().Format(sysmonTimeLayout)
@@ -173,6 +193,11 @@ func TestWindowsQuarantineRefusals(t *testing.T) {
 		}
 	}
 	check("no binding", winEvent(p, time.Time{}, `C:\evil.exe`), OutcomeFileCheck)
+	// Another user's file at the path (a shared folder): refused even with
+	// the right creation time (WS E finding 2).
+	other := winEvent(p, b, `C:\evil.exe`)
+	other.Proc.Username, other.Proc.Integrity = `NT AUTHORITY\LOCAL SERVICE`, "Medium"
+	check("another user's file, not elevated", other, OutcomeFileCheck)
 	check("other creation time", winEvent(p, b.Add(-time.Second), `C:\evil.exe`), OutcomeFileCheck)
 	if err := os.Link(p, p+".2"); err == nil {
 		check("two names", winEvent(p, b, `C:\evil.exe`), OutcomeFileCheck)
@@ -219,6 +244,18 @@ func TestWindowsTrustedWriter(t *testing.T) {
 		systemRoot + `\Temp\x.exe`:               false,
 		`C:\Program Files\Vendor\setup.exe`:      true,
 		`C:\ProgramData\x.exe`:                   false,
+		// WS E finding 3: user-writable folders under C:\Windows and
+		// ProgramData\Microsoft, and look-alike folders at the root of C:.
+		systemRoot + `\Tasks\evil.exe`:                             false,
+		systemRoot + `\tracing\evil.exe`:                           false,
+		systemRoot + `\Registration\CRMLog\evil.exe`:               false,
+		systemDir + `\spool\drivers\color\evil.exe`:                false,
+		systemDir + `\spool\PRINTERS\evil.exe`:                     false,
+		systemDir + `\FxsTmp\evil.exe`:                             false,
+		systemDir + `\com\dmp\evil.exe`:                            false,
+		`C:\ProgramData\Microsoft\Crypto\RSA\MachineKeys\evil.exe`: false,
+		`C:\Program Fileſ\Vendor\setup.exe`:                        false,
+		`C:\Windowſ\System32\reg.exe`:                              false,
 	} {
 		if got := trustedWriter(&event.Proc{Exe: exe}) != ""; got != trusted {
 			t.Errorf("%s: trusted=%v", exe, got)
@@ -227,6 +264,23 @@ func TestWindowsTrustedWriter(t *testing.T) {
 	p := &event.Proc{Exe: systemRoot + `\System32\reg.exe`, Parent: &event.Proc{Exe: `C:\Users\a\evil.exe`}}
 	if trustedWriter(p) != "" {
 		t.Fatal("reg.exe under an untrusted parent is trusted")
+	}
+	p = &event.Proc{Exe: systemRoot + `\System32\reg.exe`, Parent: &event.Proc{Exe: systemRoot + `\Tasks\evil.exe`}}
+	if trustedWriter(p) != "" {
+		t.Fatal("reg.exe under a parent in C:\\Windows\\Tasks is trusted")
+	}
+}
+
+// TestWindowsNeverBlockAzure: Azure's WireServer is never blocked (WS E
+// item 8), and a refresh of the rules lists every isolated address in
+// the two rules.
+func TestWindowsNeverBlockAzure(t *testing.T) {
+	g := newWRig(t)
+	if why := g.r.blockable(netip.MustParseAddr("168.63.129.16"), nil); why != "cloud platform address 168.63.129.16/32" {
+		t.Fatalf("WireServer: %q", why)
+	}
+	if why := g.r.blockable(netip.MustParseAddr("168.63.129.17"), nil); why != "" {
+		t.Fatalf("neighbour: %q", why)
 	}
 }
 
@@ -237,10 +291,8 @@ func TestWindowsIsolateNetsh(t *testing.T) {
 		Net:  &event.Net{Direction: "outbound", SrcIP: "10.0.0.5", DstIP: "192.0.2.7"}}
 	g.r.Observe(&event.Event{Name: event.NetworkConnect, Proc: e.Proc, Net: &event.Net{Direction: "outbound", DstIP: "10.0.0.1"}})
 	g.run = func(bin string, args []string) ([]byte, error) {
-		if args[2] == "delete" {
-			return nil, &ExitError{Code: 1, Output: "No rules match the specified criteria."}
-		}
-		if args[2] == "show" {
+		switch args[2] {
+		case "delete", "show", "set": // no ZAAFVesper rule yet
 			return nil, &ExitError{Code: 1, Output: "No rules match the specified criteria."}
 		}
 		return []byte("Ok."), nil
@@ -256,14 +308,30 @@ func TestWindowsIsolateNetsh(t *testing.T) {
 	if g.last().Outcome != OutcomeIsolated && g.last().Outcome != OutcomePartial {
 		t.Fatalf("%+v", g.last())
 	}
+	// A second isolation changes the list of the two rules in place: two
+	// netsh runs, both addresses in each.
+	g.cmds = nil
+	g.run = func(bin string, args []string) ([]byte, error) { return []byte("Ok."), nil }
+	e2 := *e
+	e2.Net = &event.Net{Direction: "outbound", SrcIP: "10.0.0.5", DstIP: "198.51.100.4"}
+	e2.Proc = &event.Proc{PID: 5001, UniqueID: 56, StartTime: time.Unix(1, 0), Exe: `C:\Users\a\evil2.exe`, UID: -1, EUID: -1}
+	if err := g.r.IsolateProcess(&e2, TargetProcess, "r2", "r"); err != nil {
+		t.Fatalf("%v %+v", err, g.last())
+	}
+	if len(g.cmds) != 2 || !strings.Contains(g.cmds[0], "set rule name=ZAAFVesper-isolation dir=out new action=block enable=yes profile=any remoteip=192.0.2.7,198.51.100.4") {
+		t.Fatalf("%q", g.cmds)
+	}
 	// A delete that fails while the rule is still listed is an error.
 	g.run = func(bin string, args []string) ([]byte, error) {
-		if args[2] == "delete" {
+		if args[2] == "delete" || args[2] == "set" {
 			return nil, &ExitError{Code: 1, Output: "Access is denied."}
 		}
 		return []byte("RemoteIP: 192.0.2.7/32\r\n"), nil
 	}
 	if err := g.r.fwDelete([]string{"192.0.2.7"}); err == nil {
+		t.Fatal("failed change reported as done")
+	}
+	if err := g.r.fwDelete([]string{"192.0.2.7", "198.51.100.4"}); err == nil {
 		t.Fatal("failed delete reported as done")
 	}
 }

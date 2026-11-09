@@ -30,6 +30,11 @@ var tasksDir = filepath.Join(systemDir, "Tasks")
 // registry key for whoever called CreateService.
 var servicesExe = filepath.Join(systemDir, "services.exe")
 
+// svchostExe hosts the Task Scheduler, which writes a task file for
+// whoever registered the task. Both are compared ASCII-only
+// (equalASCIIFold), as every trust decision.
+var svchostExe = filepath.Join(systemDir, "svchost.exe")
+
 // persist handles, after its event:
 //
 //   - a value of a Run or RunOnce key (HKLM or HKU\<SID>, 64- and 32-bit
@@ -146,7 +151,7 @@ func (r *Responder) removeService(e *event.Event, rule string, budget func() *re
 	}
 	// The Service Control Manager writes the key for whoever created the
 	// service: then the program the service runs is judged instead.
-	if !strings.EqualFold(p.Exe, servicesExe) {
+	if !equalASCIIFold(p.Exe, servicesExe) {
 		if why := trustedWriter(p); why != "" {
 			return refused(OutcomeWriterNotUntrusted, ErrProtected, "%s", why)
 		}
@@ -256,7 +261,7 @@ func (r *Responder) removeTask(e *event.Event, rule string, budget func() *resul
 	if err != nil {
 		return refused(OutcomeFileCheck, ErrFileCheck, "%v", err)
 	}
-	if strings.EqualFold(filepath.Base(p.Exe), "svchost.exe") && systemImage(p.Exe) {
+	if equalASCIIFold(p.Exe, svchostExe) {
 		// The Task Scheduler wrote the file for whoever registered the
 		// task: judge the programs the task runs instead.
 		untrusted := false

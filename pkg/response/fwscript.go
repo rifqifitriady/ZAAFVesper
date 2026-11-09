@@ -1,10 +1,13 @@
 package response
 
 import (
+	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"net/netip"
+	"sort"
 	"strings"
 	"time"
 )
@@ -105,42 +108,119 @@ func nftDeleteScript(addrs []string) string {
 // nftFlushSets empties both sets (zaafvesper isolation release all).
 const nftFlushSets = "flush set inet zaafvesper isolated4\nflush set inet zaafvesper isolated6\n"
 
-// Windows Firewall objects of isolate_process: rules that all carry this
-// name, one per address and direction. Only rules with this exact name are
-// ever added, deleted or listed (never "netsh advfirewall reset").
+// cloudPlatformNetworks are cloud platform addresses outside the
+// link-local range that a virtual machine needs (never blocked on Linux and
+// Windows): Azure's WireServer 168.63.129.16 (DHCP, DNS, health probes,
+// the VM agent). The instance metadata services (169.254.169.254) are
+// link-local and never blocked anyway.
+var cloudPlatformNetworks = []netip.Prefix{netip.MustParsePrefix("168.63.129.16/32")}
+
+// Windows Firewall objects of isolate_process: two rules, one per
+// direction, that both carry this name and list every isolated address in
+// one remoteip value. Only rules with this exact name are ever added,
+// changed, deleted or listed (never "netsh advfirewall reset").
 const WinRuleName = "ZAAFVesper-isolation"
 
-// netshAddArgs is the fixed argument vector adding one block rule.
-func netshAddArgs(a netip.Addr, dir string) []string {
-	return []string{"advfirewall", "firewall", "add", "rule", "name=" + WinRuleName, "dir=" + dir,
-		"action=block", "enable=yes", "profile=any", "remoteip=" + a.Unmap().String()}
-}
-
-// netshDeleteArgs deletes the rules of one address (both directions), or
-// every ZAAFVesper rule when a is invalid.
-func netshDeleteArgs(a netip.Addr) []string {
-	args := []string{"advfirewall", "firewall", "delete", "rule", "name=" + WinRuleName}
-	if a.IsValid() {
-		args = append(args, "remoteip="+a.Unmap().String())
-	}
-	return args
-}
-
-// netshShowArgs lists ZAAFVesper's rules.
-var netshShowArgs = []string{"advfirewall", "firewall", "show", "rule", "name=" + WinRuleName, "verbose"}
-
-// netshListsAddr reports whether `netsh ... show rule` output names a as a
-// remote address ("RemoteIP: 192.0.2.7/32"; the label is localized, the
-// address is not).
-func netshListsAddr(out string, a netip.Addr) bool {
-	a = a.Unmap()
-	for _, f := range strings.FieldsFunc(out, func(r rune) bool { return r == ' ' || r == '\t' || r == '\r' || r == '\n' || r == ',' }) {
-		f = strings.TrimSuffix(strings.TrimSuffix(f, "/32"), "/128")
-		if x, err := netip.ParseAddr(f); err == nil && x.Unmap() == a {
-			return true
+// netshRemoteList is the remoteip value for addrs: each parsed and
+// re-printed by net/netip (anything else is skipped), unmapped, without
+// duplicates, sorted, comma-separated. "" when none is left.
+func netshRemoteList(addrs []string) string {
+	seen := map[netip.Addr]bool{}
+	var list []netip.Addr
+	for _, s := range addrs {
+		a, err := netip.ParseAddr(s)
+		if err != nil || a.Zone() != "" {
+			continue
+		}
+		if a = a.Unmap(); !seen[a] {
+			seen[a] = true
+			list = append(list, a)
 		}
 	}
-	return false
+	sort.Slice(list, func(i, j int) bool { return list[i].Less(list[j]) })
+	out := make([]string, len(list))
+	for i, a := range list {
+		out[i] = a.String()
+	}
+	return strings.Join(out, ",")
+}
+
+// netshAddArgs is the fixed argument vector adding the block rule of one
+// direction for the remoteip list.
+func netshAddArgs(list, dir string) []string {
+	return []string{"advfirewall", "firewall", "add", "rule", "name=" + WinRuleName, "dir=" + dir,
+		"action=block", "enable=yes", "profile=any", "remoteip=" + list}
+}
+
+// netshSetArgs replaces, in place, the remoteip list of the rule (or
+// rules) of one direction: the change is atomic for that rule, so no
+// address that stays isolated is ever unblocked while the list changes.
+func netshSetArgs(list, dir string) []string {
+	return []string{"advfirewall", "firewall", "set", "rule", "name=" + WinRuleName, "dir=" + dir,
+		"new", "action=block", "enable=yes", "profile=any", "remoteip=" + list}
+}
+
+// netshDeleteArgs deletes every ZAAFVesper rule.
+var netshDeleteArgs = []string{"advfirewall", "firewall", "delete", "rule", "name=" + WinRuleName}
+
+// netshShowArgs lists ZAAFVesper's rules of one direction ("" for both).
+func netshShowArgs(dir string) []string {
+	args := []string{"advfirewall", "firewall", "show", "rule", "name=" + WinRuleName}
+	if dir != "" {
+		args = append(args, "dir="+dir)
+	}
+	return append(args, "verbose")
+}
+
+// netshDeleteAll deletes every ZAAFVesper rule. netsh answers "No rules
+// match" with a non-zero exit, in the system's language, so a failed
+// delete is checked with a listing: it is an error only when a rule is
+// still listed.
+func netshDeleteAll(run Runner, bin string) error {
+	_, err := run(context.Background(), bin, netshDeleteArgs, nil)
+	if err == nil {
+		return nil
+	}
+	_, serr := run(context.Background(), bin, netshShowArgs(""), nil)
+	var ee *ExitError
+	switch {
+	case errors.As(serr, &ee):
+		return nil // no ZAAFVesper rule at all
+	case serr != nil:
+		return fmt.Errorf("%v; listing the rules failed: %v", err, serr)
+	}
+	return err
+}
+
+// netshSync makes ZAAFVesper's rules block exactly addrs, with at most two
+// netsh runs when nothing goes wrong (one per direction), whatever the
+// number of addresses: the rule of each direction gets the whole list in
+// place (set rule); a direction without a rule gets one (add rule, after a
+// listing shows none); no address left deletes the rules.
+func netshSync(run Runner, bin string, addrs []string) error {
+	list := netshRemoteList(addrs)
+	if list == "" {
+		return netshDeleteAll(run, bin)
+	}
+	for _, dir := range []string{"out", "in"} {
+		_, err := run(context.Background(), bin, netshSetArgs(list, dir), nil)
+		if err == nil {
+			continue
+		}
+		_, serr := run(context.Background(), bin, netshShowArgs(dir), nil)
+		var ee *ExitError
+		switch {
+		case errors.As(serr, &ee): // no rule of this direction yet
+			if _, aerr := run(context.Background(), bin, netshAddArgs(list, dir), nil); aerr != nil {
+				return fmt.Errorf("add rule %s: %w", dir, aerr)
+			}
+		case serr != nil:
+			return fmt.Errorf("set rule %s: %v; listing the rules failed: %v", dir, err, serr)
+		default:
+			return fmt.Errorf("set rule %s: %w", dir, err) // the rule exists and kept its old list
+		}
+	}
+	return nil
 }
 
 // parseProcNetRoute returns the gateways of /proc/net/route (every route

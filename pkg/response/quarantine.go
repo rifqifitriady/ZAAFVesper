@@ -562,7 +562,15 @@ func hashOf(hashes, alg string) string {
 // process could have made the extra names itself, so refusing would let
 // any payload escape with one link() call, while a link to somebody else's
 // file is still refused. The weaker bindings (creation time, hash) accept
-// only a file with exactly one name.
+// only a file with exactly one name that belongs to the user of the
+// event's process (ownerOK: uid or euid on Linux; the owner SID, or
+// Administrators for an elevated process, on Windows): in a shared folder
+// (/tmp, /dev/shm, C:\Users\Public, C:\Windows\Temp, ProgramData) another
+// user can create the path first, and the creation-time tolerance (Linux
+// 2 s, NTFS tunneling about 15 s) would otherwise let root or SYSTEM
+// quarantine that user's file. On Linux the writer must also be in the
+// host mount namespace (writerMountNS): a container's path names another
+// file.
 func (r *Responder) openBound(path string, b fileBind, allowDir bool, max int64, e *event.Event) (dirfd int, base string, f *os.File, fi fileInfo, res *result) {
 	return r.openBoundIn(path, b, allowDir, max, e, "")
 }
@@ -594,6 +602,12 @@ func (r *Responder) openBoundIn(path string, b fileBind, allowDir bool, max int6
 	if b.none() {
 		return fail(refused(OutcomeFileCheck, ErrFileCheck, "the event carries no file identity (dev/ino, creation time or hash); refusing to act on whatever is at the path now"))
 	}
+	// The opened-up directory (System32\Tasks) is writable by SYSTEM and
+	// administrators only, so no other user can create a file there first,
+	// and the Task Scheduler writes the file for whoever registered the
+	// task: its owner says nothing about the writer. Everywhere else the
+	// owner of a file bound by creation time or hash must be the writer.
+	ownerChecked := !(allow != "" && hasPrefixASCIIFold(path, allow))
 	if runtime.GOOS == "darwin" {
 		bundlePath := path
 		if allowDir {
@@ -646,10 +660,21 @@ func (r *Responder) openBoundIn(path string, b fileBind, allowDir bool, max int6
 				fi.Birth.UTC().Format(sysmonTimeLayout), b.Birth.UTC().Format(sysmonTimeLayout))
 		case fi.Nlink != 1:
 			return bad("file has %d names; a file bound by creation time must have one", fi.Nlink)
+		case ownerChecked && !ownerOK(fi, e):
+			return bad("file belongs to %s, not to the user of the process of the event; a file bound by creation time must be the writer's own (in a shared folder another user can put a file at the path first)", ownerString(fi))
 		}
 	default: // content hash: checked when the copy is made (Vault.store)
-		if fi.Nlink != 1 {
+		switch {
+		case fi.Nlink != 1:
 			return bad("file has %d names; a file bound by its hash must have one", fi.Nlink)
+		case ownerChecked && !ownerOK(fi, e):
+			return bad("file belongs to %s, not to the user of the process of the event; a file bound by its hash must be that user's own", ownerString(fi))
+		}
+	}
+	if b.Dev == 0 && b.Ino == 0 && r.writerNS != nil {
+		// A path from the event names a file as its process sees it.
+		if err := r.writerNS(procOf(e)); err != nil {
+			return bad("%v", err)
 		}
 	}
 	if fi.isReg() && fi.Size > max {

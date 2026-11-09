@@ -145,7 +145,10 @@ func userName() string {
 	return dom + `\` + acct
 }
 
-// sysmonFile is a Sysmon CreateFile event for path written by w.
+// sysmonFile is a Sysmon CreateFile event for path written by w, with the
+// user and integrity level Sysmon reports for the harness (an elevated
+// administrator's files are owned by Administrators, which ownerOK accepts
+// only for a High or System integrity level).
 func sysmonFile(path string, w *event.Proc) (*event.Event, error) {
 	c, err := created(path)
 	if err != nil {
@@ -153,6 +156,10 @@ func sysmonFile(path string, w *event.Proc) (*event.Event, error) {
 	}
 	p := *w
 	p.UID, p.EUID, p.Username = -1, -1, userName()
+	p.Integrity = "Medium"
+	if windows.GetCurrentProcessToken().IsElevated() {
+		p.Integrity = "High"
+	}
 	return &event.Event{Name: event.CreateFile, Source: "sysmon", Proc: &p, File: &event.File{Path: path},
 		Args: map[string]string{"creation_utc_time": c}}, nil
 }

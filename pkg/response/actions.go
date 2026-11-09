@@ -166,6 +166,35 @@ func hasPrefixFold(s, prefix string) bool {
 	return true
 }
 
+// hasPrefixASCIIFold is the prefix test of trust decisions (fail closed):
+// ASCII letters compare case-insensitively, every other byte exactly, and
+// a non-ASCII byte anywhere in the compared region of s (or in prefix) is
+// a mismatch. hasPrefixFold, which folds Unicode ("C:\Program Fileſ\"
+// with U+017F matches "C:\Program Files\"), stays for the protection
+// direction, where matching more is the safe side.
+func hasPrefixASCIIFold(s, prefix string) bool {
+	if len(s) < len(prefix) {
+		return false
+	}
+	for i := 0; i < len(prefix); i++ {
+		c, p := s[i], prefix[i]
+		if c >= utf8.RuneSelf || p >= utf8.RuneSelf || asciiLower(c) != asciiLower(p) {
+			return false
+		}
+	}
+	return true
+}
+
+// equalASCIIFold is hasPrefixASCIIFold for whole strings.
+func equalASCIIFold(a, b string) bool { return len(a) == len(b) && hasPrefixASCIIFold(a, b) }
+
+func asciiLower(c byte) byte {
+	if 'A' <= c && c <= 'Z' {
+		return c + 'a' - 'A'
+	}
+	return c
+}
+
 // hasSuffixFold is hasPrefixFold for suffixes (ASCII suffixes only).
 func hasSuffixFold(s, suffix string) bool {
 	return len(s) >= len(suffix) && strings.EqualFold(s[len(s)-len(suffix):], suffix)
