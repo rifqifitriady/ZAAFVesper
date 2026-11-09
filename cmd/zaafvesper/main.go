@@ -63,6 +63,13 @@ sigma convert turns Sigma rules (macos, windows, linux) into ZAAFVesper rules;
 rules it cannot convert exactly are skipped with a reason. It never follows
 symbolic links and never replaces an existing rule file unless --force is given.`
 
+// hiddenCommands are commands compiled in only by build tags and kept out of
+// the usage text: `validate-response`, the live validation harness of the
+// response actions, exists only in binaries built with -tags
+// zaafvesper_validate (.github/workflows/live-response.yml), never in a
+// release or package build.
+var hiddenCommands = map[string]func(args []string, stdout, stderr io.Writer) int{}
+
 func main() {
 	os.Exit(realMain(os.Args[1:], os.Stdout, os.Stderr))
 }
@@ -93,6 +100,9 @@ func realMain(args []string, stdout, stderr io.Writer) int {
 	case "help", "-h", "--help":
 		sayLines(stdout, "", usage)
 		return 0
+	}
+	if f, ok := hiddenCommands[args[0]]; ok {
+		return f(args[1:], stdout, stderr)
 	}
 	say(stderr, "unknown command %q", args[0])
 	sayLines(stderr, "", usage)
