@@ -8,9 +8,10 @@ import (
 )
 
 // The spool and OpenAppendPrivate are built on Unix directory descriptors
-// (spool_unix.go). Windows has no equivalent here yet: outputs that need a
-// spool directory or an append file refuse to start with ErrNoWindowsSpool;
-// network outputs without a spool still work.
+// (spool_unix.go). Windows has no equivalent here yet, and every forwarder
+// (syslog, webhook) and file output (ZAAFElegia, OCSF) needs one of them, so
+// on Windows those flags are refused at start-up (cmd/zaafvesper
+// platformOutputCheck) and these stand-ins are never reached in normal use.
 
 // Spool defaults (the same as spool_unix.go).
 const (

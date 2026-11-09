@@ -143,3 +143,24 @@ func (h *serviceHandler) Execute(_ []string, req <-chan svc.ChangeRequest, statu
 		}
 	}
 }
+
+// platformOutputCheck refuses, at start-up and with a clear message, the
+// outputs that cannot work on Windows yet: syslog and webhook forwarders and
+// the ZAAFElegia/OCSF files are built on the Unix-only spool and append
+// files (pkg/output/spool_windows.go), and a service has no stdout for
+// --elegia-out -. Alerts still go to --output-dir.
+func platformOutputCheck(n *netOutOptions) error {
+	switch {
+	case n.syslogAddr != "", n.webhookURL != "":
+		return errors.New("--syslog and --webhook are not available on Windows yet (they need the on-disk spool); use --output-dir")
+	case n.alertsOCSF != "":
+		return errors.New("--alerts-ocsf is not available on Windows yet; use --output-dir")
+	case n.elegiaOut != "" && n.elegiaOut != "-":
+		return errors.New("--elegia-out FILE is not available on Windows yet; use --elegia-out - from a console")
+	case n.elegiaOut == "-":
+		if isSvc, err := svc.IsWindowsService(); err == nil && isSvc {
+			return errors.New("--elegia-out - writes to stdout, which a Windows service does not have")
+		}
+	}
+	return nil
+}

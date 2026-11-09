@@ -80,6 +80,25 @@ registry, driver load, file creation, network connection). About 1,800 Windows a
 - Low and medium rules, to keep false positives low until the adapters are
   validated on real hosts.
 
+**Known weaknesses kept from SigmaHQ.** The converted rules keep SigmaHQ's logic
+exactly (they must equal the converter's output), including two exclusions that test
+text the attacker controls:
+- "Suspicious File Downloaded From Direct IP Via Certutil.EXE" excludes any command
+  line containing `://7-`, so adding a dummy argument such as `"://7-"` silences it.
+- "Linux Webshell Indicators" excludes children of `node` whose command line contains
+  `ip neigh show`, so a webshell behind a Node.js server that appends that text to its
+  command (for example `cat /etc/shadow "ip neigh show"`) is not reported.
+
+The hand-written rules in `rules/windows/` and `rules/linux/` are not affected by these
+exclusions. A local fix needs a documented deviation from SigmaHQ (a later change).
+
+**ps.parent fields.** Sigma's `ParentImage` and `ParentCommandLine` map to
+`ps.parent.*`, which comes from the process table. "Suspicious Java Children Processes"
+and "Linux Webshell Indicators" therefore stay silent for a process whose parent the
+table does not know (for example a parent that started before the sensor and was not
+seeded). Sysmon's own view of the parent is kept in `evt.arg[parent_image]` for
+hand-written rules.
+
 **Known gap.** Three Linux reverse-shell rules (Perl, PHP, Python) carry only the
 ATT&CK tactic tag in Sigma, so `rules validate` warns that they have no
 `technique.id`.

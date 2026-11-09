@@ -82,6 +82,8 @@ container (unit tests, pidfd kill, a replayed journal).
 | S4-6 | The identity map was cleared when full; then a FIFO evicted the oldest (long-running) process first. | **Closed (code)** | Least-recently-seen eviction: a process that keeps producing events survives a flood of creates (`TestBinderEvictsOldest`). | A process silent for 65 536 other process starts loses its identity (kill refused, fail closed). |
 | S4-7 | Repeated System header elements were accepted (last one won). | **Closed (code)** | Refused (`TestRepeatedHeaderRejected`). | |
 | S4-8 | The journalctl child's pid stayed protected after a restart. | **Closed (code)** | Protected only while running (responder DynamicPIDs). | macOS eslogger keeps the old pattern. |
+| S4-9 | Two converted SigmaHQ rules keep upstream exclusions that test attacker-controlled command-line text (certutil `://7-`, node webshell `ip neigh show`). | **Accepted (documented)** | Converted rules must equal SigmaHQ's logic; recorded in [rules/sigma/NOTICE.md](../../rules/sigma/NOTICE.md). | A local deviation from SigmaHQ is a later change. |
+| S4-10 | On Windows the SIEM/ZAAFElegia outputs need the Unix-only spool; any of these flags stopped the service, and `--elegia-out -` under the service wrote nowhere. | **Closed (code)** | `platformOutputCheck` (run_windows.go) refuses `--syslog`, `--webhook`, `--alerts-ocsf`, `--elegia-out FILE`, and `--elegia-out -` under the service, at flag check with a clear message; documented in packaging/windows/README.md. | Untested on Windows. |
 
 ## Decisions pending with the owner
 

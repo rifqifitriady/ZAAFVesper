@@ -59,3 +59,6 @@ func newSource(_ *config.Config, _ *pipeline, stderr io.Writer) source.Source {
 		},
 	})
 }
+
+// platformOutputCheck: every output works here.
+func platformOutputCheck(*netOutOptions) error { return nil }

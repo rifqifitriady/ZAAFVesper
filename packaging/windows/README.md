@@ -127,5 +127,9 @@ untrusted): rename it back or open an issue.
 - Parent links of processes running before the sensor started come from a
   Toolhelp32 snapshot; Windows reuses parent pids, so they are a best effort.
 - YARA is not available on Windows (the build is pure Go, without cgo).
+- The SIEM and ZAAFElegia outputs (`--syslog`, `--webhook`, `--alerts-ocsf`,
+  `--elegia-out FILE`) are not available on Windows yet: they need the on-disk
+  spool, which is Unix-only. `zaafvesper run` refuses them at start-up with a
+  message saying so. Alerts are written to `--output-dir`.
 - Event log overwrites and dropped events show as `sysmon_events_dropped`
   sensor-degraded alerts (gaps in EventRecordID).

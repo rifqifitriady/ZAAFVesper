@@ -28,3 +28,6 @@ func stdinIsTerminal() bool { return false }
 func checkSourceBinary(*config.Config) error { return nil }
 
 func newSource(*config.Config, *pipeline, io.Writer) source.Source { return nil }
+
+// platformOutputCheck: every output works here.
+func platformOutputCheck(*netOutOptions) error { return nil }

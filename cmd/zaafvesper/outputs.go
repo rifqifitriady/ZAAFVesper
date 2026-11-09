@@ -79,6 +79,9 @@ func (n *netOutOptions) register(fs *flag.FlagSet) {
 
 // check rejects incomplete or contradictory W2 flags.
 func (n *netOutOptions) check() error {
+	if err := platformOutputCheck(n); err != nil {
+		return err
+	}
 	switch {
 	case n.netInterval < netpoll.MinInterval:
 		return fmt.Errorf("--net-interval must be at least %v", netpoll.MinInterval)
