@@ -8,10 +8,12 @@ Workflow: [`.github/workflows/live-macos.yml`](../../.github/workflows/live-maco
 
 | Date (UTC) | Run | Commit | Result |
 |---|---|---|---|
-| 9 Nov 2026 10:22 | [42600448973](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42600448973) | `validate/live-macos` | 41 checks, 0 failed, 2 not testable |
-| 9 Nov 2026 10:26 | [42600917240](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42600917240) | same (repeat, `workflow_dispatch`) | see the job summary of the run |
+| 9 Nov 2026 10:45 | [42601933739](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42601933739) | `c682ca4` (final harness) | **43 checks, 0 failed**; 2 rules not testable |
+| 9 Nov 2026 10:22 | [42600448973](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42600448973) | `7aa7844` (before the security-review changes) | 41 checks, 0 failed |
 
-Earlier runs while the harness was being built: [42576991593](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42576991593) (every Endpoint Security rule silent; see "eslogger" below), [42599223857](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42599223857) (the diagnosis), [42599771481](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42599771481) (54 of 56; it found the shutdown-flush gap fixed below).
+The results below are from run [42601933739](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42601933739) unless stated. Every row is one row of that run's job summary (the "Check" name is quoted), and the evidence is in its `live-macos-results` artifact: alerts in `outdir/alerts-*.jsonl` (match the rule's `id`), the events in `events.ndjson`, the receivers' logs in `receiver/`, the zaaf findings in `zaaf-findings.ndjson`, run statuses in `status.tsv`, and the full table in `results.md`.
+
+Runs while the harness was being built: [42576991593](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42576991593) (every Endpoint Security rule silent; see "eslogger"), [42599223857](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42599223857) (the diagnosis), [42599771481](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42599771481) (54 of 56; it found the shutdown-flush gap fixed below), [42601040109](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42601040109) (40 of 41: the old eslogger probe counted background noise and saw none in 4 s; replaced by the diagnosis counts).
 
 Runner: `macos-latest`, macOS 26.7.2 (25G332), arm64 virtual machine, SIP disabled. Each run's job summary has the full table, and the `live-macos-results` artifact (30 days) holds the alert files, the capture, the event stream, the receivers' logs, the spool listing and the sensor log.
 
@@ -28,34 +30,37 @@ Runner: `macos-latest`, macOS 26.7.2 (25G332), arm64 virtual machine, SIP disabl
 
 ## eslogger: works, but not for the job's own processes
 
+- Job summary: "eslogger under sudo" PASS ("reports launchd-started commands (3 events); job-tree commands: 0 events"), and two INFO rows with the diagnosis counts.
 - `sudo /usr/bin/eslogger` **runs** on the runner: Full Disk Access is granted to `/bin/bash`, so the job's shell can start it.
 - **Endpoint Security reports nothing for the job's own process tree.** In every run, eslogger alone, with either subscription, reported the marked commands started through launchd (3 matching events) and **none** of the two marked commands started from the job's shell (0 matching events; `esdiag/esdiag.tsv` in the artifact). Other processes are reported normally (launchd, xpcproxy, Spotlight, the runner's Anka scripts). The first full run therefore raised no Endpoint Security alert at all (run 42576991593).
 - **Workaround:** the triggers run as a launchd job (`outside.sh`: `launchctl submit` as root, then `sudo -u runner`), outside the job's tree. With that, every trigger is seen. This is a property of the runner environment, not of ZAAFVesper, and it means a real Mac is not affected in the same way. It also means tests driven straight from a job's shell are blind on these runners.
-- **Dropped events:** the source reported `global_seq_num` gaps in every run (for example `seq_gaps=3197`, `events_missed=33400` against 98,547 decoded events in run 42600448973), and `es_events_dropped` was raised. No trigger was lost. It is not established whether these are real drops under the `open` event volume or numbers used by the muted job tree; treat the count as an upper bound on loss.
+- **Dropped events:** the source reported `global_seq_num` gaps in every run (run 42601933739: `seq_gaps=2940`, `events_missed=28443` against 63,327 decoded events), and `es_events_dropped` was raised. No trigger was lost. It is not established whether these are real drops under the `open` event volume or numbers used by the muted job tree; treat the count as an upper bound on loss.
 
 ## Rules
 
 Each action is listed with the rule it is meant to fire. All are local to the runner: test files, a test plist that is never loaded, a crontab that is removed, a loopback socket.
 
+Job summary rows: "rules | `<id>`: `<rule>`" (the id is the first word in the Action column below). Each "fired" row had at least one alert of that rule in `outdir/alerts-*.jsonl`.
+
 | Action (ATT&CK) | Rule | Result |
 |---|---|---|
-| `xattr -d com.apple.quarantine` on a test file (T1553.001) | `defense_impairment_quarantine_attribute_removed` | fired |
-| `cp` a test plist into `~/Library/LaunchAgents` (T1543.001) | `persistence_launch_agent_plist` | fired |
-| `sudo cp` a test plist into `/Library/LaunchDaemons` (T1543.004) | `persistence_launch_daemon_plist` | fired |
-| `osascript -e 'do shell script "… base64 -D"'`, no UI (T1059.002) | `execution_suspicious_osascript` | fired |
-| `chflags hidden` (T1564.001) | `stealth_hidden_file_flag` | fired |
-| `rm ~/.zsh_history` (T1070.003) | `stealth_shell_history_deleted` | fired |
-| append to `~/.zshrc` from `sh` (T1546.004) | `persistence_shell_profile_modification` | fired |
-| `ps aux \| egrep "Little Snitch\|falcond…"` (T1518.001) | `discovery_security_software_enumeration` | fired |
-| `system_profiler` then `sw_vers` from one shell (T1082) | `discovery_system_profiling_burst` (sequence) | fired |
-| `launchctl submit` of a test job (T1569.001) | `execution_launchctl_submit_or_load_from_temp` | fired |
-| `chmod u+xs` on a test file (T1548.001) | `privilege_escalation_setuid_bit_set` | fired |
-| `screencapture -x` (T1113; the capture itself fails without permission, the exec is detected) | `collection_noninteractive_screencapture` | fired |
-| `echo … \| base64 -d \| sh` (T1059.004) | `execution_remote_script_piped_to_shell` | fired |
-| `security dump-keychain`, metadata only (T1555.001) | `credential_access_keychain_dump_via_security` | fired |
-| `crontab /tmp/…` (T1053.003) | `persistence_cron_periodic` | fired |
-| unsigned Go binary copied to `/tmp` and run (T1204.002) | `execution_untrusted_binary_dropped_and_run_from_temp` (sequence) | fired |
-| `bash` holds a `/dev/tcp` connection to an `nc` on 127.0.0.1 (T1059.004) | `network_shell_remote_socket` (socket polling) | fired |
+| `quarantine`: `xattr -d com.apple.quarantine` on a test file (T1553.001) | `defense_impairment_quarantine_attribute_removed` | fired |
+| `launchagent`: `cp` a test plist into `~/Library/LaunchAgents` (T1543.001) | `persistence_launch_agent_plist` | fired |
+| `launchdaemon`: `sudo cp` a test plist into `/Library/LaunchDaemons` (T1543.004) | `persistence_launch_daemon_plist` | fired |
+| `osascript`: `osascript -e 'do shell script "… base64 -D"'`, no UI (T1059.002) | `execution_suspicious_osascript` | fired |
+| `chflags`: `chflags hidden` (T1564.001) | `stealth_hidden_file_flag` | fired |
+| `history`: `rm ~/.zsh_history` (T1070.003) | `stealth_shell_history_deleted` | fired |
+| `zshrc`: append to `~/.zshrc` from `sh` (T1546.004) | `persistence_shell_profile_modification` | fired |
+| `secsw`: `ps aux \| egrep "Little Snitch\|falcond…"` (T1518.001) | `discovery_security_software_enumeration` | fired |
+| `profiling`: `system_profiler` then `sw_vers` from one shell (T1082) | `discovery_system_profiling_burst` (sequence) | fired |
+| `launchctl`: `launchctl submit` of a test job (T1569.001) | `execution_launchctl_submit_or_load_from_temp` | fired |
+| `setuid`: `chmod u+xs` on a test file (T1548.001) | `privilege_escalation_setuid_bit_set` | fired |
+| `screencapture`: `screencapture -x` (T1113; the capture itself fails without permission, the exec is detected) | `collection_noninteractive_screencapture` | fired |
+| `pipe`: `echo … \| base64 -d \| sh` (T1059.004) | `execution_remote_script_piped_to_shell` | fired |
+| `keychain`: `security dump-keychain`, metadata only (T1555.001) | `credential_access_keychain_dump_via_security` | fired |
+| `cron`: `crontab /tmp/…` (T1053.003) | `persistence_cron_periodic` | fired |
+| `dropped`: unsigned Go binary copied to `/tmp` and run (T1204.002) | `execution_untrusted_binary_dropped_and_run_from_temp` (sequence) | fired |
+| `revshell`: `bash` holds a `/dev/tcp` connection to an `nc` on 127.0.0.1 (T1059.004) | `network_shell_remote_socket` (socket polling) | fired |
 | — | `network_unsigned_temp_binary_outbound` | **not testable**: needs a public destination, and the validation stays on 127.0.0.1 |
 | — | `network_interpreter_raw_ip_uncommon_port` | **not testable**: same reason |
 
@@ -72,7 +77,7 @@ Not exercised here: the remaining macOS rules. These are the ones that need a re
 | the accepted socket in `nc` → one `NetworkAccept` `inbound` | pass |
 | every network event has `source: netpoll` | pass |
 
-Polling ran at 500 ms over about 105 polls, reading about 60,000 processes in all. No `budget_exhausted`, `fd_caps` or `untracked_sockets`.
+Evidence: the `network_connection` records in `events.ndjson` (`Image` `/usr/bin/nc` or `…/dropped`, `DestinationPort` 5555, `Initiated` absent / `"true"` / `"false"`). Polling ran at 500 ms over 110 polls, reading about 62,000 processes in all, with no `budget_exhausted`, `fd_caps` or `untracked_sockets` (sensor log `stats: network`).
 
 ## SIEM outputs and spool
 
@@ -80,12 +85,12 @@ Polling ran at 500 ms over about 105 polls, reading about 60,000 processes in al
 |---|---|
 | syslog over TLS, pinned CA, received every alert | pass |
 | HTTPS webhook (bearer token) received every alert | pass |
-| alerts raised while both receivers were stopped went to the spool | pass (4 spool files) |
+| alerts raised while both receivers were stopped went to the spool | pass (3 spool files; `spool-while-down.txt`) |
 | the spool drained after the receivers came back, and those alerts arrived | pass |
 | nothing left in the spool at shutdown | pass, after the fix below |
-| the token is absent from the sensor log, the event stream, the alert files and the syslog messages | pass |
+| the token is absent from everything uploaded (every file of the artifact, plus the decompressed capture) | pass |
 
-Splunk HEC mode was not run live (it uses the same HTTPS path; unit tests cover its format).
+Evidence: `receiver/syslog.log` and `receiver/webhook.log`, compared per rule id with the alert file by `check.py` ("syslog over TLS (pinned CA) received every alert", "HTTPS webhook received every alert", "alerts raised while down were delivered later: …"). Splunk HEC mode was not run live (it uses the same HTTPS path; unit tests cover its format).
 
 ## ZAAFElegia and OCSF
 
@@ -101,7 +106,18 @@ The three Sigma rules are in `scripts/ci/c/sigma/`.
 ## Bugs found and fixed
 
 - **The last alerts before shutdown were spooled, not sent** (run 42599771481). The forwarder put every record still queued at `Close` into the spool, even when the endpoint was up. So an alert raised in the last second before a clean stop reached the SIEM only after the next start. Now it gets one last delivery attempt (bounded to 3 s, and syslog write deadlines follow it) when the endpoint is up; otherwise, or when that attempt fails, the records are spooled as before. Test: `TestForwarderFinalFlushOnClose`, which fails without the fix.
+- The fix keeps delivery **at least once**: a record whose final send timed out after the receiver had taken it is spooled and sent again at the next start (a possible duplicate), and the final flush does not send older spooled records first, so ordering across a restart is not guaranteed. `TestFinalFlushBoundedByHangingEndpoint` shows that an endpoint which never answers holds `Close` for about 3 s and the record is spooled.
 - The harness itself also needed fixes, none of them in ZAAFVesper: eslogger ignores SIGINT (it is stopped with SIGTERM, as the sensor already does), and `launchctl submit` restarts a job when it exits.
+
+## How the workflow is protected
+
+From the independent security review (no critical, high or medium findings), with its low findings fixed:
+- **Triggers:** `workflow_dispatch` and push to `validate/**` only, so forks and pull requests cannot run it.
+- **Permissions and actions:** `permissions: contents: read`, `persist-credentials: false`, no secrets, and every action pinned to a commit SHA that matches its tag. No `${{ }}` in any `run:` block.
+- **Pinned toolchains:** Go is downloaded from go.dev and checked against its published sha256. ZAAFElegia is fetched at a full commit, the commit is re-checked, and it is built with `cargo --locked` (every crate carries a checksum) and a pinned Rust toolchain (`RUSTUP_TOOLCHAIN`).
+- **Least privilege:** `zaaf`, the receivers and the triggers run unprivileged; only eslogger, the sensor and the installs use `sudo`.
+- **Bounds:** every wait has a deadline, a cleanup trap stops the sensor, receivers and launchd jobs on any failure, and the scripts refuse to run outside a GitHub-hosted runner.
+- **Artifact:** it is public for 30 days and holds runner telemetry: command lines, environment variable names (values are redacted) and the runner's own endpoints. No secret was found in it.
 
 ## Limits of this validation
 
