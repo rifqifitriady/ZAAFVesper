@@ -1,3 +1,9 @@
+# Live validation of ZAAFVesper on a throw-away GitHub macOS runner (v0.3 C).
+# Runs the sensor as root with eslogger, fires safe local actions, checks
+# socket polling, syslog/TLS and HTTPS webhook delivery with the spool, and
+# the ZAAFElegia pipe. Results: job summary and the live-macos-results
+# artifact; docs/validation/macos.md records them. No secrets, read-only
+# token, every action pinned to a commit SHA.
 name: live-macos
 on:
   workflow_dispatch:
@@ -5,13 +11,62 @@ on:
     branches: ['validate/**']
 permissions:
   contents: read
+concurrency:
+  group: live-macos-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  # ZAAFElegia 0.0.1, pinned by commit (the same commit the integration
+  # example was verified with).
+  ZAAFELEGIA_REPO: https://github.com/rifqifitriady/ZAAFElegia.git
+  ZAAFELEGIA_COMMIT: c2e02128894084b4ac673fa4fc7206dca53add06
 jobs:
-  probe:
+  live:
     runs-on: macos-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Probe runner
-        run: scripts/ci/live-macos/probe.sh
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build ZAAFVesper and the test helpers
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/bin/zaafvesper" ./cmd/zaafvesper
+          go build -o "$RUNNER_TEMP/bin/receiver" ./scripts/ci/live-macos/receiver
+          go build -o "$RUNNER_TEMP/bin/dropped" ./scripts/ci/live-macos/dropped
+      - name: Build zaaf (ZAAFElegia) at the pinned commit
+        run: |
+          src="$RUNNER_TEMP/zaafelegia"
+          git init -q "$src"
+          git -C "$src" fetch -q --depth 1 "$ZAAFELEGIA_REPO" "$ZAAFELEGIA_COMMIT"
+          git -C "$src" -c advice.detachedHead=false checkout -q FETCH_HEAD
+          test "$(git -C "$src" rev-parse HEAD)" = "$ZAAFELEGIA_COMMIT"
+          (cd "$src" && cargo build -q --release --locked -p zaaf-cli)
+          cp "$src/target/release/zaaf" "$RUNNER_TEMP/bin/zaaf"
+          "$RUNNER_TEMP/bin/zaaf" --version
+      - name: Live validation (root)
+        env:
+          BIN: ${{ runner.temp }}/bin
+          ART: ${{ runner.temp }}/live-macos-results
+        run: scripts/ci/live-macos/run.sh
+      - name: Check results
+        if: always()
+        env:
+          ART: ${{ runner.temp }}/live-macos-results
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set +e
+          python3 scripts/ci/live-macos/check.py "$ART" "$GITHUB_WORKSPACE" "$RUN_URL"
+          rc=$?
+          [ -f "$ART/results.md" ] && cat "$ART/results.md" >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: live-macos-results
+          path: ${{ runner.temp }}/live-macos-results
+          retention-days: 30
