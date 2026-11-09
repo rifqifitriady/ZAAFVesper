@@ -1,20 +1,20 @@
 <div align="center">
 
-<img src="docs/assets/banner.svg" width="100%" alt="ZAAFVesper: behaviour-driven security sensor for macOS">
+<img src="docs/assets/banner.svg" width="100%" alt="ZAAFVesper: behaviour-driven security sensor for macOS, with Windows and Linux in preview">
 
 <br>
 
-[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-0A0D26?style=for-the-badge&logo=apple&logoColor=white)](#requirements) [![Go](https://img.shields.io/badge/Go-1.27-1FE5C3?style=for-the-badge&logo=go&logoColor=0A0D26)](go.mod) [![License](https://img.shields.io/badge/license-Apache--2.0-9D6BFF?style=for-the-badge)](LICENSE) [![Status](https://img.shields.io/badge/status-pre--release-FF3EC8?style=for-the-badge)](#project-status)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-0A0D26?style=for-the-badge&logo=apple&logoColor=white)](#platform-support) [![Version](https://img.shields.io/badge/version-v0.2-5EF0D6?style=for-the-badge)](CHANGELOG.md) [![Go](https://img.shields.io/badge/Go-1.27-1FE5C3?style=for-the-badge&logo=go&logoColor=0A0D26)](go.mod) [![License](https://img.shields.io/badge/license-Apache--2.0-9D6BFF?style=for-the-badge)](LICENSE) [![Status](https://img.shields.io/badge/status-pre--release-FF3EC8?style=for-the-badge)](#project-status)
 
-[![Rules](https://img.shields.io/badge/detection%20rules-56-3B8EFF?style=flat-square)](docs/rules.md) [![Fixtures](https://img.shields.io/badge/rule%20fixtures-319%20passing-1FE5C3?style=flat-square)](rules/testdata) [![ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-41%20techniques-FF3EC8?style=flat-square)](#detection-coverage) [![Atomic](https://img.shields.io/badge/Atomic%20Red%20Team-28%20rules%20linked-9D6BFF?style=flat-square)](https://github.com/redcanaryco/atomic-red-team)
+[![Rules](https://img.shields.io/badge/detection%20rules-94-3B8EFF?style=flat-square)](docs/rules.md) [![Fixtures](https://img.shields.io/badge/rule%20fixtures-467%20passing-1FE5C3?style=flat-square)](rules/testdata) [![ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-63%20techniques-FF3EC8?style=flat-square)](#detection-coverage) [![Atomic](https://img.shields.io/badge/Atomic%20Red%20Team-28%20rules%20linked-9D6BFF?style=flat-square)](https://github.com/redcanaryco/atomic-red-team)
 
-**[Quick start](#quick-start)** · **[How it works](#how-it-works)** · **[Coverage](#detection-coverage)** · **[Writing rules](#writing-rules)** · **[Security](#security-model)** · **[Operations guide](docs/operations.md)**
+**[What's new](CHANGELOG.md)** · **[Quick start](#quick-start)** · **[How it works](#how-it-works)** · **[Coverage](#detection-coverage)** · **[Writing rules](#writing-rules)** · **[Security](#security-model)** · **[Operations guide](docs/operations.md)**
 
 </div>
 
 ---
 
-ZAAFVesper watches what processes on a Mac actually **do**: what they spawn, which files they touch, which secrets they read, how they try to persist. It matches that behaviour against readable rules mapped to MITRE ATT&CK. Events come from Apple's Endpoint Security framework through the built-in `eslogger`. The rule language is modelled on [Fibratus](https://github.com/rabbitstack/fibratus), and every built-in rule ships with test fixtures. Most rules also name the Atomic Red Team test that exercises them.
+ZAAFVesper watches what processes on a Mac actually **do**: what they spawn, which files they touch, which secrets they read, how they try to persist. It matches that behaviour against readable rules mapped to MITRE ATT&CK. Events come from Apple's Endpoint Security framework through the built-in `eslogger`. The rule language is modelled on [Fibratus](https://github.com/rabbitstack/fibratus), and every built-in rule ships with test fixtures. Most rules also name the Atomic Red Team test that exercises them. Since v0.2 the same engine also reads Sysmon on Windows and Linux (preview), imports Sigma rules, sees network connections, ships alerts to a SIEM or to [ZAAFElegia](https://github.com/rifqifitriady/ZAAFElegia), and can contain a threat after it is detected.
 
 > *Vesper* is the evening star: a watch that stays awake after dark.
 
@@ -42,7 +42,7 @@ macOS-only for now (the Windows and Linux builds are pure Go).
 <td width="50%" valign="top">
 
 **Behaviour rules, not signatures**<br>
-46 rules over process, file, network, persistence, credential and defence-impairment activity. Single-event rules and `sequence` rules correlate steps such as *download → write → execute* by path or process. Twelve more come from SigmaHQ, converted with `zaafvesper sigma convert`.
+94 rules: 46 hand-written for macOS (process, file, network, persistence, credential and defence-impairment activity), 11 for Windows and Linux, and 37 converted from SigmaHQ with `zaafvesper sigma convert`. Single-event rules and `sequence` rules correlate steps such as *download → write → execute* by path or process.
 
 </td>
 <td width="50%" valign="top">
@@ -140,8 +140,8 @@ Details and limits: [docs/operations.md](docs/operations.md#network-telemetry-so
 
 | Tactic | Rules | Examples |
 |---|:-:|---|
-| Persistence | 10 | Launch Agents and Daemons, Login Items, cron, emond, kernel extensions, shell start-up files |
-| Defense Impairment | 8 | Gatekeeper or firewall disabled, quarantine stripped, logs cleared, security tool or sensor stopped |
+| Persistence | 11 | Launch Agents and Daemons, Login Items, cron, emond, kernel extensions, shell start-up files |
+| Defense Impairment | 9 | Gatekeeper or firewall disabled, quarantine stripped, logs cleared, security tool or sensor stopped |
 | Execution | 7 | Script piped into a shell, suspicious AppleScript/JXA, launchctl jobs from temp folders, unsigned binary dropped and run, XProtect and YARA hits, a shell holding a network connection (reverse shell) |
 | Credential Access | 6 | Fake password prompts, Keychain dumps, browser credential stores, SSH and GnuPG keys |
 | Stealth | 4 | `DYLD_INSERT_LIBRARIES`, task port and ptrace injection, hidden files, shell history deleted |
@@ -150,7 +150,9 @@ Details and limits: [docs/operations.md](docs/operations.md#network-telemetry-so
 | Command and Control | 3 | Download followed by a stdin-fed shell, unsigned binary in a temp folder connecting out, script interpreter to a public IP on an uncommon port |
 | Collection | 1 | Non-interactive screen capture |
 
-The table counts the 41 hand-written rules. The 12 converted SigmaHQ macOS rules in `rules/sigma/macos/` add account changes (admin group, root and guest accounts), SIP and Time Machine tampering, Office child processes and JXA or run-only AppleScript. The full list, with false-positive notes and trust policy, is in [docs/rules.md](docs/rules.md). `zaafvesper coverage --navigator` exports an ATT&CK Navigator layer.
+The table counts the 46 hand-written macOS rules (the two sensor-health rules apply on every platform). The 12 converted SigmaHQ macOS rules in `rules/sigma/macos/` add account changes (admin group, root and guest accounts), SIP and Time Machine tampering, Office child processes and JXA or run-only AppleScript.
+
+**Windows and Linux (preview).** 11 hand-written rules in `rules/windows/` and `rules/linux/` (LSASS memory reads, shadow-copy deletion, encoded PowerShell, Run keys, WMI subscriptions, remote threads; reverse shells, cron and systemd persistence, sudoers changes, shell history deletion) and 25 converted SigmaHQ rules in `rules/sigma/windows/` and `rules/sigma/linux/`. They pass their fixtures but have not yet run against a real Windows or Linux host. The full list, with false-positive notes and trust policy, is in [docs/rules.md](docs/rules.md). `zaafvesper coverage --navigator` exports an ATT&CK Navigator layer.
 
 ## Writing rules
 
@@ -237,7 +239,7 @@ packaging/             LaunchDaemon plist, newsyslog config (the package also cr
 
 ## Roadmap
 
-- Windows and Linux adapters (Sysmon): in preview, to be validated on real hosts.
+- Validate the Windows and Linux adapters, and the macOS install, on real hosts.
 - Complete network telemetry (DNS, short connections) through a NetworkExtension.
 - Native Endpoint Security client with AUTH events: real blocking before execution (needs Apple's entitlement; today's response only acts after the event).
 - Signed and notarized package built in CI.

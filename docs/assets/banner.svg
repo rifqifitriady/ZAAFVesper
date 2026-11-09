@@ -94,7 +94,7 @@
     </g>
 
     <!-- copy -->
-    <text x="44" y="64" class="sans" font-size="13" font-weight="700" letter-spacing="2.4" fill="#5EF0D6">MACOS · ENDPOINT SECURITY · MITRE ATT&amp;CK</text>
+    <text x="44" y="64" class="sans" font-size="13" font-weight="700" letter-spacing="2.4" fill="#5EF0D6">MACOS · WINDOWS · LINUX · MITRE ATT&amp;CK</text>
     <text x="42" y="132" class="sans" font-size="58" font-weight="800" fill="url(#title)">ZAAFVesper</text>
     <text x="44" y="170" class="sans" font-size="18" fill="#D6D3F2">Behaviour-driven security sensor for macOS.</text>
     <text x="44" y="196" class="sans" font-size="18" fill="#A9A5D6">The evening watch that stays awake after dark.</text>
