@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-0A0D26?style=for-the-badge&logo=apple&logoColor=white)](#platforms) [![Version](https://img.shields.io/badge/version-v0.2-5EF0D6?style=for-the-badge)](CHANGELOG.md) [![Go](https://img.shields.io/badge/Go-1.27-1FE5C3?style=for-the-badge&logo=go&logoColor=0A0D26)](go.mod) [![License](https://img.shields.io/badge/license-Apache--2.0-9D6BFF?style=for-the-badge)](LICENSE)
 
-[![Rules](https://img.shields.io/badge/detection%20rules-94-3B8EFF?style=flat-square)](docs/rules.md) [![Fixtures](https://img.shields.io/badge/rule%20fixtures-467%20passing-1FE5C3?style=flat-square)](rules/testdata) [![ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-63%20techniques-FF3EC8?style=flat-square)](#detection-coverage) [![Status](https://img.shields.io/badge/status-pre--release-FF3EC8?style=flat-square)](#status)
+[![Rules](https://img.shields.io/badge/detection%20rules-94-3B8EFF?style=flat-square)](docs/rules.md) [![Fixtures](https://img.shields.io/badge/rule%20fixtures-467%20passing-1FE5C3?style=flat-square)](rules/testdata) [![ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-63%20techniques-FF3EC8?style=flat-square)](#detection-coverage) [![Status](https://img.shields.io/badge/status-pre--release-FF3EC8?style=flat-square)](#status) [![CI](https://github.com/rifqifitriady/ZAAFVesper/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rifqifitriady/ZAAFVesper/actions/workflows/ci.yml)
 
 **[Quick start](#quick-start)** · **[How it works](#how-it-works)** · **[Coverage](#detection-coverage)** · **[Security](#security-model)** · **[Roadmap](#roadmap)** · **[Operations guide](docs/operations.md)** · **[Changelog](CHANGELOG.md)**
 
