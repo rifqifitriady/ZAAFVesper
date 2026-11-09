@@ -6,7 +6,10 @@ description: |
   shutdown, reboot, halt or poweroff ran without a controlling terminal. Malware and
   wipers reboot or power off a host to finish an attack or to cause disruption. The
   macOS Apple menu does not run these commands, and an administrator who types them has
-  a tty. On Linux the Sysmon source does not report a tty, so every run matches there.
+  a tty, unless the tty comes from script, expect or unbuffer. On systemd Linux these
+  commands are links to systemctl, which the rule also matches (systemctl poweroff, or a
+  link name as argv[0]). The Linux Sysmon source reports no tty, so every run matches
+  there, including an administrator's systemctl reboot.
 labels:
   tactic.id: TA0040
   tactic.name: Impact
@@ -16,8 +19,13 @@ references:
   - https://attack.mitre.org/techniques/T1529/
 condition: >
   spawn_process
-  and base(ps.exe) in ('shutdown', 'reboot', 'halt', 'poweroff')
-  and not ps.tty imatches '/dev/*'
+  and (
+    base(ps.exe) in ('shutdown', 'reboot', 'halt', 'poweroff')
+    or (base(ps.exe) = 'systemctl'
+        and (ps.args in ('poweroff', 'reboot', 'halt', 'kexec', 'shutdown')
+             or ps.args imatches ('*/poweroff', '*/reboot', '*/halt', '*/shutdown')))
+  )
+  and (not ps.tty imatches '/dev/*' or ps.parent.name in ('script', 'expect', 'unbuffer'))
 output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran without a terminal: %ps.cmdline"
 severity: low
 action: []

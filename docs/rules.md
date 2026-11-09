@@ -1,13 +1,12 @@
 # ZAAFVesper built-in rules
 
-133 rules: 58 hand-written rules in `rules/` (macOS, some of them also Linux or every
+136 rules: 61 hand-written rules in `rules/` (macOS, some of them also Linux or every
 platform), 12 hand-written Windows and Linux rules in `rules/windows/` and `rules/linux/`,
 and 63 rules converted from SigmaHQ (17 macOS, 30 Windows, 16 Linux; see
 [Sigma import](#sigma-import)). Also 5 YARA signatures and two shared macro files
 (`macros.yml`, `network.yml`). Together they cover **109 ATT&CK techniques** (see
-[Coverage and benchmark](#coverage-and-benchmark)). Every hand-written rule maps to one
-MITRE ATT&CK technique (two where one command line serves both, such as audio and video
-capture), has a fixture file with at least one `match` and two `nomatch` scenarios (one of
+[Coverage and benchmark](#coverage-and-benchmark)). Every hand-written rule added since v0.4 maps to one
+MITRE ATT&CK technique (one older rule, the untrusted Launch item writer, keeps two), has a fixture file with at least one `match` and two `nomatch` scenarios (one of
 them a realistic benign lookalike), and, where Atomic Red Team ships a test for the
 behaviour on the rule's platforms, lists that test's GUID in `tests.atomic`.
 
@@ -180,8 +179,8 @@ they list only tests whose command lines match the rule's condition.
 
 ## Coverage and benchmark
 
-**Coverage (v0.4, 9 Nov 2026).** 133 enabled rules cover **109 ATT&CK techniques**, up
-from 63 before v0.4: 61 on macOS, 43 on Windows and 27 on Linux (a rule without
+**Coverage (v0.4, 9 Nov 2026).** 136 enabled rules cover **109 ATT&CK techniques**, up
+from 63 before v0.4: 61 on macOS, 43 on Windows and 26 on Linux (a rule without
 `platforms:` counts for every platform). Techniques per tactic, thinnest first:
 
 | Tactic | Techniques | | Tactic | Techniques |
@@ -194,18 +193,25 @@ from 63 before v0.4: 61 on macOS, 43 on Windows and 27 on Linux (a rule without
 | Command and Control | 6 | | Stealth | 24 |
 | Defense Impairment | 10 | | Persistence | 28 |
 
-67 of the 133 rules link at least one Atomic Red Team test. The other 66 are listed by the
+67 of the 136 rules link at least one Atomic Red Team test. The other 69 are listed by the
 report; most are converted SigmaHQ rules for tools that have no atomic (hacktools, malware
 families) or hand-written rules for behaviour no atomic exercises.
 
 What v0.4 added, thinnest tactics first:
 
-- **macOS, hand-written (rules 47–58):** Exfiltration (plain-text curl/wget upload,
-  rclone), Lateral Movement (Remote Login, Screen Sharing or ARD enabled), Impact (file
-  encryption, dd overwrite and disk erase, scripted shutdown, account deletion,
-  crypto miners), Collection (sensitive-folder or password archives, background clipboard
-  reads, audio and video capture), and SSH `authorized_keys` writes. Several also run on
-  Linux, and the miner and rclone rules on every platform.
+- **macOS, hand-written (rules 47–61, one technique each):** Exfiltration (plain-text
+  curl/wget upload, rclone), Lateral Movement (Remote Login; Screen Sharing or ARD),
+  Impact (file encryption, dd overwrite, diskutil erase, scripted shutdown, account
+  deletion, crypto miners), Collection (sensitive-folder or password archives, background
+  clipboard reads, audio capture, video capture), and SSH `authorized_keys` writes or
+  renames. Several also run on Linux, and the miner and rclone rules on every platform.
+  An independent security review tried evasions against them (renamed binaries, fake
+  localhost URLs, `/tmp/../` paths, `systemctl` links on Linux, `script -q` ptys, combined
+  zip flags, `openssl -d -e`, relative paths); each one found is now a `match` fixture.
+  Still not covered, as each rule's description says: a renamed miner with a config file,
+  a renamed rclone with none of its options, shell-builtin reads of `/etc/shadow`,
+  overwrites without dd (shred, shell redirection), and curl uploads that hide a
+  scheme-less URL behind another `://` argument.
 - **Linux:** a hand-written `/etc/shadow` reader rule, and converted SigmaHQ rules for
   immutable-flag removal, `/proc/<pid>/mem` writes with dd, services stopped or disabled,
   backdated systemd units and `userdel`.
@@ -227,16 +233,46 @@ benchmark" downloads the bundle shipped with Atomic Red Team at commit `a0e3f9bc
 its SHA-256, runs the report and writes it to the job summary. Result on this branch: 0
 problems, 4 warnings (converted SigmaHQ tags).
 
-**Benchmark.** `go test -run '^$' -bench BenchmarkShippedRules -benchtime 3s ./cmd/zaafvesper`
-runs the rule engine with all 133 rules enabled (every platform) over the 664 events of all
-fixture scenarios, in a loop, on one goroutine. On an Apple M4 (Go 1.27.3) it processes
-about **77 000 events per second** (12.9 µs per event, 227 allocations); before v0.4, with
-94 rules, it was about 153 000. A CPU profile shows about a third of the time in rule
-evaluation, mostly lower-casing for `icontains`, and the rest in allocation and garbage
-collection; no single rule dominates. The CI job runs the same benchmark on GitHub's
-`ubuntu-latest` runner and prints its number in the job summary. Limits: this measures the
-engine only (no eslogger decoding, process table, YARA or output sinks), on fixture events
-rather than a live event mix, and a real sensor loads only its own platform's rules.
+**Benchmark.** Two engine-only benchmarks (no eslogger or Sysmon decoding, no process
+table, no YARA, no output sinks; one goroutine; events already in memory). Neither is a
+full-pipeline figure, and neither replaces a measurement on a live host.
+
+- `go test -run '^$' -bench BenchmarkEngine ./pkg/rules`: the original throughput test.
+  30 synthetic rules (27 single-event, 3 sequences) over 10 benign macOS events; about 7.4
+  rules share each event's name. This is the number earlier documents quoted.
+- `go test -run '^$' -bench BenchmarkShippedRules -benchtime 3s ./cmd/zaafvesper`: the
+  shipped rules over the events of their own fixtures. `benign-<platform>` loads only that
+  platform's rules (as `run` does) and replays that platform's `nomatch` events, which is
+  the like-for-like production case; `benign` and `fixtures-all` load every platform's
+  rules at once and are upper bounds on cost.
+
+Apple M4, macOS, Go 1.27.3, branch `feat/detection-expansion` (136 rules) and the same
+benchmark run on the v0.3 rule set (commit `7112b12`, 94 rules):
+
+| Benchmark | Rules loaded | Rules evaluated per event | Alerts per event | Events per second | µs per event |
+|---|:-:|:-:|:-:|--:|--:|
+| BenchmarkEngine (synthetic) | 30 | 7.4 | not reported | 1 650 000 | 0.61 |
+| benign-macos, v0.3 → v0.4 | 58 → 78 | 21.6 → 36.3 | 0.25 → 0.21 | 278 000 → 178 000 | 3.6 → 5.6 |
+| benign-windows, v0.3 → v0.4 | 22 → 40 | 5.1 → 17.9 | 0.03 → 0.03 | 595 000 → 179 000 | 1.7 → 5.6 |
+| benign-linux, v0.3 → v0.4 | 18 → 32 | 8.3 → 19.5 | 0 → 0 | 714 000 → 406 000 | 1.4 → 2.5 |
+| benign, all platforms, v0.3 → v0.4 | 94 → 136 | 33.0 → 64.9 | 0.23 → 0.18 | 130 000 → 79 000 | 7.7 → 12.6 |
+| fixtures-all, all platforms (v0.4) | 136 | 64.3 | 0.58 | 74 000 | 13.5 |
+
+What the numbers say. The engine indexes rules by event name, and the index holds: the
+cost per evaluated rule stays about the same (roughly 150 to 330 ns for shipped rules,
+80 ns for the short synthetic ones), and the time per event grows with the number of
+rules that share the event's name. v0.4 added mostly process-creation rules, so every
+CreateProcess event now meets more of them: on Windows the rules evaluated per event
+went from 5 to 18 and throughput fell by about 3.3 times; on macOS by about 1.6 times.
+Converted SigmaHQ rules cost more per rule than the synthetic ones (long lists of
+case-insensitive substrings, each lower-casing the command line again; 120 to 230
+allocations per event). Alerts are not the main cost (`benign` is only about 7% faster
+than `fixtures-all`). The fixture event mix is not a live mix: real traffic has many more
+file events and far fewer suspicious command lines. The CI job "ATT&CK coverage and rule
+benchmark" runs both benchmarks on GitHub's `ubuntu-latest` runner and prints the
+numbers in the job summary. A runner is slower than the M4: the first version of this
+benchmark (all platforms, all fixture events, 133 rules) measured about 47 000 events per
+second there (AMD EPYC 9V74, 4 vCPU, CI run 42608315354) against about 77 000 on the M4.
 
 ## Network rules (42–44)
 
@@ -301,23 +337,26 @@ Seq = sequence rule. Action = response taken only when ZAAFVesper runs with `--e
 | 45 | Quarantine attribute removed by an untrusted process<br>`rules/defense_impairment_quarantine_attribute_removed_by_untrusted_process.yml` | TA0112 Defense Impairment | T1553.001 Gatekeeper Bypass | high |  | requarantine | (none indexed for this technique) |
 | 46 | Launch Agent or Daemon written by an untrusted process<br>`rules/persistence_launch_item_plist_by_untrusted_process.yml` | TA0003 Persistence | T1543.001 Launch Agent, T1543.004 Launch Daemon | high |  | remove_persistence | (none indexed for this technique) |
 | 47 | Sensitive folder archived or archive encrypted with a password (macos, linux)<br>`rules/collection_archive_sensitive_or_encrypted.yml` | TA0009 Collection | T1560.001 Archive via Utility | medium |  |  | `0286eb44-e7ce-41a0-b109-3da516e05a5f`<br>`2794f321-55c4-4484-9eef-0557996f715a` |
-| 48 | Microphone or camera recorded from the command line (macos)<br>`rules/collection_audio_or_video_capture.yml` | TA0009 Collection | T1123 Audio Capture, T1125 Video Capture | medium |  |  | `c7a0bb71-70ce-4a53-b115-881f241b795b` |
-| 49 | Clipboard read by a script without a terminal (macos)<br>`rules/collection_clipboard_read_by_script.yml` | TA0009 Collection | T1115 Clipboard Data | medium |  |  | `1ac2247f-65f8-4051-b51f-b0ccdfaaa5ff` |
-| 50 | File uploaded with curl or wget over unencrypted HTTP or FTP (macos, linux)<br>`rules/exfiltration_upload_over_plain_http_or_ftp.yml` | TA0010 Exfiltration | T1048.003 Exfiltration Over Unencrypted Non-C2 Protocol | medium |  |  | (none indexed for this behaviour) |
-| 51 | rclone copies data to a remote (all)<br>`rules/exfiltration_rclone_copy_to_remote.yml` | TA0010 Exfiltration | T1567.002 Exfiltration to Cloud Storage | medium |  |  | `a4b74723-5cee-4300-91c3-5e34166909b4` |
-| 52 | User account deleted or its password reset with dscl or sysadminctl (macos)<br>`rules/impact_account_deleted_or_password_reset.yml` | TA0040 Impact | T1531 Account Access Removal | medium |  |  | `4d938c43-2fe8-4d70-a5b3-5bf239aa7846`<br>`d3812c4e-30ee-466a-a0aa-07e355b561d6` |
-| 53 | Cryptocurrency miner started (all)<br>`rules/impact_cryptocurrency_miner.yml` | TA0040 Impact | T1496 Resource Hijacking | high |  |  | (none indexed for this behaviour) |
-| 54 | File or disk overwritten with dd, or disk erased with diskutil (macos, linux)<br>`rules/impact_data_destruction_overwrite_or_disk_erase.yml` | TA0040 Impact | T1485 Data Destruction, T1561.001 Disk Content Wipe | high |  |  | `38deee99-fd65-4031-bec8-bfa4f9f26146` |
-| 55 | Files encrypted with openssl, gpg or 7z from the command line (macos, linux)<br>`rules/impact_file_encryption_with_cli_tool.yml` | TA0040 Impact | T1486 Data Encrypted for Impact | medium |  |  | `645f0f5a-ef09-48d8-b9bc-f0e24c642d72`<br>`1a01f6b8-b1e8-418e-bbe3-78a6f822759e` |
-| 56 | Shutdown or reboot run without a terminal (macos, linux)<br>`rules/impact_shutdown_or_reboot_without_terminal.yml` | TA0040 Impact | T1529 System Shutdown/Reboot | low |  |  | `6326dbc4-444b-4c04-88f4-27e94d0327cb`<br>`4963a81e-a3ad-4f02-adda-812343b351de`<br>`47d0b042-a918-40ab-8cf9-150ffe919027`<br>`918f70ab-e1ef-49ff-bc57-b27021df84dd`<br>`78f92e14-f1e9-4446-b3e9-f1b921f2459e`<br>`73a90cd2-48a2-4ac5-8594-2af35fa909fa`<br>`61303105-ff60-427b-999e-efb90b314e41` |
-| 57 | Remote Login, Screen Sharing or Apple Remote Desktop enabled from the command line (macos)<br>`rules/lateral_movement_remote_access_enabled.yml` | TA0008 Lateral Movement | T1021.005 VNC, T1021.004 SSH | medium |  |  | `8a930abe-841c-4d4f-a877-72e9fe90b9ea` |
-| 58 | SSH authorized_keys written by a non-editor process (macos, linux)<br>`rules/persistence_ssh_authorized_keys_written.yml` | TA0003 Persistence, TA0004 Privilege Escalation | T1098.004 SSH Authorized Keys | high |  |  | `342cc723-127c-4d3a-8292-9c0c6b4ecadc` |
+| 48 | Microphone recorded from the command line (macos)<br>`rules/collection_audio_capture_cli.yml` | TA0009 Collection | T1123 Audio Capture | medium |  |  | `c7a0bb71-70ce-4a53-b115-881f241b795b` |
+| 49 | Camera recorded from the command line (macos)<br>`rules/collection_video_capture_cli.yml` | TA0009 Collection | T1125 Video Capture | medium |  |  | (none indexed for this behaviour) |
+| 50 | Clipboard read by a script without a terminal (macos)<br>`rules/collection_clipboard_read_by_script.yml` | TA0009 Collection | T1115 Clipboard Data | medium |  |  | `1ac2247f-65f8-4051-b51f-b0ccdfaaa5ff` |
+| 51 | File uploaded with curl or wget over unencrypted HTTP or FTP (macos, linux)<br>`rules/exfiltration_upload_over_plain_http_or_ftp.yml` | TA0010 Exfiltration | T1048.003 Exfiltration Over Unencrypted Non-C2 Protocol | medium |  |  | (none indexed for this behaviour) |
+| 52 | rclone copies data to a remote (all)<br>`rules/exfiltration_rclone_copy_to_remote.yml` | TA0010 Exfiltration | T1567.002 Exfiltration to Cloud Storage | medium |  |  | `a4b74723-5cee-4300-91c3-5e34166909b4` |
+| 53 | User account deleted or its password reset with dscl or sysadminctl (macos)<br>`rules/impact_account_deleted_or_password_reset.yml` | TA0040 Impact | T1531 Account Access Removal | medium |  |  | `4d938c43-2fe8-4d70-a5b3-5bf239aa7846`<br>`d3812c4e-30ee-466a-a0aa-07e355b561d6` |
+| 54 | Cryptocurrency miner started (all)<br>`rules/impact_cryptocurrency_miner.yml` | TA0040 Impact | T1496 Resource Hijacking | high |  |  | (none indexed for this behaviour) |
+| 55 | File or disk overwritten with zeros or random data by dd (macos, linux)<br>`rules/impact_data_destruction_dd_overwrite.yml` | TA0040 Impact | T1485 Data Destruction | high |  |  | `38deee99-fd65-4031-bec8-bfa4f9f26146` |
+| 56 | Disk or volume erased with diskutil (macos)<br>`rules/impact_disk_erased_with_diskutil.yml` | TA0040 Impact | T1561.001 Disk Content Wipe | high |  |  | (none indexed for this behaviour) |
+| 57 | Files encrypted with openssl, gpg or 7z from the command line (macos, linux)<br>`rules/impact_file_encryption_with_cli_tool.yml` | TA0040 Impact | T1486 Data Encrypted for Impact | medium |  |  | `645f0f5a-ef09-48d8-b9bc-f0e24c642d72`<br>`1a01f6b8-b1e8-418e-bbe3-78a6f822759e` |
+| 58 | Shutdown or reboot run without a terminal (macos, linux)<br>`rules/impact_shutdown_or_reboot_without_terminal.yml` | TA0040 Impact | T1529 System Shutdown/Reboot | low |  |  | `6326dbc4-444b-4c04-88f4-27e94d0327cb`<br>`4963a81e-a3ad-4f02-adda-812343b351de`<br>`47d0b042-a918-40ab-8cf9-150ffe919027`<br>`918f70ab-e1ef-49ff-bc57-b27021df84dd`<br>`78f92e14-f1e9-4446-b3e9-f1b921f2459e`<br>`73a90cd2-48a2-4ac5-8594-2af35fa909fa`<br>`61303105-ff60-427b-999e-efb90b314e41` |
+| 59 | Apple Remote Desktop or Screen Sharing enabled from the command line (macos)<br>`rules/lateral_movement_ard_or_screen_sharing_enabled.yml` | TA0008 Lateral Movement | T1021.005 VNC | medium |  |  | `8a930abe-841c-4d4f-a877-72e9fe90b9ea` |
+| 60 | Remote Login (SSH) enabled from the command line (macos)<br>`rules/lateral_movement_ssh_remote_login_enabled.yml` | TA0008 Lateral Movement | T1021.004 SSH | medium |  |  | (none indexed for this behaviour) |
+| 61 | SSH authorized_keys written or replaced (macos, linux)<br>`rules/persistence_ssh_authorized_keys_written.yml` | TA0003 Persistence, TA0004 Privilege Escalation | T1098.004 SSH Authorized Keys | high |  |  | `342cc723-127c-4d3a-8292-9c0c6b4ecadc` |
 
-Totals: 58 rules, 4 sequence rules, 38 rules with at least one atomic indexed under the rule's own technique (78 GUIDs; rules that also run on Linux list the Linux atomics too), 4 rules with response actions (see [operations.md](operations.md#response)). Every action needs `--enable-response` and happens after the event: none of them prevents anything.
+Totals: 61 rules, 4 sequence rules, 38 rules with at least one atomic indexed under the rule's own technique (78 GUIDs; rules that also run on Linux list the Linux atomics too), 4 rules with response actions (see [operations.md](operations.md#response)). Every action needs `--enable-response` and happens after the event: none of them prevents anything.
 
 `tests.atomic` lists only GUIDs that `atomics/Indexes/Indexes-CSV/<platform>-index.csv` files
 under the rule's own technique (or its parent), and only tests whose command lines match the
-rule's condition (rules 47–58 were checked against the atomic YAML at Atomic Red Team commit
+rule's condition (rules 47–61 were checked against the atomic YAML at Atomic Red Team commit
 `a0e3f9bc69fed2fd711bd1f1aa87a40c33482fe6`). Atomics filed under another technique that
 also exercise a rule are cited in that rule's `references` instead, as
 "atomic <guid> (indexed <technique>) also exercises this behaviour":

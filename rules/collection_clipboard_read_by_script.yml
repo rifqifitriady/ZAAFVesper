@@ -7,7 +7,8 @@ description: |
   from a parent with no verified developer identity. Infostealers and clipboard
   hijackers read the clipboard in the background (passwords, wallet addresses, MFA
   codes). People run pbpaste in Terminal all the time: those runs have a tty and do not
-  match. Not covered: reading the clipboard through NSPasteboard or osascript
+  match. A pty made for the purpose (script -q /dev/null pbpaste, expect, unbuffer) is
+  treated as a script, since a tty alone does not prove a person. Not covered: reading the clipboard through NSPasteboard or osascript
   "the clipboard" (see the converted SigmaHQ osascript clipboard rule, where shipped).
 labels:
   tactic.id: TA0009
@@ -19,8 +20,11 @@ references:
 condition: >
   spawn_process
   and ps.name = 'pbpaste'
-  and not ps.tty imatches '/dev/*'
-  and (ps.parent.exe in shells or ps.parent.name imatches script_interpreter_name_globs or parent_no_developer_identity)
+  and (
+    (not ps.tty imatches '/dev/*'
+     and (ps.parent.exe in shells or ps.parent.name imatches script_interpreter_name_globs or parent_no_developer_identity))
+    or ps.parent.name in ('script', 'expect', 'unbuffer')
+  )
 output: "pbpaste (pid %ps.pid) read the clipboard for %ps.parent.exe (pid %ps.ppid) without a terminal"
 severity: medium
 action: []

@@ -5,7 +5,8 @@ platforms: [macos, linux]
 description: |
   zip, ditto or tar archived a folder that holds secrets (Keychains, ~/.ssh, browser
   profiles, Mail, Messages, Cookies), or zip was told to encrypt the archive with a
-  password (-e, -P, --password, --encrypt). Collecting and packing data before
+  password (-e or -P, also combined as in -rP or -er, --password, --encrypt). Paths match
+  with or without a leading folder (Library/Keychains, .ssh). Collecting and packing data before
   exfiltration is the usual first half of a theft; a password hides the content from
   inspection. Not covered: archives written by GUI apps (Finder "Compress" uses
   Archive Utility) and 7z (see the T1486 rule).
@@ -19,11 +20,11 @@ references:
 condition: >
   spawn_process
   and (
-    (ps.name = 'zip' and ps.args in ('-e', '-P', '--password', '--encrypt'))
+    (ps.name = 'zip' and (ps.args regex '^-[A-Za-z0-9]*[eP]' or ps.args imatches ('--password*', '--encrypt')))
     or (ps.name in ('zip', 'ditto', 'tar', 'gtar', 'bsdtar')
-        and ps.cmdline icontains ('/Library/Keychains', '/.ssh', '/Library/Cookies', '/Library/Messages',
-                                  '/Library/Mail', '/Library/Application Support/Google/Chrome',
-                                  '/Library/Application Support/Firefox', '/Library/Safari', '/.gnupg'))
+        and ps.cmdline icontains ('Library/Keychains', '.ssh', 'Library/Cookies', 'Library/Messages',
+                                  'Library/Mail', 'Application Support/Google/Chrome',
+                                  'Application Support/Firefox', 'Library/Safari', '.gnupg'))
   )
 output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) archived: %ps.cmdline"
 severity: medium

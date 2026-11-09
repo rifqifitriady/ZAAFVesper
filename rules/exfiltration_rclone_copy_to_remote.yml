@@ -5,7 +5,9 @@ description: |
   rclone ran a transfer command (copy, sync, move, copyto, moveto, rcat). rclone is a
   favourite exfiltration tool because it speaks to every cloud storage service. Some
   people back up with it on purpose; tune with an exclusion for your own backup job.
-  Applies to every platform (rclone and rclone.exe).
+  Applies to every platform. A renamed rclone is caught by its PE original name on
+  Windows or by rclone-only options (--config, --transfers, ...); a renamed copy run with
+  none of them is not covered.
 labels:
   tactic.id: TA0010
   tactic.name: Exfiltration
@@ -15,8 +17,9 @@ references:
   - https://attack.mitre.org/techniques/T1567/002/
 condition: >
   spawn_process
-  and ps.exe iendswith ('/rclone', '\\rclone.exe')
   and ps.args in ('copy', 'sync', 'move', 'copyto', 'moveto', 'rcat')
+  and (ps.exe iendswith ('/rclone', '\\rclone.exe') or ps.original_name iin ('rclone.exe')
+       or ps.args imatches ('--config*', '--transfers*', '--multi-thread-streams*', '--no-check-certificate', '--ignore-existing'))
 output: "rclone (pid %ps.pid, parent %ps.parent.exe) transferred data: %ps.cmdline"
 severity: medium
 action: []

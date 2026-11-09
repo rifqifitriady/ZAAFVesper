@@ -8,6 +8,12 @@ match:
   - desc: "gpg --batch --symmetric on Linux"
     events:
       - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24503, "ppid": 24000, "exe": "/usr/bin/gpg", "name": "gpg", "uid": -1, "euid": -1, "username": "alice", "cmdline": "gpg --batch --yes --passphrase-fd 0 -c /home/alice/report.docx", "args": ["gpg", "--batch", "--yes", "--passphrase-fd", "0", "-c", "/home/alice/report.docx"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "openssl -d -e still encrypts (decoy -d)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5503, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "args": ["openssl", "enc", "-d", "-e", "-aes-256-cbc", "-in", "a.docx", "-out", "a.enc"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.openssl", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "openssl camellia cipher command"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5504, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "args": ["openssl", "camellia-256-cbc", "-in", "b.xlsx", "-out", "b.enc", "-k", "x"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.openssl", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
 nomatch:
   - desc: "benign lookalike - openssl enc -d decrypts"
     events:
@@ -15,6 +21,9 @@ nomatch:
   - desc: "openssl x509 reads a certificate"
     events:
       - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5512, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "args": ["openssl", "x509", "-in", "cert.pem", "-noout", "-text"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.openssl", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "openssl dgst hashes a file named design.pdf"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5514, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "args": ["openssl", "dgst", "-sha256", "design.pdf"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.openssl", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
   - desc: "7z extracts an archive"
     events:
       - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5513, "ppid": 4000, "exe": "/opt/homebrew/bin/7z", "name": "7z", "args": ["7z", "x", "-pinfected", "sample.7z"], "uid": 501, "euid": 501, "is_platform": false, "is_signed": true, "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}

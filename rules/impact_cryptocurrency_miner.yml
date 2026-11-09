@@ -6,7 +6,8 @@ description: |
   stratum2+tcp), typical miner options (--donate-level, --coin=monero, rx/0 algorithms,
   --cpu-max-threads-hint), or from a well-known miner binary (xmrig, xmr-stak, minerd,
   cpuminer, t-rex, nbminer, lolminer). Stolen compute is the most common payload of
-  opportunistic intrusions on every platform. Applies to macOS, Windows and Linux.
+  opportunistic intrusions on every platform. Applies to macOS, Windows and Linux. Not
+  covered: a renamed miner that reads everything from a config file (-c config.json).
 labels:
   tactic.id: TA0040
   tactic.name: Impact
@@ -18,7 +19,8 @@ condition: >
   spawn_process
   and (
     ps.cmdline icontains ('stratum+tcp://', 'stratum+ssl://', 'stratum+tls://', 'stratum2+tcp://',
-                          '--donate-level', '--coin=monero', '--algo=rx/0', ' -a rx/0', '--cpu-max-threads-hint')
+                          '--donate-level', '--coin=monero', '--coin monero', '--algo=rx/0', '--algo rx/0',
+                          ' -a rx/0', '--cpu-max-threads-hint')
     or ps.exe iendswith ('/xmrig', '\\xmrig.exe', '/xmr-stak', '\\xmr-stak.exe', '/minerd', '/cpuminer', '\\cpuminer.exe',
                          '/t-rex', '\\t-rex.exe', '/nbminer', '\\nbminer.exe', '/lolminer', '\\lolminer.exe')
   )

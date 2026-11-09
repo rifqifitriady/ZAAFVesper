@@ -7,7 +7,9 @@ description: |
   @) or wget posted a file (--post-file/--body-file) to an http:// or ftp:// URL.
   Unencrypted uploads of local files to an external host are rare in normal use and
   common in exfiltration over a non-C2 channel. HTTPS uploads are not covered here
-  (T1048.002 and normal API traffic look alike).
+  (T1048.002 and normal API traffic look alike). A URL without a scheme counts as
+  plain HTTP (curl's default). Uploads to a local test server also match; there is no
+  localhost exclusion, because a host name or user part can fake one.
 labels:
   tactic.id: TA0010
   tactic.name: Exfiltration
@@ -18,11 +20,10 @@ references:
 condition: >
   spawn_process
   and (
-    (ps.name = 'curl' and (ps.args in ('-T', '--upload-file') or ps.args imatches ('@*', '*=@*', '*=<*')))
+    (ps.name = 'curl' and (ps.args in ('-T', '--upload-file') or ps.args imatches ('@*', '*=@*', '*=<*', '-d@*', '-T?*')))
     or (ps.name = 'wget' and ps.args imatches ('--post-file*', '--body-file*'))
   )
-  and ps.cmdline icontains ('http://', 'ftp://', 'tftp://')
-  and not ps.cmdline icontains ('http://localhost', 'http://127.0.0.1', 'http://[::1]')
+  and (ps.cmdline icontains ('http://', 'ftp://', 'tftp://') or not ps.cmdline icontains '://')
 output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) uploaded a file over plain text: %ps.cmdline"
 severity: medium
 action: []

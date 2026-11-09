@@ -8,10 +8,19 @@ match:
   - desc: "tar of ~/.ssh on Linux"
     events:
       - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24501, "ppid": 24000, "exe": "/usr/bin/tar", "name": "tar", "uid": -1, "euid": -1, "username": "alice", "cmdline": "tar -czf /tmp/k.tgz /home/alice/.ssh", "args": ["tar", "-czf", "/tmp/k.tgz", "/home/alice/.ssh"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "zip -rP with combined flags"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5103, "ppid": 4000, "exe": "/usr/bin/zip", "name": "zip", "args": ["zip", "-rP", "pw", "/tmp/x.zip", "Documents"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.zip", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "tar of relative paths from the home folder"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5104, "ppid": 4000, "exe": "/usr/bin/tar", "name": "tar", "args": ["tar", "czf", "/tmp/h.tgz", ".ssh", "Library/Keychains"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.tar", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
 nomatch:
-  - desc: "benign lookalike - zip of a source folder without a password"
+  - desc: "benign lookalike - zip -r of a source folder without a password"
     events:
       - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5111, "ppid": 4000, "exe": "/usr/bin/zip", "name": "zip", "args": ["zip", "-r", "/Users/rifqi/Desktop/project.zip", "/Users/rifqi/code/project"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.zip", "tty": "/dev/ttys001", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "zip -x excludes files (no password flag)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5114, "ppid": 4000, "exe": "/usr/bin/zip", "name": "zip", "args": ["zip", "-r", "-x", "*.log", "/tmp/src.zip", "src"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.zip", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
   - desc: "ditto copies Documents to a backup volume"
     events:
       - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5112, "ppid": 4000, "exe": "/usr/bin/ditto", "name": "ditto", "args": ["ditto", "/Users/rifqi/Documents", "/Volumes/Backup/Documents"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.ditto", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}

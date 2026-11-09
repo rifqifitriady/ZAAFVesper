@@ -3,7 +3,9 @@ id: 7a1c5e93-0d4b-4e62-9f18-3b6e2d8c4a75
 version: 1.0.0
 platforms: [macos, linux]
 description: |
-  openssl enc (or an openssl cipher command) without -d, gpg --symmetric in batch mode,
+  openssl enc or a cipher command (aes, aria, camellia, sm4, des, ...) that encrypts
+  (no -d, or -e given as well: the last flag wins and an extra -d must not hide an
+  encryption), gpg --symmetric in batch mode,
   or 7z adding to an archive with a password. Ransomware written as scripts encrypts
   user files with exactly these tools. Developers and admins also encrypt files by
   hand; a single run is a low-confidence signal, many runs in a row a strong one.
@@ -17,8 +19,9 @@ references:
 condition: >
   spawn_process
   and (
-    (ps.name = 'openssl' and (ps.args = 'enc' or ps.args imatches ('aes-*', '-aes-*', 'des3', 'chacha20'))
-     and not ps.args in ('-d', '-decrypt'))
+    (ps.name = 'openssl'
+     and ps.cmdline regex '^(\\S*/)?openssl\\s+(enc(\\s|$)|-?(aes|aria|camellia|sm4|des|bf|cast|chacha20|rc2|rc4|seed|idea)[a-z0-9-]*(\\s|$))'
+     and not (ps.args in ('-d', '-decrypt') and not ps.args in ('-e', '-encrypt')))
     or (base(ps.exe) iin ('gpg', 'gpg2') and ps.args in ('-c', '--symmetric') and ps.args = '--batch')
     or (base(ps.exe) iin ('7z', '7zz', '7za') and ps.args = 'a' and ps.args imatches '-p*')
   )

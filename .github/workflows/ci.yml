@@ -140,12 +140,15 @@ jobs:
             cat "$RUNNER_TEMP/coverage.txt"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Rule engine benchmark (all shipped rules, every fixture event)
+      - name: Rule engine benchmarks (engine only, one goroutine)
         run: |
           set -o pipefail
-          go test -run '^$' -bench BenchmarkShippedRules -benchtime 3s ./cmd/zaafvesper | tee "$RUNNER_TEMP/bench.txt"
+          # BenchmarkEngine: 30 synthetic rules, 10 benign events (the original
+          # throughput test). BenchmarkShippedRules: the shipped rules over
+          # fixture events, per platform; see docs/rules.md "Benchmark".
+          go test -run '^$' -bench 'BenchmarkEngine|BenchmarkShippedRules' -benchtime 2s ./pkg/rules ./cmd/zaafvesper | tee "$RUNNER_TEMP/bench.txt"
           {
-            echo '## Rule engine benchmark (GitHub ubuntu-latest runner, one goroutine)'
+            echo '## Rule engine benchmarks (GitHub ubuntu-latest runner, engine only, one goroutine)'
             echo '```'
             grep -E 'Benchmark|cpu:' "$RUNNER_TEMP/bench.txt"
             echo '```'

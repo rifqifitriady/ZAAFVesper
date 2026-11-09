@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/alert"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
+	"github.com/rifqifitriady/ZAAFVesper/pkg/nofollow"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/rules"
 )
 
@@ -116,76 +116,121 @@ type attackTechnique struct {
 	deprecated bool
 }
 
-// maxAttackBytes bounds the ATT&CK bundle read (the bundle is ~50 MB).
-const maxAttackBytes = 256 << 20
+// Bounds on the ATT&CK bundle (the real one is ~50 MB with ~25 000 objects).
+// Objects are decoded one at a time from a stream, so memory follows the
+// largest single object and the kept techniques, not the file size.
+const (
+	maxAttackBytes   = 256 << 20
+	maxAttackObjects = 500000
+)
+
+type stixObject struct {
+	Type       string `json:"type"`
+	Name       string `json:"name"`
+	Shortname  string `json:"x_mitre_shortname"`
+	Revoked    bool   `json:"revoked"`
+	Deprecated bool   `json:"x_mitre_deprecated"`
+	Version    string `json:"x_mitre_version"`
+	ExtRefs    []struct {
+		Source string `json:"source_name"`
+		ID     string `json:"external_id"`
+	} `json:"external_references"`
+	Phases []struct {
+		Chain string `json:"kill_chain_name"`
+		Phase string `json:"phase_name"`
+	} `json:"kill_chain_phases"`
+}
+
+// keptTechnique is what the check keeps of an attack-pattern object.
+type keptTechnique struct {
+	id, name            string
+	revoked, deprecated bool
+	phases              []string
+}
+
+func (o *stixObject) attackID() string {
+	for _, r := range o.ExtRefs {
+		if r.Source == "mitre-attack" {
+			return r.ID
+		}
+	}
+	return ""
+}
 
 func loadAttackData(path string) (*attackData, error) {
-	f, err := os.Open(path)
+	f, err := nofollow.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	var bundle struct {
-		Objects []struct {
-			Type       string `json:"type"`
-			Name       string `json:"name"`
-			Shortname  string `json:"x_mitre_shortname"`
-			Revoked    bool   `json:"revoked"`
-			Deprecated bool   `json:"x_mitre_deprecated"`
-			Version    string `json:"x_mitre_version"`
-			ExtRefs    []struct {
-				Source string `json:"source_name"`
-				ID     string `json:"external_id"`
-			} `json:"external_references"`
-			Phases []struct {
-				Chain string `json:"kill_chain_name"`
-				Phase string `json:"phase_name"`
-			} `json:"kill_chain_phases"`
-		} `json:"objects"`
+	if fi, err := f.Stat(); err != nil {
+		return nil, err
+	} else if !fi.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s: not a regular file", path)
 	}
-	if err := json.NewDecoder(io.LimitReader(f, maxAttackBytes)).Decode(&bundle); err != nil {
-		return nil, fmt.Errorf("%s: %v", path, err)
+	dec := json.NewDecoder(io.LimitReader(f, maxAttackBytes))
+	bad := func(what string) error { return fmt.Errorf("%s: not an ATT&CK STIX bundle (%s)", path, what) }
+	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+		return nil, bad("expected an object")
 	}
+	var techs []keptTechnique
+	short := map[string]string{} // tactic shortname -> TA id
 	ad := &attackData{techniques: map[string]attackTechnique{}, tactics: map[string]string{}}
-	short := map[string]string{} // shortname -> TA id
-	attackID := func(refs []struct {
-		Source string `json:"source_name"`
-		ID     string `json:"external_id"`
-	}) string {
-		for _, r := range refs {
-			if r.Source == "mitre-attack" {
-				return r.ID
-			}
+	n := 0
+	for dec.More() {
+		k, err := dec.Token()
+		if err != nil {
+			return nil, bad(err.Error())
 		}
-		return ""
-	}
-	for _, o := range bundle.Objects {
-		switch o.Type {
-		case "x-mitre-tactic":
-			id := attackID(o.ExtRefs)
-			ad.tactics[id] = o.Name
-			short[o.Shortname] = id
-		case "x-mitre-collection":
-			if ad.version == "" {
-				ad.version = o.Name + " " + o.Version
+		if k != "objects" {
+			var skip json.RawMessage
+			if err := dec.Decode(&skip); err != nil {
+				return nil, bad(err.Error())
 			}
-		}
-	}
-	for _, o := range bundle.Objects {
-		if o.Type != "attack-pattern" {
 			continue
 		}
-		id := attackID(o.ExtRefs)
-		if id == "" {
-			continue
+		if t, err := dec.Token(); err != nil || t != json.Delim('[') {
+			return nil, bad("objects is not a list")
 		}
-		t := attackTechnique{name: o.Name, tactics: map[string]bool{}, revoked: o.Revoked, deprecated: o.Deprecated}
-		for _, p := range o.Phases {
-			if p.Chain == "mitre-attack" {
-				t.tactics[short[p.Phase]] = true
+		for dec.More() {
+			if n++; n > maxAttackObjects {
+				return nil, bad(fmt.Sprintf("more than %d objects", maxAttackObjects))
+			}
+			var o stixObject
+			if err := dec.Decode(&o); err != nil {
+				return nil, bad(err.Error())
+			}
+			switch o.Type {
+			case "x-mitre-tactic":
+				id := o.attackID()
+				ad.tactics[id] = o.Name
+				short[o.Shortname] = id
+			case "x-mitre-collection":
+				if ad.version == "" {
+					ad.version = o.Name + " " + o.Version
+				}
+			case "attack-pattern":
+				if id := o.attackID(); id != "" {
+					k := keptTechnique{id: id, name: o.Name, revoked: o.Revoked, deprecated: o.Deprecated}
+					for _, p := range o.Phases {
+						if p.Chain == "mitre-attack" {
+							k.phases = append(k.phases, p.Phase)
+						}
+					}
+					techs = append(techs, k)
+				}
 			}
 		}
-		ad.techniques[id] = t
+		if _, err := dec.Token(); err != nil {
+			return nil, bad(err.Error())
+		}
+	}
+	for _, k := range techs {
+		t := attackTechnique{name: k.name, tactics: map[string]bool{}, revoked: k.revoked, deprecated: k.deprecated}
+		for _, p := range k.phases {
+			t.tactics[short[p]] = true
+		}
+		ad.techniques[k.id] = t
 	}
 	if len(ad.techniques) == 0 {
 		return nil, fmt.Errorf("%s: no ATT&CK techniques found", path)

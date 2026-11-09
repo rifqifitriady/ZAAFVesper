@@ -206,6 +206,10 @@ func loadAtomicsMap(path string) (map[string][]string, error) {
 	if err := dec.Decode(&m); err != nil {
 		return nil, fmt.Errorf("%s: %v", path, err)
 	}
+	var extra any
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("%s: more than one YAML document", path)
+	}
 	for id, gs := range m {
 		if id == "" || len(gs) == 0 {
 			return nil, fmt.Errorf("%s: entry %q needs at least one test GUID", path, id)
