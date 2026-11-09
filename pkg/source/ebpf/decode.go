@@ -34,6 +34,7 @@ const (
 	argOldEUID        = "old_euid"
 	argNewUID         = "new_uid"
 	argNewEUID        = "new_euid"
+	argNameFromComm   = "name_from_comm"
 )
 
 // image is what a process runs: its executable and the file's identity.
@@ -186,7 +187,7 @@ func (m *mapper) proc(h *header) (*event.Proc, procKey) {
 	ticks := ticksOf(h.StartNs)
 	p := &event.Proc{
 		PID: int32(h.PID), PPID: int32(h.PPID), UID: int64(h.UID), EUID: int64(h.EUID),
-		UniqueID: ticks, PIDVersion: pidVersion(ticks), StartTime: m.startTime(ticks), Name: h.Comm,
+		UniqueID: ticks, PIDVersion: pidVersion(ticks), StartTime: m.startTime(ticks),
 	}
 	if h.PPID != 0 {
 		p.Parent = &event.Proc{PID: int32(h.PPID), PIDVersion: pidVersion(ticksOf(h.PStartNs)), UID: -1, EUID: -1}
@@ -412,6 +413,11 @@ func (m *mapper) mapRecord(r *record) (*event.Event, error) {
 
 	default:
 		return nil, fmt.Errorf("%w: kind %d", errRecord, r.Kind)
+	}
+	// comm is chosen by the process itself (prctl PR_SET_NAME), so it is
+	// never used as ps.name; with no known image it is reported as an argument.
+	if e.Proc.Name == "" && r.Comm != "" {
+		setArg(e, argNameFromComm, r.Comm)
 	}
 	if m.hostMntNS != 0 && r.MntNS != 0 && r.MntNS != m.hostMntNS {
 		setArg(e, argMntNS, strconv.FormatUint(uint64(r.MntNS), 10))

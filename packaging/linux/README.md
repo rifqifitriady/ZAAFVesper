@@ -159,9 +159,9 @@ warns at start which enabled rules ask for them, and the alert is still raised.
   allows write, and the mask is what the group permission bits show, so such a
   grant is refused by the mode check.
 - eBPF source: file paths and the executable path are rebuilt from the kernel's
-  directory entries, at most 64 levels and 4 KiB deep; a longer path is reported
+  directory entries, at most 512 components and 4 KiB deep; a longer path is reported
   by its last part with `evt.arg[path_incomplete] = "true"`. Command lines are
-  the first 4 KiB (`evt.arg[args_truncated]`). Delete and rename are reported
+  reported up to 64 KiB (`evt.arg[args_truncated]` when longer). Delete and rename are reported
   when the kernel's permission check runs, just before the change; a change that
   then fails is still reported. Process access (`Ptrace`, `OpenProcess`) is
   reported once the kernel's own permission checks have passed; security modules

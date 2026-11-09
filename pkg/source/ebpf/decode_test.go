@@ -250,6 +250,7 @@ func TestImageLookupAndBound(t *testing.T) {
 func TestDecodeFiles(t *testing.T) {
 	m := newTestMapper()
 	h := defHdr()
+	decodeOK(t, m, execRec(h, "/usr/bin/touch", "touch\x00", "/", 0)) // the image is known
 	cases := []struct {
 		raw  []byte
 		name string
@@ -292,7 +293,9 @@ func mustParse(t *testing.T, raw []byte) *record {
 }
 
 func TestDecodeSetUID(t *testing.T) {
-	e := decodeOK(t, newTestMapper(), build(kindSetUID, defHdr(), le32b(1000, 1000, 0, 0)))
+	m := newTestMapper()
+	decodeOK(t, m, execRec(defHdr(), "/usr/bin/su", "su\x00", "/", 0))
+	e := decodeOK(t, m, build(kindSetUID, defHdr(), le32b(1000, 1000, 0, 0)))
 	want := map[string]string{argOldUID: "1000", argOldEUID: "1000", argNewUID: "0", argNewEUID: "0"}
 	if e.Name != event.SetUID || len(e.Args) != 4 {
 		t.Fatalf("%s %v", e.Name, e.Args)
@@ -712,5 +715,61 @@ func TestDropTrackerCountsSkippedPrograms(t *testing.T) {
 	n, detail := d.update(now)
 	if n != 4 || !strings.Contains(detail, "4 skipped (program recursion)") {
 		t.Errorf("%d %q", n, detail)
+	}
+}
+
+// D2: comm is chosen by the process, so it is never ps.name. With no image
+// the name stays empty and comm is reported as an argument; with an image the
+// name is the executable's basename even when comm differs.
+func TestNameNeverFromComm(t *testing.T) {
+	m := newTestMapper()
+	h := defHdr()
+	h.comm = "kworker/0:1" // what a malicious /tmp/mal sets with prctl(PR_SET_NAME)
+	e := decodeOK(t, m, fileRec(h, fileCreate, 0, "/tmp/x", ""))
+	if e.Proc.Name != "" || e.Proc.Exe != "" {
+		t.Fatalf("no image known: name %q exe %q", e.Proc.Name, e.Proc.Exe)
+	}
+	if e.Args[argNameFromComm] != "kworker/0:1" {
+		t.Errorf("name_from_comm %q", e.Args[argNameFromComm])
+	}
+
+	e = decodeOK(t, m, execRec(h, "/tmp/mal", "mal\x00", "/tmp", 0))
+	if e.Proc.Name != "mal" || e.Proc.Exe != "/tmp/mal" {
+		t.Errorf("exec: name %q exe %q", e.Proc.Name, e.Proc.Exe)
+	}
+	if _, ok := e.Args[argNameFromComm]; ok {
+		t.Errorf("name_from_comm set although the image is known: %v", e.Args)
+	}
+	e = decodeOK(t, m, fileRec(h, fileCreate, 0, "/tmp/y", ""))
+	if e.Proc.Name != "mal" {
+		t.Errorf("later event: name %q, want the exe basename", e.Proc.Name)
+	}
+}
+
+// CK-23: a set-uid exec changes only the effective ids (uid stays 1000,
+// euid becomes 0); it is a SetUID event with the old and new ids. The
+// kernel hook (commit_creds) fires for any change of uid or euid; the live
+// counterpart is TestLiveSetUIDExec.
+func TestDecodeSetUIDExec(t *testing.T) {
+	e := decodeOK(t, newTestMapper(), build(kindSetUID, defHdr(), le32b(1000, 1000, 1000, 0)))
+	if e.Name != event.SetUID {
+		t.Fatalf("name %q", e.Name)
+	}
+	want := map[string]string{argOldUID: "1000", argOldEUID: "1000", argNewUID: "1000", argNewEUID: "0"}
+	for k, v := range want {
+		if e.Args[k] != v {
+			t.Errorf("%s = %q want %q", k, e.Args[k], v)
+		}
+	}
+}
+
+// CK-44: a refusal that is not a missing BTF file names the minimum kernel and
+// what the process needs.
+func TestRefusedMessageNamesRequirements(t *testing.T) {
+	msg := refusedMessage("program on_x: invalid argument")
+	for _, w := range []string{"5.17", "BTF", "CAP_BPF", "CAP_PERFMON", "invalid argument"} {
+		if !strings.Contains(msg, w) {
+			t.Errorf("message %q lacks %q", msg, w)
+		}
 	}
 }

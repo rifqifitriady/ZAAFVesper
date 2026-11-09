@@ -150,6 +150,7 @@ in a privileged container on kernel 6.8 and run in the `live-linux-ebpf` workflo
 | F8 | A write to `/proc/pid/mem` and `pidfd_getfd` give no `Ptrace` or `OpenProcess` event. | **Open** | | Hook later (`security_file_permission` on the proc mem file, `pidfd_getfd` syscall tracepoint). Only `ptrace` attach and seize, `process_vm_readv` and `process_vm_writev` are covered. |
 | F9 | `O_TMPFILE` plus `linkat`, and hard links, give no `CreateFile`. | **Open** | | Hook `security_path_link` later. |
 | F10 | `neverSuppressed` held only `es_events_dropped`, so a flood of another condition could hide a lost-events report from the eBPF or Sysmon source. | **Closed (code)** | `ebpf_events_dropped`, `ebpf_events_unreadable` and `sysmon_events_dropped` pass the share and the overall limit (`TestDegradedLostTelemetryNeverSuppressed`). | These sources rate-limit themselves to one report a minute per condition. |
+| F11 | All kinds share one ring buffer (8 MiB), so a flood of file events can fill it and push out exec, exit, fork, SetUID and module records (judge D8). | **Open** | Losses are counted per kind in the kernel (`drops`) and raise `ebpf_events_dropped` (`TestDropTracker`, `TestLiveDropsAreCounted`). With the default ring, 10k file creations from eight shells next to 40 execs: `TestLiveExecSurvivesFileFlood` (added; first live run pending). | A reserved second ring for exec/exit/fork/setuid/module (own drop counter) was not built: it changes the programs, the loader and the reader together, which is more than a small, safe change. Until then an attacker who can create files faster than the reader drains can drop an exec record; the loss is reported, the exec is not. The filter that keeps file events to the paths rules need (`plan`) lowers the rate but is not a bound. |
 
 Notes (not findings of their own):
 
@@ -160,6 +161,11 @@ Notes (not findings of their own):
 - The source address of a connect to a v4-mapped destination may be empty.
 - If an exec record is lost (ring buffer full) the process keeps the image of the previous exec until the next one.
 - F4: the kernel 7.0 preemption model is unverified; the busy flag does not depend on it.
+
+Follow-up for the integrator (rules are frozen in this workstream; judge CK-08): `rules/defense_impairment_sensor_degraded.yml`
+(1.2.0) describes `ebpf_events_dropped` as lost ring-buffer records only. The condition now also covers records skipped
+because a per-CPU buffer was busy, programs the kernel skipped for recursion, and DNS datagrams lost before they were
+reported. The description should say so (version 1.2.1, description text only); an edit made on `feat/linux-ebpf` was reverted.
 
 ## Decisions pending with the owner
 

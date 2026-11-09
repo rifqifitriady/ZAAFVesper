@@ -67,6 +67,45 @@ record that cannot be decoded raises `ebpf_events_unreadable`.
 lost in the kernel), `seq_gaps` (seconds in which some were lost) and
 `decode_errors`, the same names the other sources use.
 
+## Limits
+
+- **io_uring.** Work submitted through io_uring never passes a syscall-entry
+  tracepoint. The programs hooked on `sys_enter_*` / `sys_exit_*` are
+  `ptrace`, `process_vm_readv`, `process_vm_writev`, `init_module` and
+  `finit_module`; io_uring has no operation for any of them, so no gap is
+  known there. Every other event hooks a kernel function (`security_file_open`,
+  `security_path_unlink`, `security_path_rename`, `commit_creds`,
+  `security_ptrace_access_check`, `security_kernel_read_file`,
+  `tcp_v4_connect`, `udp_sendmsg` and so on) that io_uring requests also reach
+  (open, unlink, rename, connect, send), so they are expected to be reported.
+  That is from reading the code, not tested: no test submits through io_uring,
+  and which task the kernel attributes an io_uring request to (the submitting
+  task or an io-wq worker thread) is not verified.
+- **DNS payload (time of check to time of use).** The DNS name is read from the
+  sender's memory at `fentry` of `udp_sendmsg`, before the kernel copies the
+  datagram. Another thread of the process can change the buffer between that
+  read and the copy, so the reported name can differ from what was sent. The
+  destination port is read from the same call and has the same exposure for
+  `msg_name`.
+- **One ring buffer.** All kinds share one ring (see "Lost and bad records"). A
+  flood of file events can fill it and push out exec, exit, fork, SetUID and
+  module records. Losses are counted per kind and raise `ebpf_events_dropped`;
+  they are not prevented. Open finding F11 in
+  [docs/security/open-findings.md](../../docs/security/open-findings.md).
+
+## Why `bpf/vmlinux_min.h` is hand-written (CK-10)
+
+The programs include a small hand-written `bpf/vmlinux_min.h` instead of a
+`vmlinux.h` generated from a kernel's BTF. Reasons: size (a generated header is
+several MB and tied to one kernel's version), reviewability (the file lists
+every kernel field the programs read, a few hundred lines, and a reviewer can
+check each one), and portability (every struct carries
+`__attribute__((preserve_access_index))`, so the loader applies CO-RE
+relocations against the running kernel's own BTF and field offsets are never
+taken from the header). Only the fields the programs use are declared. The cost
+is that a new field must be added by hand. This is the owner's decision; the
+alternative is `bpftool btf dump file /sys/kernel/btf/vmlinux format c`.
+
 ## What it needs, and what happens without it
 
 Linux 5.17+ on x86-64 or 6.0+ on arm64, with `/sys/kernel/btf/vmlinux`; root
@@ -74,7 +113,9 @@ Linux 5.17+ on x86-64 or 6.0+ on arm64, with `/sys/kernel/btf/vmlinux`; root
 older kernel or in a container's process namespace, `zaafvesper run` stops with
 the reason and `use --source sysmon`. When a kernel lacks one optional hook
 (for example delete and rename need `CONFIG_SECURITY_PATH`), only that group of
-events is left out, and the start-up log says so.
+events is left out, and the start-up log says so. When loading fails for any other
+reason the message names the minimum kernel (5.17) and the configuration needed
+(BTF; `CAP_BPF` and `CAP_PERFMON`).
 
 Only the programs some rule needs are loaded. ZAAFVesper's own file activity
 is filtered out in the kernel (by its process id, never by name). Nothing is
@@ -131,3 +172,7 @@ programs that use its tracing helpers only under a GPL-compatible licence); the
 rest of ZAAFVesper stays Apache-2.0. The compiled objects are embedded in the Go
 binary as data and loaded through the `bpf()` system call; they are distributed
 under the BSD-2-Clause option.
+
+Third-party code in the build: the Go library `github.com/cilium/ebpf` is MIT
+licensed; the libbpf headers vendored under `bpf/libbpf` are `LGPL-2.1 OR BSD-2-Clause`, used under
+the BSD-2-Clause option.

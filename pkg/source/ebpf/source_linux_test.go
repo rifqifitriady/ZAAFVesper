@@ -339,6 +339,40 @@ func TestLiveSetUID(t *testing.T) {
 	}
 }
 
+// CK-23: a set-uid exec changes only the effective uid (65534 -> 0 here).
+func TestLiveSetUIDExec(t *testing.T) {
+	needLive(t)
+	c := startSource(t, Config{}, []string{event.SetUID}, 1<<16)
+	setpriv := lookPath(t, "setpriv")
+	src := lookPath(t, "true")
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(dir, "suid-true")
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(bin, data, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(bin, 0o4755); err != nil { // owned by root
+		t.Fatal(err)
+	}
+	cmd := exec.Command(setpriv, "--reuid=65534", "--regid=65534", "--clear-groups", bin)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("set-uid exec not possible here (nosuid mount?): %v: %s", err, out)
+	}
+	e := c.waitFor(t, "SetUID by exec", func(e *event.Event) bool {
+		return e.Name == event.SetUID && e.Proc.PID == int32(cmd.Process.Pid) &&
+			e.Args[argOldUID] == "65534" && e.Args[argNewEUID] == "0"
+	})
+	if e.Args[argOldEUID] != "65534" || e.Args[argNewUID] != "65534" {
+		t.Errorf("args %v", e.Args)
+	}
+}
+
 func TestLiveProcessAccess(t *testing.T) {
 	needLive(t)
 	c := startSource(t, Config{}, []string{event.Ptrace, event.OpenProcess}, 1<<16)
@@ -795,5 +829,52 @@ func TestLiveConcurrentRecordsStayWhole(t *testing.T) {
 	t.Logf("seen %d of 600 creations; stats %v", seen, st)
 	if missing := 600 - seen; missing > 0 && st["events_missed"] == 0 {
 		t.Errorf("%d creations missing and none counted: %v", missing, st)
+	}
+}
+
+// D8: file events and exec records share one ring. With the default ring a
+// flood of 10k file creations (eight shells, built-in redirects, no exec of
+// their own) must not push out the exec records of a concurrent process.
+// The residual with a ring that is too small is in docs/security/open-findings.md.
+func TestLiveExecSurvivesFileFlood(t *testing.T) {
+	needLive(t)
+	c := startSource(t, Config{}, []string{event.CreateProcess, event.CreateFile}, 1<<16)
+	sh := lookPath(t, "sh")
+	tr := lookPath(t, "true")
+	dir := t.TempDir()
+	var wg sync.WaitGroup
+	for w := 0; w < 8; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			script := "i=0; while [ $i -lt 1250 ]; do : > " + dir + "/f" + strconv.Itoa(w) + "_$i; i=$((i+1)); done"
+			_ = exec.Command(sh, "-c", script).Run()
+		}(w)
+	}
+	const execs = 40
+	for i := 0; i < execs; i++ {
+		_ = exec.Command(tr, "floodmarker"+strconv.Itoa(i)).Run()
+		time.Sleep(10 * time.Millisecond)
+	}
+	wg.Wait()
+	time.Sleep(time.Second)
+	c.mu.Lock()
+	seenExec, seenFile := map[string]bool{}, 0
+	for _, e := range c.evs {
+		switch {
+		case e.Name == event.CreateProcess && len(e.Proc.Args) == 2 && strings.HasPrefix(e.Proc.Args[1], "floodmarker"):
+			seenExec[e.Proc.Args[1]] = true
+		case e.Name == event.CreateFile && strings.HasPrefix(e.File.Path, dir+"/"):
+			seenFile++
+		}
+	}
+	c.mu.Unlock()
+	st := c.src.Stats()
+	t.Logf("exec %d of %d, file %d of 10000; stats %v", len(seenExec), execs, seenFile, st)
+	if len(seenExec) != execs {
+		t.Errorf("only %d of %d exec records arrived during the file flood; stats %v", len(seenExec), execs, st)
+	}
+	if st["events_missed"] != 0 {
+		t.Errorf("records were lost with the default ring: %v", st)
 	}
 }

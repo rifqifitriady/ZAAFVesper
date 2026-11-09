@@ -18,6 +18,15 @@ both images with no skip, `events_missed=0`, `seq_gaps=0`, `recursion_misses=0`;
 in run 42655385402 (workflow `.github/workflows/ebpf-objects.yml`). The per-rule tables below are from the earlier run
 42649231114 (commit `ad6913b`); the results did not change.
 
+## Limits and licences
+
+Limits of the source (io_uring, the DNS read before the kernel copy, the single
+ring buffer, the hand-written `vmlinux_min.h`) are in
+[pkg/source/ebpf/README.md](../../pkg/source/ebpf/README.md) under "Limits".
+Licences: `github.com/cilium/ebpf` is MIT; the libbpf headers are
+`LGPL-2.1 OR BSD-2-Clause` (BSD-2-Clause used); the BPF C sources are
+`GPL-2.0-only OR BSD-2-Clause`.
+
 ## What the live runs found
 
 - **Compressed kernel modules (fixed).** kmod 31 on these kernels loads `.ko.zst` files with `finit_module` and

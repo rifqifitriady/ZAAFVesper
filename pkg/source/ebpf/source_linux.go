@@ -160,12 +160,12 @@ func (s *Source) load(events []string) (*loaded, []string, error) {
 		}
 		coll, err := ebpf.NewCollectionWithOptions(spec, ebpf.CollectionOptions{Cache: cache})
 		if errors.Is(err, unix.EPERM) {
-			return nil, nil, unavailable("the kernel refused to load eBPF programs: permission denied (needs root with CAP_BPF and CAP_PERFMON; in a container, a privileged one)")
+			return nil, nil, unavailable("the kernel refused to load eBPF programs: permission denied; %s", requirements)
 		}
 		if err != nil {
 			g, ok := failedGroup(use, err)
 			if !ok || g.required {
-				return nil, nil, unavailable("the kernel refused the core programs: %v", shortErr(err))
+				return nil, nil, unavailable("%s", refusedMessage(shortErr(err)))
 			}
 			s.logf("eBPF: %s events unavailable on this kernel (%v)", g.name, shortErr(err))
 			skipped = append(skipped, g.name)
@@ -181,7 +181,7 @@ func (s *Source) load(events []string) (*loaded, []string, error) {
 				}
 				if g.required {
 					l.close()
-					return nil, nil, unavailable("cannot attach the %s programs: %v", g.name, shortErr(err))
+					return nil, nil, unavailable("cannot attach the %s programs: %v; %s", g.name, shortErr(err), requirements)
 				}
 				s.logf("eBPF: %s events unavailable on this kernel (%v)", g.name, shortErr(err))
 				skipped = append(skipped, g.name)

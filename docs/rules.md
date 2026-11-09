@@ -406,8 +406,9 @@ them yet except the `SetUID` ones, which are part of the event contract):
 |---|---|---|
 | `old_uid`, `old_euid`, `new_uid`, `new_euid` | `SetUID` | decimal uids before and after the change; `ps.uid`/`ps.euid` are the values before |
 | `exit_status` | `TerminateProcess` | the kernel's wait status, decimal (exit code × 256, or the signal number), as for eslogger |
-| `args_truncated` | `CreateProcess` | `true` when the command line was longer than 4 KiB or unreadable (only the first 4 KiB are in `ps.cmdline`) |
-| `path_incomplete` | any event with a path | `true` when a path (executable, file, rename destination, working directory) was deeper than 64 levels or longer than 4 KiB; the value is then the trailing part |
+| `args_truncated` | `CreateProcess` | `true` when the command line was longer than the limit or unreadable (eBPF source: 64 KiB; other sources: see their notes) |
+| `path_incomplete` | any event with a path | `true` when a path (executable, file, rename destination, working directory) was deeper than 512 components (eBPF source) or longer than 4 KiB; the value is then the trailing part |
+| `name_from_comm` | any eBPF event whose process image is unknown | the kernel's `comm` of the process, which the process sets itself; `ps.name` is then empty and `comm` is never used as the name |
 | `truncated` | `CreateFile` | `true` when an existing file was opened for writing with `O_TRUNC` (its content replaced) rather than newly created |
 | `syscall` | `Ptrace`, `OpenProcess` | `ptrace_attach`, `ptrace_seize`, `process_vm_readv` or `process_vm_writev` |
 | `module_name` | `DriverLoad` | the kernel module's name, e.g. `dummy` |
