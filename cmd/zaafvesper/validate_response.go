@@ -35,7 +35,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -204,9 +203,16 @@ func validateSleeper(args []string, stderr io.Writer) int {
 			say(stderr, "sleeper: --beat must name a beat-* file next to the sleeper")
 			return 2
 		}
+		f, err := os.OpenFile(*beat, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			say(stderr, "sleeper: %v", err)
+			return 2
+		}
 		go func() {
+			// A fixed-width counter written in place: the file is never
+			// empty or half-written when the process is suspended.
 			for i := 0; ; i++ {
-				_ = os.WriteFile(*beat, []byte(strconv.Itoa(i)), 0o600)
+				_, _ = f.WriteAt([]byte(fmt.Sprintf("%012d", i)), 0)
 				time.Sleep(100 * time.Millisecond)
 			}
 		}()

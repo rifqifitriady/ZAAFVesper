@@ -214,7 +214,12 @@ func TestLinuxQuarantineDryRunAndVaultMode(t *testing.T) {
 func TestLinuxQuarantineTargetProcess(t *testing.T) {
 	g := newLRig(t, false)
 	g.r.cfg.Identify = identify
-	exe := filepath.Join(g.dir, "sleeper")
+	// Named sleep: Ubuntu's coreutils is a multi-call binary that picks
+	// the tool by its file name.
+	if err := os.Mkdir(filepath.Join(g.dir, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(g.dir, "bin", "sleep")
 	src, err := os.ReadFile("/bin/sleep")
 	if err != nil {
 		t.Skip("no /bin/sleep")

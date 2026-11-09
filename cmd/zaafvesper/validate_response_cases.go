@@ -143,8 +143,8 @@ func (h *vHarness) isolateFlow(c isoCase) {
 	h.record("isolate_process", "zaafvesper isolation release lifts the block", expectAct, rerr == nil && reach && !c.listed()[c.probe],
 		fmt.Sprintf("reachable again=%v %s", reach, strings.TrimSpace(out)))
 	time.Sleep(c.ttl + time.Second)
-	h.r.Tick(time.Now())
 	h.reset()
+	h.r.Tick(time.Now())
 	left := c.listed()
 	h.record("isolate_process", fmt.Sprintf("time-to-live expiry (%s in this run)", c.ttl), expectAct, len(left) == 0 && h.decision().Outcome == response.OutcomeReleased,
 		fmt.Sprintf("listed now %v", keys(left)))

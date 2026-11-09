@@ -3,6 +3,7 @@ package main
 import (
 	"io"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/response"
@@ -97,8 +98,20 @@ func cmdQuarantine(args []string, stdout, stderr io.Writer) int {
 			say(stderr, "zaafvesper quarantine restore: %v", err)
 			return 1
 		}
-		say(stdout, "restored %s to %s (mode %04o, owner %d:%d)", rec.ID[:16], rec.OriginalPath, rec.Mode&0o777, rec.UID, rec.GID)
-		if rec.Label != "" {
+		switch {
+		case rec.Kind != "":
+			// A Windows registry value, service or scheduled task.
+			say(stdout, "restored %s: %s %s (%s)", rec.ID[:16], rec.Kind, rec.Label, rec.OriginalPath)
+		case runtime.GOOS == "windows":
+			say(stdout, "restored %s to %s", rec.ID[:16], rec.OriginalPath)
+		default:
+			say(stdout, "restored %s to %s (mode %04o, owner %d:%d)", rec.ID[:16], rec.OriginalPath, rec.Mode&0o777, rec.UID, rec.GID)
+		}
+		switch {
+		case rec.Kind != "":
+		case rec.Label != "" && runtime.GOOS == "linux":
+			say(stdout, "the systemd unit %s is NOT reloaded or started; run systemctl daemon-reload and enable it yourself if you trust it", rec.Label)
+		case rec.Label != "":
 			say(stdout, "the launch item %s is NOT loaded again; load it yourself if you trust it", rec.Label)
 		}
 		return 0

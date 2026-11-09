@@ -8,6 +8,10 @@ description: |
   after a reboot or a killed implant.
   Known benign: package managers installing cron jobs (dpkg, rpm) and crontab(1) editing
   a user's own table.
+  With response on, remove_persistence moves the file into the vault, but only when the
+  writer runs from outside the system directories or is a system program driven by such a
+  process (an administrator's editor under a system shell is refused); /etc/crontab is
+  protected and never moved.
 labels:
   tactic.id: TA0003
   tactic.name: Persistence

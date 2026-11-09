@@ -217,12 +217,14 @@ func (h *vHarness) quarantineCases() {
 		h.record("quarantine_file", "executable whose content is not the hash Sysmon reported", expectDeny,
 			err != nil && exists(other) && strings.Contains(h.decision().Detail, "not the"), "")
 	}
-	// Refused: another creation time (the file was replaced).
+	// Refused: another creation time (the file was replaced). NTFS
+	// tunneling gives a file created under a name deleted less than 15 s
+	// before the old creation time, so the new file is made after 16 s.
 	repl := filepath.Join(dir, "replaced.exe")
 	if os.WriteFile(repl, []byte("one"), 0o644) == nil {
 		if e, err := sysmonFile(repl, w); err == nil {
 			_ = os.Remove(repl)
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(16 * time.Second)
 			_ = os.WriteFile(repl, []byte("two"), 0o644)
 			h.reset()
 			err = h.r.QuarantineFile(e, response.TargetFile, "validate-quarantine", "validation: replaced")
@@ -370,9 +372,11 @@ func (h *vHarness) serviceCases() {
 		return c.BinaryPathName, err
 	}
 	present := func(name string) bool {
-		s, err := m.OpenService(name)
+		// Query rights only: Defender's service denies more even to
+		// administrators.
+		h, err := windows.OpenService(m.Handle, windows.StringToUTF16Ptr(name), windows.SERVICE_QUERY_STATUS)
 		if err == nil {
-			s.Close()
+			_ = windows.CloseServiceHandle(h)
 		}
 		return err == nil
 	}

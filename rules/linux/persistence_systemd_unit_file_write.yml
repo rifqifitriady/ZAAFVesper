@@ -8,6 +8,11 @@ description: |
   package manager or systemctl. A new unit is started at boot (or on its timer).
   Known benign: configuration management (Ansible, Puppet) writing units; add their
   interpreters after review.
+  With response on, remove_persistence disables and stops a unit in /etc/systemd/system that
+  systemd loaded from this file, moves the file into the vault and reloads systemd; only when
+  the writer runs from outside the system directories or is a system program driven by such
+  a process. Units under /usr/lib and /lib, and system, remote-access and agent services
+  (ssh, systemd-*, dbus, cron, ...), are never stopped.
 labels:
   tactic.id: TA0003
   tactic.name: Persistence

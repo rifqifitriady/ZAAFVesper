@@ -228,7 +228,8 @@ func TestNoCommandsWithoutRoot(t *testing.T) {
 	}
 }
 
-// TestBuiltinRuleActions: the shipped rules carry the W1 actions.
+// TestBuiltinRuleActions: the shipped rules carry the W1 actions (macOS)
+// and the v0.4 E actions (Linux, Windows).
 func TestBuiltinRuleActions(t *testing.T) {
 	rs, err := rules.LoadDir("../../rules")
 	if err != nil {
@@ -239,6 +240,9 @@ func TestBuiltinRuleActions(t *testing.T) {
 		"Quarantine attribute removed by an untrusted process":                              {"requarantine"},
 		"Launch Agent or Daemon written by an untrusted process":                            {"remove_persistence"},
 		"Fake password prompt via osascript from untrusted origin":                          {"suspend:parent", "kill:parent"},
+		"Cron job file created":                                 {"remove_persistence"},
+		"Systemd unit file created outside the package manager": {"remove_persistence"},
+		"Run value pointing into a temporary or public folder":  {"remove_persistence"},
 	}
 	found := 0
 	for _, r := range rs.Rules {
