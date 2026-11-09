@@ -22,7 +22,7 @@ condition: >
   and not ps.name in ('dpkg', 'rpm', 'dnf', 'yum', 'apt', 'apt-get', 'crontab', 'unattended-upgrade')
 output: "%ps.exe (pid %ps.pid, user %ps.username) created cron file %file.path"
 severity: medium
-action: []
+action: [{name: remove_persistence}]
 tests:
   atomic: [078e69eb-d9fb-450e-b9d0-2e118217c846, 2d943c18-e74a-44bf-936f-25ade6cccab4]
 min-engine-version: 0.1.0

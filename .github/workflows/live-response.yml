@@ -96,7 +96,7 @@ jobs:
           set -o pipefail
           go test -c -o "$RUNNER_TEMP/response.test" ./pkg/response
           mkdir -m 700 "$RUNNER_TEMP/t"
-          sudo TMPDIR="$RUNNER_TEMP/t" "$RUNNER_TEMP/response.test" -test.count=1 -test.v 2>&1 | grep -E '^(--- |ok|FAIL|PASS)'
+          sudo TMPDIR="$RUNNER_TEMP/t" "$RUNNER_TEMP/response.test" -test.count=1 -test.v 2>&1 | grep -vE '^(=== RUN|=== PAUSE|=== CONT)'
       - name: Validate response actions (root)
         shell: bash
         run: |
@@ -157,7 +157,7 @@ jobs:
         shell: pwsh
         run: |
           $env:CGO_ENABLED = "0"
-          go test -count=1 -v ./pkg/response 2>&1 | Select-String -Pattern '^(--- |ok|FAIL|PASS)'
+          go test -count=1 -v ./pkg/response 2>&1 | Select-String -NotMatch -Pattern '^=== (RUN|PAUSE|CONT)'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Windows Firewall state
         shell: pwsh
@@ -173,7 +173,9 @@ jobs:
         shell: pwsh
         run: |
           "## Response actions on windows-latest" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
-          Get-Content "$env:RUNNER_TEMP\response-windows.log" | Where-Object { $_ -like '|*' } | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          if (Test-Path "$env:RUNNER_TEMP\response-windows.log") {
+            Get-Content "$env:RUNNER_TEMP\response-windows.log" | Where-Object { $_ -like '|*' } | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          }
       - name: Clean up the firewall rules, test services, tasks and Run values
         if: always()
         shell: pwsh
@@ -182,7 +184,8 @@ jobs:
           Get-Service -Name 'ZVValidate*' -ErrorAction SilentlyContinue | ForEach-Object { sc.exe delete $_.Name | Out-Null }
           Get-ScheduledTask -TaskPath '\ZVValidate\' -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false
           foreach ($k in 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run', 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run') {
-            (Get-Item $k).Property | Where-Object { $_ -like 'ZVValidate*' } | ForEach-Object { Remove-ItemProperty -Path $k -Name $_ }
+            $item = Get-Item $k -ErrorAction SilentlyContinue
+            if ($item) { $item.Property | Where-Object { $_ -like 'ZVValidate*' } | ForEach-Object { Remove-ItemProperty -Path $k -Name $_ } }
           }
           exit 0
       - name: The runner still reaches GitHub (isolation never blocked its own connectivity)

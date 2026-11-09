@@ -1,0 +1,31 @@
+name: Run value pointing into a temporary or public folder
+id: 9ac6106e-1d90-44b2-a328-9161363d39bd
+version: 1.0.0
+platforms: [windows]
+description: |
+  A Run or RunOnce value (machine or user hive, both registry views) names a program in a
+  temporary or public folder: the user's Temp, C:\Windows\Temp or C:\Users\Public. Desktop
+  applications register programs from Program Files or their own AppData folder; a start-up
+  program in a folder that is emptied or writable by everyone is a common dropper pattern.
+  The value is removed with remove_persistence: only when the process that set it is not a
+  system program under system programs, and only while the value still holds what was set.
+  The removed value is kept in the vault (zaafvesper quarantine restore).
+  Known benign: rare installers that register a one-time RunOnce clean-up step in Temp.
+labels:
+  tactic.id: TA0003
+  tactic.name: Persistence
+  technique.id: T1547.001
+  technique.name: Registry Run Keys / Startup Folder
+references:
+  - https://attack.mitre.org/techniques/T1547/001/
+condition: >
+  evt.name = 'RegistrySetValue'
+  and registry.key imatches ('*\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\*',
+                            '*\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce\\*',
+                            '*\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run\\*',
+                            '*\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\RunOnce\\*')
+  and registry.data imatches ('*\\AppData\\Local\\Temp\\*', '*\\Windows\\Temp\\*', '*\\Users\\Public\\*')
+output: "%ps.exe (pid %ps.pid) set %registry.key = %registry.data (a program in a temporary or public folder)"
+severity: high
+action: [{name: remove_persistence}]
+min-engine-version: 0.1.0

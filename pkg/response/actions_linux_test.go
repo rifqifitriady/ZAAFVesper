@@ -234,6 +234,9 @@ func TestLinuxQuarantineTargetProcess(t *testing.T) {
 	}
 	e := &event.Event{Name: event.CreateProcess, Source: "sysmon", Args: map[string]string{},
 		Proc: &event.Proc{PID: int32(cmd.Process.Pid), UniqueID: id.UniqueID, StartTime: id.StartTime, Exe: exe, UID: -1, EUID: -1, Username: me(t)}}
+	if _, _, err := g.r.liveExe(e.Proc); err != nil {
+		t.Fatalf("live image: %v", err)
+	}
 	bound := g.r.BindExecutable(e)
 	if bound.Proc.ExeIno == 0 || e.Proc.ExeIno != 0 {
 		t.Fatalf("bind: %+v", bound.Proc)
