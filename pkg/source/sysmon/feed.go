@@ -36,7 +36,11 @@ type Feeder struct {
 	Binder *Binder // nil: no identity binding (kills then always refuse)
 	// Trust, when set, checks who wrote a parsed event before it is mapped;
 	// an error drops the event and is reported as CondEventsUntrusted.
-	Trust  func(*Record) error
+	Trust func(*Record) error
+	// Fix, when set, corrects a decoded event from the live system before
+	// identity binding (the Linux source maps a parent thread id to its
+	// process; see sysmonlinux.FixThreadParent).
+	Fix    func(*event.Event)
 	wanted map[string]bool
 
 	mu       sync.Mutex
@@ -99,6 +103,9 @@ func (f *Feeder) Handle(ctx context.Context, raw []byte, out chan<- *event.Event
 		return nil
 	}
 	f.decoded.Add(1)
+	if f.Fix != nil {
+		f.Fix(e)
+	}
 	if f.Binder != nil {
 		f.Binder.Bind(e) // every event, so creates and exits keep the map right
 	}

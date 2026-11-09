@@ -97,6 +97,7 @@ func ReadStamp(pid int32) (sysmon.Stamp, error) {
 // times a minute.
 func (s *Source) Run(ctx context.Context, events []string, out chan<- *event.Event) error {
 	feed := sysmon.NewFeeder(events, sysmon.NewBinder(ReadStamp, IdentityTolerance))
+	feed.Fix = func(e *event.Event) { FixThreadParent(e, procfs.Default.Tgid) }
 	if s.pending != nil {
 		feed.OnDegraded(s.pending)
 	}

@@ -43,7 +43,10 @@
         "Volume shadow copies deleted or recovery disabled",
         "Shadow Copies Deletion Using Operating Systems Utilities"
       ],
-      "note": "Needs wmic.exe, which newer Windows images no longer ship."
+      "note": "Needs wmic.exe, which newer Windows images no longer ship.",
+      "requires": [
+        "wmic.exe"
+      ]
     },
     {
       "id": "art-T1546.003-3c64f177",
@@ -53,7 +56,8 @@
       },
       "expect": [
         "WMI event subscription persistence"
-      ]
+      ],
+      "note": "The test's PowerShell creates the filter, consumer and binding (the rule fires) but does not exit; artrun stops it after 60 s and runs the cleanup."
     },
     {
       "id": "inline-encoded-powershell",

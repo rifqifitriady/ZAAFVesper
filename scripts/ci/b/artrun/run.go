@@ -16,6 +16,7 @@ import (
 // Result records one executed test.
 type Result struct {
 	ID         string    `json:"id"`
+	NotRun     string    `json:"not_run,omitempty"` // why the test was not run
 	Name       string    `json:"name,omitempty"`
 	Kind       string    `json:"kind"` // atomic or inline
 	Command    string    `json:"command"`
@@ -29,7 +30,7 @@ type Result struct {
 }
 
 const (
-	testTimeout = 120 * time.Second
+	testTimeout = 60 * time.Second
 	maxOutput   = 4 << 10
 )
 
@@ -52,6 +53,15 @@ func cmdRun(args []string) error {
 	var results []Result
 	for _, t := range p.Tests {
 		r := Result{ID: t.ID, Kind: "inline"}
+		if missing := missingTools(t.Requires); missing != "" {
+			r.NotRun = missing + " is not on this runner image"
+			if t.Atomic != nil {
+				r.Kind = "atomic"
+			}
+			results = append(results, r)
+			fmt.Printf("%-40s not run: %s\n", t.ID, r.NotRun)
+			continue
+		}
 		step := t.Inline
 		if t.Atomic != nil {
 			r.Kind = "atomic"
@@ -89,6 +99,15 @@ func cmdRun(args []string) error {
 	}
 	b, _ := json.MarshalIndent(results, "", "  ")
 	return os.WriteFile(*out, b, 0o644)
+}
+
+func missingTools(tools []string) string {
+	for _, t := range tools {
+		if _, err := exec.LookPath(t); err != nil {
+			return t
+		}
+	}
+	return ""
 }
 
 // execute runs command with an Atomic Red Team executor name. Multi-line

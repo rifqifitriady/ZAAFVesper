@@ -158,18 +158,23 @@ func buildRows(p *Plan, results []Result, fired map[string]uint64, first map[str
 		if i := strings.Index(row.File, "rules/"); i >= 0 {
 			row.File = row.File[i:]
 		}
-		hit, miss := 0, 0
+		hit, miss, notRun := 0, 0, 0
 		var notes []string
 		for _, id := range byRule[r.Name] {
 			tr, ran := res[id]
 			switch {
 			case !ran:
 				row.Tests = append(row.Tests, id+": not run")
-				miss++
+				notes = append(notes, id+": not run")
+				notRun++
+			case tr.NotRun != "":
+				row.Tests = append(row.Tests, id+": not run")
+				notes = append(notes, id+": "+tr.NotRun)
+				notRun++
 			case tr.Command == "" && tr.Error != "":
 				row.Tests = append(row.Tests, id+": not run")
 				notes = append(notes, id+": "+tr.Error)
-				miss++
+				notRun++
 			case firedIn(alerts, r.Name, tr):
 				row.Tests = append(row.Tests, id+": fired")
 				hit++
@@ -181,15 +186,18 @@ func buildRows(p *Plan, results []Result, fired map[string]uint64, first map[str
 		switch {
 		case hit > 0 && miss == 0:
 			row.Status = "fired"
-			row.Detail = first[r.Name]
+			row.Detail = strings.Join(append(notes, first[r.Name]), "; ")
 		case hit > 0:
 			row.Status = "fired for some tests"
 			row.Detail = strings.Join(append(notes, first[r.Name]), "; ")
-		case len(byRule[r.Name]) > 0:
+		case miss > 0:
 			row.Status = "did not fire"
 			if fired[r.Name] > 0 {
 				notes = append(notes, fmt.Sprintf("fired %d time(s) outside the test windows", fired[r.Name]))
 			}
+			row.Detail = strings.Join(notes, "; ")
+		case notRun > 0:
+			row.Status = "not tested"
 			row.Detail = strings.Join(notes, "; ")
 		case untestable[r.Name] != "":
 			row.Status = "not tested"
@@ -252,6 +260,9 @@ func render(rows []Row, p *Plan, results []Result, platform, runURL string, fire
 		note := notes[r.ID]
 		if len(r.Prereqs) > 0 {
 			note = strings.TrimSpace(note + " Prerequisites not fetched: " + strings.Join(r.Prereqs, "; "))
+		}
+		if r.NotRun != "" {
+			note = strings.TrimSpace(note + " Not run: " + r.NotRun)
 		}
 		if r.Error != "" {
 			note = strings.TrimSpace(note + " Error: " + r.Error)

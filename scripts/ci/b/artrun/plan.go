@@ -31,6 +31,9 @@ type Test struct {
 	// Expect names the rules (by name) this test should make fire.
 	Expect []string `json:"expect"`
 	Note   string   `json:"note,omitempty"`
+	// Requires names programs the test needs; when one is not on the
+	// runner image the test is recorded as not run (not as a miss).
+	Requires []string `json:"requires,omitempty"`
 }
 
 // Atomic names one test in the atomics folder.

@@ -7,11 +7,13 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
+	"github.com/rifqifitriady/ZAAFVesper/pkg/procfs"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/source/sysmon"
 )
 
@@ -53,5 +55,35 @@ func TestReadLines(t *testing.T) {
 	}
 	if len(out) != 2 || s.untrusted.Load() != 1 || s.oversize.Load() != 1 || s.badLines.Load() != 1 || s.cursor != "s=1;i=4" {
 		t.Fatalf("out %d untrusted %d oversize %d bad %d cursor %q", len(out), s.untrusted.Load(), s.oversize.Load(), s.badLines.Load(), s.cursor)
+	}
+}
+
+// TestTgidOfOwnThreads: every thread of this (multi-threaded Go) process
+// maps to the process id, as FixThreadParent needs.
+func TestTgidOfOwnThreads(t *testing.T) {
+	ents, err := os.ReadDir("/proc/self/task")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid := int32(os.Getpid())
+	threads := 0
+	for _, e := range ents {
+		tid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		g, err := procfs.Default.Tgid(int32(tid))
+		if err != nil {
+			continue // thread ended meanwhile
+		}
+		if g != pid {
+			t.Fatalf("thread %d: tgid %d, want %d", tid, g, pid)
+		}
+		if int32(tid) != pid {
+			threads++
+		}
+	}
+	if threads == 0 {
+		t.Skip("no thread other than the main one")
 	}
 }

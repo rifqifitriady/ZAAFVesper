@@ -49,7 +49,7 @@ func TestFSReaders(t *testing.T) {
 	}
 	must(os.WriteFile(filepath.Join(pd, "stat"), []byte("77 (sh) R 1 77 77 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 500 0 0"), 0o644))
 	must(os.WriteFile(filepath.Join(pd, "cmdline"), []byte("/bin/sh\x00-c\x00echo hi\x00"), 0o644))
-	must(os.WriteFile(filepath.Join(pd, "status"), []byte("Name:\tsh\nUid:\t1000\t0\t0\t0\n"), 0o644))
+	must(os.WriteFile(filepath.Join(pd, "status"), []byte("Name:\tsh\nTgid:\t70\nUid:\t1000\t0\t0\t0\n"), 0o644))
 	must(os.Symlink("/usr/bin/dash (deleted)", filepath.Join(pd, "exe")))
 	must(os.WriteFile(filepath.Join(root, "stat"), []byte("btime 100\n"), 0o644))
 	must(os.Mkdir(filepath.Join(root, "self"), 0o755))
@@ -72,6 +72,12 @@ func TestFSReaders(t *testing.T) {
 	exe, del, err := fs.Exe(77)
 	if err != nil || !del || exe != "/usr/bin/dash" {
 		t.Fatalf("Exe %q %v %v", exe, del, err)
+	}
+	if tg, err := fs.Tgid(77); err != nil || tg != 70 {
+		t.Fatalf("Tgid %d %v", tg, err)
+	}
+	if _, err := fs.Tgid(78); err == nil {
+		t.Fatal("Tgid of a missing task")
 	}
 	bt, err := fs.BootTime()
 	if err != nil || bt != 100 {

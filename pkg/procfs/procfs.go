@@ -211,6 +211,26 @@ func (fs FS) UIDs(pid int32) (real, effective int64, err error) {
 	return -1, -1, errors.New("procfs: no Uid line in status")
 }
 
+// Tgid returns the thread group (process) id of a task id: for a thread,
+// the process it belongs to; for a process, itself. /proc/<tid> exists for
+// every thread even though the proc root lists only processes.
+func (fs FS) Tgid(tid int32) (int32, error) {
+	b, err := readBounded(fs.pidPath(tid, "status"), maxStatusBytes)
+	if err != nil && !errors.Is(err, errTruncated) {
+		return 0, err
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if v, ok := strings.CutPrefix(line, "Tgid:"); ok {
+			n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 32)
+			if err != nil || n <= 0 {
+				break
+			}
+			return int32(n), nil
+		}
+	}
+	return 0, errors.New("procfs: no Tgid line in status")
+}
+
 // PIDs lists the numeric entries of the proc root.
 func (fs FS) PIDs() ([]int32, error) {
 	ents, err := os.ReadDir(fs.Root)
