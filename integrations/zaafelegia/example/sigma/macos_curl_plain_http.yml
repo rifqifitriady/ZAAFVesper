@@ -1,0 +1,21 @@
+title: curl downloads over plain HTTP (macOS)
+id: 7d2e9b14-3c5a-4f8e-a1b6-0e4d2c9f7a31
+status: experimental
+description: curl fetches a URL over plain HTTP, a common first stage of ClickFix-style lures. Example rule for ZAAFVesper's --elegia-out.
+author: ZAAFVesper example
+references:
+  - https://attack.mitre.org/techniques/T1105/
+tags:
+  - attack.command-and-control
+  - attack.t1105
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: /curl
+    CommandLine|contains: 'http://'
+  condition: selection
+falsepositives:
+  - Developer scripts fetching from local HTTP servers
+level: medium

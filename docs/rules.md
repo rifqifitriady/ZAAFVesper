@@ -1,7 +1,7 @@
 # ZAAFVesper built-in rules (macOS)
 
-41 hand-written behaviour rules, 12 rules converted from SigmaHQ (see
-[Sigma import](#sigma-import)), 5 YARA signatures and one shared macro file. Every
+44 hand-written behaviour rules, 12 rules converted from SigmaHQ (see
+[Sigma import](#sigma-import)), 5 YARA signatures and two shared macro files (`macros.yml`, `network.yml`). Every
 hand-written rule maps to one MITRE ATT&CK technique, has a fixture file with at least one `match` and two `nomatch`
 scenarios (one of them a realistic benign lookalike), and, where Atomic Red Team ships a
 macOS test for the behaviour, lists that test's GUID in `tests.atomic`.
@@ -152,6 +152,16 @@ These rules keep SigmaHQ's ATT&CK tags. Unlike the hand-written rules, their tec
 and tactic IDs were not checked against the bundled `enterprise-attack.json` (only the
 revoked IDs listed above are rewritten), and no atomic test has been run against them.
 
+## Network rules (42–44)
+
+The network rules match `NetworkConnect` and `NetworkAccept` events from socket polling (`pkg/source/netpoll`, see [operations](operations.md#network-telemetry-socket-polling)). What they can and cannot see:
+
+- **Polling, not a stream.** A socket is found by polling every `--net-interval` (1 s) and right after each exec. A connection that opens and closes between two polls is never seen, so these rules catch long-lived shells and sessions, not short beacons.
+- **No DNS.** macOS gives no DNS visibility without a NetworkExtension, so `net.dhost` is never set and rule 44 treats every public destination as a raw IP.
+- **Identity.** When the process was seen executing, the event carries its full identity from the process table. Otherwise the identity comes from the kernel and is marked `evt.arg[identity] = unverified` with no signing data. Rule 42 matches either (by path or name); rule 43 requires a verified identity, so it misses a payload that started before ZAAFVesper rather than flag every signed helper whose signing data is unknown.
+- **Evasion gaps.** UDP sent with `sendto()` on an unconnected socket shows only as a listening socket, so these rules never see it as a connection. A renamed copy of a shell or interpreter outside the usual paths evades rules 42 and 44 (rule 42 also matches by process name). Flooding Endpoint Security until events are dropped (`es_events_dropped`) can leave a process with an unverified identity, which rule 43 skips. Padding a process with many descriptors only delays polling (`netpoll_fd_capped` is raised).
+- **False positives.** Rule 42: a shell that really holds a socket is rare; `ssh`, `nc` or `curl` started from a shell hold their own sockets and do not match. Rule 43: unsigned developer builds run from `/tmp` that talk to the internet. Rule 44: scripts that talk to cloud databases or brokers on their native ports (5432, 6379, 9092, 27017) and game or VoIP traffic from interpreters; add exclusions in the configuration. Common client ports (`net_common_ports` in `rules/macros/network.yml`) and private, loopback, link-local, CGNAT (100.64.0.0/10) and unique-local destinations are not "uncommon public" destinations.
+
 ## Rule table
 
 Seq = sequence rule. Action = response taken only when ZAAFVesper runs with `--enable-response`.
@@ -199,8 +209,11 @@ Seq = sequence rule. Action = response taken only when ZAAFVesper runs with `--e
 | 39 | Download followed by stdin-fed shell<br>`rules/command_and_control_download_then_stdin_shell.yml` | TA0011 Command and Control | T1105 Ingress Tool Transfer | high | yes |  | (none indexed for this technique) |
 | 40 | ZAAFVesper sensor degraded<br>`rules/defense_impairment_sensor_degraded.yml` | TA0112 Defense Impairment | T1685 Disable or Modify Tools | medium |  |  | (none; synthetic event) |
 | 41 | Executable replaced right after exec (YARA scan evasion)<br>`rules/defense_impairment_sensor_exec_replaced.yml` | TA0112 Defense Impairment | T1685 Disable or Modify Tools | high |  |  | (none; synthetic event) |
+| 42 | Shell holding a network connection to another host (reverse or bind shell)<br>`rules/network_shell_remote_socket.yml` | TA0002 Execution | T1059.004 Unix Shell | high |  |  | (none indexed for this technique) |
+| 43 | Binary without developer identity in a temp folder connects out<br>`rules/network_unsigned_temp_binary_outbound.yml` | TA0011 Command and Control | T1071 Application Layer Protocol | high |  |  | (none indexed for this technique) |
+| 44 | Script interpreter connects to a public IP on an uncommon port<br>`rules/network_interpreter_raw_ip_uncommon_port.yml` | TA0011 Command and Control | T1571 Non-Standard Port | medium |  |  | (none indexed for this technique) |
 
-Totals: 41 rules, 4 sequence rules, 28 rules with at least one macOS atomic indexed under the rule's own technique (59 GUIDs), 1 rule with a kill action (target: the untrusted parent).
+Totals: 44 rules, 4 sequence rules, 28 rules with at least one macOS atomic indexed under the rule's own technique (59 GUIDs), 1 rule with a kill action (target: the untrusted parent).
 
 `tests.atomic` lists only GUIDs that `atomics/Indexes/Indexes-CSV/macos-index.csv` files
 under the rule's own technique (or its parent). Atomics filed under another technique that
