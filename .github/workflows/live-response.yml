@@ -1,0 +1,137 @@
+# Live validation of the response actions (v0.3 workstream D).
+# Runs the real zaafvesper binary as root on throw-away GitHub runners:
+# macOS (kill, suspend, quarantine_file, quarantine restore, requarantine,
+# remove_persistence, isolate_process with real pfctl, never-block set),
+# Linux and Windows (kill with their platform identity checks; suspend on
+# Linux). Every test object is created by the harness itself. The harness
+# (`validate-response`) exists only in this build (-tags zaafvesper_validate);
+# release and package builds do not contain it.
+# Results: docs/validation/response.md.
+name: live-response
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["validate/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-response-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build
+        shell: bash
+        run: CGO_ENABLED=0 go build -trimpath -tags zaafvesper_validate -o "$RUNNER_TEMP/zaafvesper" ./cmd/zaafvesper
+      - name: Validate response actions (root)
+        shell: bash
+        run: scripts/ci/d/live-response-macos.sh "$RUNNER_TEMP/zaafvesper" "$RUNNER_TEMP/response-macos.json" 2>&1 | tee "$RUNNER_TEMP/response-macos.log"
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## Response actions on macos-latest" >> "$GITHUB_STEP_SUMMARY"
+          grep '^|' "$RUNNER_TEMP/response-macos.log" >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Clean up pf and the loopback alias
+        if: always()
+        shell: bash
+        run: |
+          sudo /sbin/pfctl -a 'com.apple/com.rifqifitriady.zaafvesper' -F all || true
+          sudo /sbin/ifconfig lo0 -alias 10.254.254.2 || true
+      - name: The runner still reaches GitHub (isolation never blocked its own connectivity)
+        if: always()
+        shell: bash
+        run: |
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 https://api.github.com/zen)
+          echo "api.github.com answered HTTP $code"
+          test "$code" = 200
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: response-macos
+          path: |
+            ${{ runner.temp }}/response-macos.json
+            ${{ runner.temp }}/response-macos.log
+          retention-days: 30
+
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build
+        shell: bash
+        run: CGO_ENABLED=0 go build -trimpath -tags zaafvesper_validate -o "$RUNNER_TEMP/zaafvesper" ./cmd/zaafvesper
+      - name: Validate response actions (root)
+        shell: bash
+        run: sudo /usr/bin/env ZAAFVESPER_VALIDATE_RESPONSE=throwaway-runner GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" "$RUNNER_TEMP/zaafvesper" validate-response --out "$RUNNER_TEMP/response-linux.json" 2>&1 | tee "$RUNNER_TEMP/response-linux.log"
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## Response actions on ubuntu-latest" >> "$GITHUB_STEP_SUMMARY"
+          grep '^|' "$RUNNER_TEMP/response-linux.log" >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: response-linux
+          path: |
+            ${{ runner.temp }}/response-linux.json
+            ${{ runner.temp }}/response-linux.log
+          retention-days: 30
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build
+        shell: pwsh
+        run: |
+          $env:CGO_ENABLED = "0"
+          go build -trimpath -tags zaafvesper_validate -o "$env:RUNNER_TEMP\zaafvesper.exe" ./cmd/zaafvesper
+      - name: Validate response actions (elevated)
+        shell: pwsh
+        run: |
+          $env:ZAAFVESPER_VALIDATE_RESPONSE = "throwaway-runner"
+          & "$env:RUNNER_TEMP\zaafvesper.exe" validate-response --out "$env:RUNNER_TEMP\response-windows.json" 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP\response-windows.log"
+          exit $LASTEXITCODE
+      - name: Summary
+        if: always()
+        shell: pwsh
+        run: |
+          "## Response actions on windows-latest" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          Get-Content "$env:RUNNER_TEMP\response-windows.log" | Where-Object { $_ -like '|*' } | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: response-windows
+          path: |
+            ${{ runner.temp }}/response-windows.json
+            ${{ runner.temp }}/response-windows.log
+          retention-days: 30
