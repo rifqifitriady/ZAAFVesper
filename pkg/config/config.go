@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -52,14 +53,31 @@ type Exclusion struct {
 	Condition string   `yaml:"condition"`
 }
 
+// Response tunes the response actions. None of these settings turns a
+// response on: only --enable-response (or --dry-run-response) does.
+type Response struct {
+	// IsolationAllow lists addresses and networks (CIDR) that
+	// isolate_process never blocks: the management allow-list (DNS
+	// resolvers, proxies, MDM, the log collector).
+	IsolationAllow []string `yaml:"isolation_allow"`
+	// IsolationTTL is how long an isolation lasts (default 1h).
+	IsolationTTL time.Duration `yaml:"isolation_ttl"`
+	// SuspendFor is how long a suspended process stays stopped unless a
+	// kill follows (default 30s, at most 10m).
+	SuspendFor time.Duration `yaml:"suspend_for"`
+	// QuarantineMaxBytes caps the size of a quarantined file (default 128 MiB).
+	QuarantineMaxBytes int64 `yaml:"quarantine_max_bytes"`
+}
+
 // Config is the merged configuration. There is deliberately no setting that
-// enables the kill response: only the --enable-response flag does that.
+// enables the response actions: only the --enable-response flag does that.
 type Config struct {
 	RulesDir string      `yaml:"rules_dir"`
 	Source   Source      `yaml:"source"`
 	Eslogger Eslogger    `yaml:"eslogger"`
 	Yara     Yara        `yaml:"yara"`
 	Exclude  []Exclusion `yaml:"exclude"`
+	Response Response    `yaml:"response"`
 
 	// Files lists the files that were read, in merge order.
 	Files []string `yaml:"-"`
@@ -112,6 +130,16 @@ func (c *Config) merge(o *Config) {
 	}
 	c.Yara.WatchDirs = append(c.Yara.WatchDirs, o.Yara.WatchDirs...)
 	c.Exclude = append(c.Exclude, o.Exclude...)
+	c.Response.IsolationAllow = append(c.Response.IsolationAllow, o.Response.IsolationAllow...)
+	if o.Response.IsolationTTL != 0 {
+		c.Response.IsolationTTL = o.Response.IsolationTTL
+	}
+	if o.Response.SuspendFor != 0 {
+		c.Response.SuspendFor = o.Response.SuspendFor
+	}
+	if o.Response.QuarantineMaxBytes != 0 {
+		c.Response.QuarantineMaxBytes = o.Response.QuarantineMaxBytes
+	}
 }
 
 // Load reads path and then every *.yml / *.yaml in the config.d directory

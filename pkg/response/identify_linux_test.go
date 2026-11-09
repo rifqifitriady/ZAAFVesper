@@ -91,3 +91,50 @@ func TestLinuxProtected(t *testing.T) {
 		}
 	}
 }
+
+// TestLinuxSuspendResume runs the suspend action and its timed resume on a
+// child through the real identify and pidfd paths.
+func TestLinuxSuspendResume(t *testing.T) {
+	cmd := exec.Command("sleep", "30")
+	if err := cmd.Start(); err != nil {
+		t.Skip(err)
+	}
+	defer cmd.Process.Kill()
+	pid := int32(cmd.Process.Pid)
+	id, err := identify(pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	r := New(Config{Log: func(Decision) {}, SuspendFor: time.Second, Now: func() time.Time { return now }})
+	p := &event.Proc{PID: pid, Exe: id.Exe, Name: "sleep", UniqueID: id.UniqueID, StartTime: id.StartTime}
+	if err := r.SuspendEvent(&event.Event{Proc: p, Source: "sysmon"}, "rule", "test"); err != nil {
+		t.Fatalf("SuspendEvent: %v (stats %v)", err, r.Stats())
+	}
+	state := func() byte {
+		st, err := proc.Stat(pid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return st.State
+	}
+	// Signal delivery is asynchronous: wait for the state to change.
+	waitState := func(stopped bool) byte {
+		var s byte
+		for i := 0; i < 100; i++ {
+			if s = state(); (s == 'T' || s == 't') == stopped {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		return s
+	}
+	if s := waitState(true); s != 'T' && s != 't' {
+		t.Fatalf("state %c after suspend, want T (stats %v)", s, r.Stats())
+	}
+	now = now.Add(2 * time.Second)
+	r.Tick(now)
+	if s := waitState(false); s == 'T' || s == 't' {
+		t.Fatalf("still stopped after the resume (stats %v)", r.Stats())
+	}
+}

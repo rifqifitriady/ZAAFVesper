@@ -76,6 +76,14 @@ before ZAAFVesper started are never killed. Images under `/usr/lib/systemd/`,
 running journalctl child are protected. Protection is by full path, not by
 name: a program called `sysmon` in `/tmp` stays killable.
 
+## Response actions on Linux
+
+Of the response actions, Linux supports `kill` and `suspend` (SIGSTOP, resumed after `response.suspend_for` unless a kill follows; the resume re-checks the start time). `quarantine_file`,
+`requarantine`, `remove_persistence` and `isolate_process` use the macOS quarantine
+attribute, launchctl and pf: on Linux they are refused (`refused-unsupported`,
+nothing is changed), `zaafvesper run` warns at start which enabled rules ask for
+them, and the alert is still raised.
+
 ## Known limits
 
 - As root, ZAAFVesper refuses configuration, rules and binaries that are not

@@ -120,6 +120,14 @@ asked from the Service Control Manager). Other events are dropped and raise a
 another service name is not recognised (all its events are then reported as
 untrusted): rename it back or open an issue.
 
+## Response actions on Windows
+
+Of the response actions, Windows supports `kill` only. `quarantine_file`,
+`requarantine`, `remove_persistence` and `isolate_process` use the macOS quarantine
+attribute, launchctl and pf: on Windows they are refused (`refused-unsupported`,
+nothing is changed), `zaafvesper run` warns at start which enabled rules ask for
+them, and the alert is still raised.
+
 ## Known limits
 
 - Sysmon gives a user name (`DOMAIN\user`), not a uid: `ps.uid` is -1.

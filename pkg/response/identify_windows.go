@@ -89,8 +89,11 @@ func identify(pid int32) (Identity, error) {
 
 // defaultKill opens the pid with PROCESS_TERMINATE, checks on that handle
 // that its creation time is the one identify read, then terminates the
-// process behind the same handle. sig is ignored (only SIGKILL is used).
-func defaultKill(pid int, _ syscall.Signal) error {
+// process behind the same handle. Only SIGKILL is accepted.
+func defaultKill(pid int, sig syscall.Signal) error {
+	if sig != syscall.SIGKILL {
+		return fmt.Errorf("signal %d is not supported on Windows (only kill)", sig)
+	}
 	want, err := takeStamp(int32(pid))
 	if err != nil {
 		return err

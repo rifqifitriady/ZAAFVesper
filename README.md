@@ -21,7 +21,7 @@ ZAAFVesper watches what processes on a Mac actually **do**: what they spawn, whi
 ## Project status
 
 > [!WARNING]
-> **Pre-release.** Every rule passes its fixtures and the code has been through several independent security review rounds. However, the installer package, the LaunchDaemon, Full Disk Access and real kills have **not yet been validated live as root**. Treat a first install as a test on a machine you can recover. Open items and residual risks are tracked in [docs/security/open-findings.md](docs/security/open-findings.md).
+> **Pre-release.** Every rule passes its fixtures and the code has been through several independent security review rounds. However, the installer package, the LaunchDaemon, Full Disk Access and the response actions (kills, suspend, quarantine, launchctl and pf) have **not yet been validated live as root**. Treat a first install as a test on a machine you can recover. Open items and residual risks are tracked in [docs/security/open-findings.md](docs/security/open-findings.md).
 
 ## Platform support
 
@@ -42,7 +42,7 @@ macOS-only for now (the Windows and Linux builds are pure Go).
 <td width="50%" valign="top">
 
 **Behaviour rules, not signatures**<br>
-44 rules over process, file, network, persistence, credential and defence-impairment activity. Single-event rules and `sequence` rules correlate steps such as *download → write → execute* by path or process. Twelve more come from SigmaHQ, converted with `zaafvesper sigma convert`.
+46 rules over process, file, network, persistence, credential and defence-impairment activity. Single-event rules and `sequence` rules correlate steps such as *download → write → execute* by path or process. Twelve more come from SigmaHQ, converted with `zaafvesper sigma convert`.
 
 </td>
 <td width="50%" valign="top">
@@ -75,8 +75,8 @@ Record events to a compressed `.rcap` file. Later, replay that capture or raw `e
 </td>
 <td valign="top">
 
-**Careful, opt-in response**<br>
-Off by default. A rule may kill the offending process or its untrusted parent. The pid is first re-checked against the kernel. The kill is refused for a process that was an Apple platform binary when it was detected, and for protected system paths. Kills are rate-limited per rule.
+**Careful, opt-in active response**<br>
+Off by default. A rule may kill or suspend the offending process or its untrusted parent, move a dropped file into a root-only quarantine vault, put back a stripped quarantine attribute, boot out and quarantine a Launch Agent or Daemon, or block a process's remote peers in pf for an hour. Every action re-checks its target first (kernel identity for processes, device and inode for files), refuses Apple and protected system paths, and is rate-limited. **All of it happens after the event: it contains damage, it does not prevent it.**
 
 </td>
 </tr>
@@ -89,7 +89,7 @@ Off by default. A rule may kill the offending process or its untrusted parent. T
 1. **Collect.** `/usr/bin/eslogger` streams Endpoint Security notifications as JSON, and ZAAFVesper decodes 24 event types into one platform-neutral event model.
 2. **Enrich.** The process tree adds parent, ancestry, signing category and a kernel-unique id to each event. Its memory is bounded, and under pressure it sheds detail before it drops identity.
 3. **Detect.** Rules are indexed by event name and evaluated in order; sequences keep bounded partial state. YARA matches come back into the engine as events.
-4. **Act.** Every match is written as an alert to the console and to JSONL files with size caps. With `--enable-response`, a match can also trigger a kill. The sensor raises a `SensorDegraded` event whenever its own telemetry suffers.
+4. **Act.** Every match is written as an alert to the console and to JSONL files with size caps. With `--enable-response`, a match can also trigger a response action (kill, suspend, quarantine, requarantine, remove persistence, isolate), always after the event. The sensor raises a `SensorDegraded` event whenever its own telemetry suffers.
 
 ## See it run
 
@@ -197,13 +197,25 @@ ZAAFVesper runs as root, so the sensor itself is treated as an attack surface. I
 - **Bounded memory:** argv, env, the process table, sequences, the YARA queue and the alert files all have caps. Event text is sanitised before it reaches a terminal.
 - **Network and outputs:** socket polling only reads the process table; its events never update it, and identities it reads from the kernel are marked unverified, so they never drive a kill. SIEM tokens are read from a root-owned `0600` file and never logged or spooled; syslog trusts only the CA you name; webhooks follow no redirects.
 - **Kills:** a kill is checked against the kernel's unique process id and start time. A process that was an Apple platform binary when it was detected is never killed, and neither is one whose current image lies on a protected system path. A detected process that later execs into an Apple binary such as `/bin/zsh` is still killed once its identity was recorded (only when Endpoint Security reported that it was not an Apple binary when it was detected); an exec that happens before the sensor recorded the process escapes the kill, not the alert.
+- **File and network actions:** a file is acted on only if it is still the inode the event reported, reached without following any symbolic link, a regular file on a local disk (hard-linked only when it belongs to the offending process), outside system paths, Apple-signed bundles and ZAAFVesper's own files. `launchctl` and `pfctl` are pinned binaries run with fixed arguments; a launch label is booted out only if launchd loaded it from that very plist, and pf rules are a constant (only parsed IP addresses enter its table; loopback, link-local, this Mac's addresses, its default gateway and DNS resolvers, Apple's 17.0.0.0/8 and a configured management allow-list are never blocked). pf filters by address, so an isolation blocks those peers for the whole Mac.
+
+What each response action can and cannot do (all of them act after the event; details in [docs/operations.md](docs/operations.md#response)):
+
+| Action | Does | Does not |
+|---|---|---|
+| `kill` | SIGKILL the process or its parent after re-checking its kernel identity | undo what it already did; touch Apple platform binaries or protected paths |
+| `suspend` | SIGSTOP it at once, so a following `kill` does not race it | keep it stopped: it is resumed after 30 s (or at shutdown) unless killed |
+| `quarantine_file` | move the file into a root-only vault, restorable with `zaafvesper quarantine restore` | stop a process already running from it, or remove other hard-linked names |
+| `requarantine` | put `com.apple.quarantine` back so Gatekeeper checks the file at its next launch | affect a launch that already happened |
+| `remove_persistence` | boot out the job (only if launchd loaded that label from this plist) and quarantine the plist | undo what the job already did; stop a job loaded in another user's domain before logout |
+| `isolate_process` | block the process's known remote peers in pf for an hour | block per process: those addresses are blocked for the whole Mac, and new peers are not |
 
 The status of every finding, with the tests that back it, is in **[docs/security/open-findings.md](docs/security/open-findings.md)**. The largest open item is the build chain: the package is built on the same account it protects, and it is unsigned. Closing that needs a signed and notarized CI build.
 
 ## Project layout
 
 ```
-cmd/zaafvesper/        CLI: run, replay, rules, coverage, sigma
+cmd/zaafvesper/        CLI: run, replay, rules, coverage, sigma, quarantine, isolation
 pkg/event/             platform-neutral event model and field registry
 pkg/source/eslogger/   eslogger decoder and supervisor
 pkg/source/sysmon/     Sysmon XML decoder (Windows and Linux) and identity binder
@@ -216,18 +228,18 @@ pkg/filter/ql/         rule language: lexer, parser, compiler
 pkg/rules/             rule loading, engine, sequences, fixtures
 pkg/sigma/             Sigma parser and converter
 pkg/yara/              YARA scanner bound to file identity
-pkg/alert/, response/  alert sinks and caps, kill guard rails
-rules/                 44 macOS rules, rules/windows, rules/linux, macros, fixtures, YARA signatures
+pkg/alert/, response/  alert sinks and caps, response actions and their guard rails
+rules/                 46 macOS rules, rules/windows, rules/linux, macros, fixtures, YARA signatures
 rules/sigma/           converted SigmaHQ rules (DRL 1.1): macos/, windows/, linux/
 integrations/          ZAAFElegia example and notes
-packaging/             LaunchDaemon plist, newsyslog config; windows/ and linux/ install notes
+packaging/             LaunchDaemon plist, newsyslog config (the package also creates /var/db/zaafvesper); windows/ and linux/ install notes
 ```
 
 ## Roadmap
 
 - Windows and Linux adapters (Sysmon): in preview, to be validated on real hosts.
 - Complete network telemetry (DNS, short connections) through a NetworkExtension.
-- Native Endpoint Security client with AUTH events (blocking, not just notify).
+- Native Endpoint Security client with AUTH events: real blocking before execution (needs Apple's entitlement; today's response only acts after the event).
 - Signed and notarized package built in CI.
 
 ## Acknowledgements

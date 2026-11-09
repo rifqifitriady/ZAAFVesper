@@ -99,8 +99,14 @@ func TestLoadDirValidation(t *testing.T) {
 		{"no engine", strings.Replace(goodRule, "min-engine-version: 0.1.0\n", "", 1), "min-engine-version is required"},
 		{"technique", goodRule + "labels: {technique.id: T15.1}\n", "T1234"},
 		{"tactic", goodRule + "labels: {tactic.id: T0003}\n", "TA1234"},
-		{"action", goodRule + "action: [{name: suspend}]\n", "not supported"},
+		{"action", goodRule + "action: [{name: block}]\n", "not supported"},
 		{"action target", goodRule + "action: [{name: kill, target: grandparent}]\n", `target "grandparent" must be`},
+		{"quarantine target", goodRule + "action: [{name: quarantine_file, target: parent}]\n", `target "parent" must be "file" or "process"`},
+		{"requarantine target", goodRule + "action: [{name: requarantine, target: process}]\n", `must be "file"`},
+		{"persistence target", goodRule + "action: [{name: remove_persistence, target: parent}]\n", `must be "file"`},
+		{"isolate target", goodRule + "action: [{name: isolate_process, target: file}]\n", `must be "process" or "parent"`},
+		{"suspend target", goodRule + "action: [{name: suspend, target: file}]\n", `must be "process" or "parent"`},
+		{"duplicate action", goodRule + "action: [{name: kill}, {name: kill, target: process}]\n", "listed twice"},
 		{"atomic", goodRule + "tests: {atomic: [xyz]}\n", "not a GUID"},
 		{"unknown key", goodRule + "severty: low\n", "severty"},
 		{"unknown field", strings.Replace(goodRule, "evt.name = 'CreateProcess'", "ps.nope = 1", 1), `rule "R": condition: line 1 col 1: unknown field`},
@@ -146,6 +152,40 @@ func TestActionTargets(t *testing.T) {
 		if len(al) != 1 || len(al[0].Response) != 1 || al[0].Response[0].KillTarget() != c.kill {
 			t.Fatalf("target %q: alert response = %+v", c.target, al)
 		}
+	}
+}
+
+// TestResponseActionNames: every reserved action name of the v0.2 contract
+// validates with its targets, and displays with a non-default target only.
+func TestResponseActionNames(t *testing.T) {
+	for _, c := range []struct {
+		yaml, display, target string
+	}{
+		{"{name: suspend}", "suspend", TargetProcess},
+		{"{name: suspend, target: parent}", "suspend:parent", TargetParent},
+		{"{name: quarantine_file}", "quarantine_file", TargetFile},
+		{"{name: quarantine_file, target: file}", "quarantine_file", TargetFile},
+		{"{name: quarantine_file, target: process}", "quarantine_file:process", TargetProcess},
+		{"{name: requarantine}", "requarantine", TargetFile},
+		{"{name: remove_persistence}", "remove_persistence", TargetFile},
+		{"{name: isolate_process}", "isolate_process", TargetProcess},
+		{"{name: isolate_process, target: parent}", "isolate_process:parent", TargetParent},
+	} {
+		rs, err := LoadDir(writeRules(t, map[string]string{"r.yml": goodRule + "action: [" + c.yaml + "]\n"}))
+		if err != nil {
+			t.Fatalf("%s: %v", c.yaml, err)
+		}
+		a := rs.Rules[0].Action[0]
+		if got := rs.Rules[0].Actions(); !reflect.DeepEqual(got, []string{c.display}) || a.EffectiveTarget() != c.target {
+			t.Fatalf("%s: Actions = %v target = %q", c.yaml, got, a.EffectiveTarget())
+		}
+	}
+	rs, err := LoadDir(writeRules(t, map[string]string{"r.yml": goodRule + "action: [{name: suspend, target: parent}, {name: kill, target: parent}]\n"}))
+	if err != nil || !reflect.DeepEqual(rs.Rules[0].Actions(), []string{"suspend:parent", "kill:parent"}) {
+		t.Fatalf("suspend then kill: %v %v", err, rs)
+	}
+	if len(ActionNames()) != 6 {
+		t.Fatalf("ActionNames = %v", ActionNames())
 	}
 }
 

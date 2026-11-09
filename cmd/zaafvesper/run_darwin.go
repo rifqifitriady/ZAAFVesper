@@ -70,3 +70,9 @@ func newSource(cfg *config.Config, p *pipeline, stderr io.Writer) source.Source 
 
 // platformOutputCheck: every output works here.
 func platformOutputCheck(*netOutOptions) error { return nil }
+
+// pfAvailable: isolate_process uses pf.
+const pfAvailable = true
+
+// unsupportedAction: every response action is implemented on macOS.
+func unsupportedAction(string) string { return "" }

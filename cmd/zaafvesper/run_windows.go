@@ -15,6 +15,7 @@ import (
 	"golang.org/x/sys/windows/svc"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/config"
+	"github.com/rifqifitriady/ZAAFVesper/pkg/rules"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/source"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/source/winevt"
 )
@@ -163,4 +164,20 @@ func platformOutputCheck(n *netOutOptions) error {
 		}
 	}
 	return nil
+}
+
+// pfAvailable: pf (isolate_process) is macOS only.
+const pfAvailable = false
+
+// supportedActions are the response actions implemented on Windows; the
+// others (quarantine_file, requarantine, remove_persistence and
+// isolate_process use the quarantine attribute, launchctl and pf) are macOS
+// only and are refused with a clear reason.
+var supportedActions = map[string]bool{rules.ActionKill: true}
+
+func unsupportedAction(name string) string {
+	if supportedActions[name] {
+		return ""
+	}
+	return "action " + name + " is not supported on Windows (macOS only)"
 }

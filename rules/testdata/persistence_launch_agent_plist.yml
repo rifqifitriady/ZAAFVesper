@@ -1,24 +1,14 @@
 match:
-  - desc: 'sudo cp drops the atomic plist into the user''s LaunchAgents (ART T1543.001 #1)'
+  - desc: 'sudo cp drops the atomic plist into the user''s LaunchAgents (ART T1543.001 #1) from a terminal: trusted chain'
     events:
       - name: CreateFile
-        proc: {pid: 2101, ppid: 2100, exe: /bin/cp, name: cp, cmdline: "cp /tmp/atomicredteam_T1543_001.plist /Users/rifqi/Library/LaunchAgents/com.atomicredteam.plist", args: [cp, /tmp/atomicredteam_T1543_001.plist, /Users/rifqi/Library/LaunchAgents/com.atomicredteam.plist], uid: 0, euid: 0, signing_id: com.apple.cp, is_platform: true, is_signed: true}
+        proc: {pid: 2101, ppid: 2100, exe: /bin/cp, name: cp, cmdline: "cp /tmp/atomicredteam_T1543_001.plist /Users/rifqi/Library/LaunchAgents/com.atomicredteam.plist", args: [cp, /tmp/atomicredteam_T1543_001.plist, /Users/rifqi/Library/LaunchAgents/com.atomicredteam.plist], uid: 0, euid: 0, signing_id: com.apple.cp, is_platform: true, is_signed: true, parent: {pid: 2100, ppid: 2099, exe: /usr/bin/sudo, name: sudo, signing_id: com.apple.sudo, is_platform: true, is_signed: true}}
         file: {path: /Users/rifqi/Library/LaunchAgents/com.atomicredteam.plist}
-  - desc: unsigned stealer renames a temp file onto /Library/LaunchAgents
-    events:
-      - name: RenameFile
-        proc: {pid: 3300, ppid: 1, exe: /Volumes/Installer/Setup.app/Contents/MacOS/Setup, name: Setup, uid: 501, euid: 501, is_platform: false, is_signed: false}
-        file: {path: /private/tmp/.x1, dest: /Library/LaunchAgents/com.apple.updates.plist}
-  - desc: forged - Google's Team ID on a self-signed writer (cs_category local_signing) stays high
+  - desc: Apple tool under a fully trusted chain (Terminal -> zsh -> cp) fires here (alert-only)
     events:
       - name: CreateFile
-        proc: {pid: 4140, ppid: 1, exe: /Users/Shared/GoogleSoftwareUpdateAgent, name: GoogleSoftwareUpdateAgent, uid: 501, euid: 501, signing_id: com.google.Keystone.Agent, team_id: EQHXZ8M8AV, is_platform: false, is_signed: true, cs_category: local_signing}
-        file: {path: /Users/rifqi/Library/LaunchAgents/com.google.keystone.agent.plist}
-  - desc: Team ID with no reported signing category stays high (fail closed)
-    events:
-      - name: CreateFile
-        proc: {pid: 4141, ppid: 1, exe: /Users/Shared/GoogleSoftwareUpdateAgent, name: GoogleSoftwareUpdateAgent, uid: 501, euid: 501, signing_id: com.google.Keystone.Agent, team_id: EQHXZ8M8AV, is_platform: false, is_signed: true}
-        file: {path: /Users/rifqi/Library/LaunchAgents/com.google.keystone.agent.plist}
+        proc: {pid: 5421, ppid: 5420, exe: /bin/cp, name: cp, uid: 501, euid: 501, signing_id: com.apple.cp, is_platform: true, is_signed: true, ancestors_untrusted: false, parent: {pid: 5420, ppid: 5419, exe: /bin/zsh, name: zsh, signing_id: com.apple.zsh, is_platform: true, is_signed: true}}
+        file: {path: /Users/rifqi/Library/LaunchAgents/com.example.mine.plist}
 nomatch:
   - desc: benign lookalike - Google Keystone (Developer ID, team EQHXZ8M8AV) installs its updater agent
     events:
@@ -35,3 +25,23 @@ nomatch:
       - name: CreateFile
         proc: {pid: 610, ppid: 1, exe: /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder, name: Finder, signing_id: com.apple.finder, is_platform: true, is_signed: true}
         file: {path: /Users/rifqi/Library/LaunchAgents/.DS_Store}
+  - desc: on the companion rule (untrusted writer) - unsigned stealer renames a temp file onto /Library/LaunchAgents
+    events:
+      - name: RenameFile
+        proc: {pid: 3300, ppid: 1, exe: /Volumes/Installer/Setup.app/Contents/MacOS/Setup, name: Setup, uid: 501, euid: 501, is_platform: false, is_signed: false}
+        file: {path: /private/tmp/.x1, dest: /Library/LaunchAgents/com.apple.updates.plist}
+  - desc: on the companion rule (untrusted writer) - forged - Google's Team ID on a self-signed writer (cs_category local_signing) stays high
+    events:
+      - name: CreateFile
+        proc: {pid: 4140, ppid: 1, exe: /Users/Shared/GoogleSoftwareUpdateAgent, name: GoogleSoftwareUpdateAgent, uid: 501, euid: 501, signing_id: com.google.Keystone.Agent, team_id: EQHXZ8M8AV, is_platform: false, is_signed: true, cs_category: local_signing}
+        file: {path: /Users/rifqi/Library/LaunchAgents/com.google.keystone.agent.plist}
+  - desc: on the companion rule (untrusted writer) - Team ID with no reported signing category stays high (fail closed)
+    events:
+      - name: CreateFile
+        proc: {pid: 4141, ppid: 1, exe: /Users/Shared/GoogleSoftwareUpdateAgent, name: GoogleSoftwareUpdateAgent, uid: 501, euid: 501, signing_id: com.google.Keystone.Agent, team_id: EQHXZ8M8AV, is_platform: false, is_signed: true}
+        file: {path: /Users/rifqi/Library/LaunchAgents/com.google.keystone.agent.plist}
+  - desc: on the companion rule (untrusted chain) - dropper writes its LaunchAgent with /bin/cp (Apple tool, untrusted parent)
+    events:
+      - name: CreateFile
+        proc: {pid: 5401, ppid: 5400, exe: /bin/cp, name: cp, cmdline: "cp /tmp/.a.plist /Users/rifqi/Library/LaunchAgents/com.update.agent.plist", uid: 501, euid: 501, signing_id: com.apple.cp, is_platform: true, is_signed: true, parent: {pid: 5400, ppid: 1, exe: /Volumes/Setup/Setup.app/Contents/MacOS/Setup, name: Setup, signing_id: Setup-5555, is_platform: false, is_signed: true, cs_category: local_signing}}
+        file: {path: /Users/rifqi/Library/LaunchAgents/com.update.agent.plist}
