@@ -1,0 +1,158 @@
+# Live validation of the Windows and Linux adapters (v0.3 workstream B,
+# docs/specs/2026-11-09-v0.3-prove-it-live.md): install Sysmon / Sysmon for
+# Linux from Microsoft with pinned hashes, run ZAAFVesper as it is installed
+# for real (Windows service, systemd unit), run pinned Atomic Red Team tests
+# and documented local equivalents, and record per rule whether it fired.
+# Results: the job summary, the "validation-*" artifacts, docs/validation/.
+name: live-windows-linux
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['validate/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-windows-linux-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Atomic Red Team: test definitions are fetched per file from this commit
+  # and checked against scripts/ci/b/atomics.sha256.
+  ART_COMMIT: a0e3f9bc69fed2fd711bd1f1aa87a40c33482fe6
+  RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      SYSMON_ZIP_SHA256: 00ecf1b46aec99299d3ae0bca79dc621458bd014b20b509d7c5c8e8c8611aa54
+      # sysmon-modular release of commit a45dedb (MIT); hash from its SHA256SUMS.
+      SYSMON_CONFIG_URL: https://github.com/olafhartong/sysmon-modular/releases/download/configs-a45dedb13a43/sysmonconfig-excludes-only.xml
+      SYSMON_CONFIG_SHA256: 4c7d27bc2847f7de816ddde90e7de37d5b9473461b27424882e9b93f00cd28a4
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build
+        shell: pwsh
+        run: |
+          $env:CGO_ENABLED = '0'
+          go build -trimpath -o build\zaafvesper.exe .\cmd\zaafvesper
+          go build -trimpath -o build\artrun.exe .\scripts\ci\b\artrun
+          go build -trimpath -o build\remotethread.exe .\scripts\ci\b\remotethread
+      - name: Fetch pinned atomics
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force atomics | Out-Null
+          foreach ($line in Get-Content scripts\ci\b\atomics.sha256) {
+            $sha, $file = $line -split '\s+', 2
+            $t = $file -replace '\.yaml$', ''
+            Invoke-WebRequest -UseBasicParsing -OutFile "atomics\$file" -Uri "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/$env:ART_COMMIT/atomics/$t/$file"
+            $h = (Get-FileHash -Algorithm SHA256 "atomics\$file").Hash.ToLowerInvariant()
+            if ($h -ne $sha) { throw "$file SHA-256 $h, pinned $sha" }
+          }
+      - name: Install Sysmon and the ZAAFVesper service
+        shell: pwsh
+        run: ./scripts/ci/b/windows-setup.ps1
+      - name: Run the tests
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          $rt = Join-Path $env:TEMP 'remotethread.exe'
+          Copy-Item build\remotethread.exe $rt
+          $env:ZV_REMOTETHREAD = $rt
+          .\build\artrun.exe run -plan scripts\ci\b\windows-plan.json -atomics atomics -out out\results.json
+      - name: Collect
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out\alerts | Out-Null
+          Start-Sleep 15
+          sc.exe stop ZAAFVesper | Out-Host
+          Start-Sleep 5
+          Copy-Item -ErrorAction SilentlyContinue C:\ProgramData\ZAAFVesper\logs\* out\alerts\
+          Get-WinEvent -LogName Microsoft-Windows-Sysmon/Operational -ErrorAction SilentlyContinue |
+            Group-Object Id | Sort-Object Name | Format-Table Name, Count -AutoSize | Out-File out\sysmon-event-counts.txt
+          Get-Content out\sysmon-event-counts.txt
+          if (Test-Path out\alerts\service.log) { Get-Content out\alerts\service.log -Tail 60 }
+      - name: Report
+        if: always()
+        shell: pwsh
+        run: |
+          .\build\artrun.exe report -plan scripts\ci\b\windows-plan.json -results out\results.json -alerts out\alerts -rules rules -platform windows -run-url $env:RUN_URL -out out\windows.md -json out\windows.json
+          Get-Content out\windows.md | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: validation-windows
+          path: out
+          retention-days: 30
+
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      SYSMONFORLINUX_VERSION: 1.6.0
+      SYSMONFORLINUX_SHA256: 95f634597f1558c9ff1554d0f04efbcbcb06badc54486945884b0aea1bfb2106
+      SYSINTERNALSEBPF_VERSION: 2.3.0
+      SYSINTERNALSEBPF_SHA256: a693b347abbe41f6bed199406058c4b83dfe71b8f34f278803d95159ee73c588
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build
+        run: |
+          CGO_ENABLED=0 go build -trimpath -o build/zaafvesper ./cmd/zaafvesper
+          CGO_ENABLED=0 go build -trimpath -o build/artrun ./scripts/ci/b/artrun
+      - name: Fetch pinned atomics
+        run: |
+          mkdir -p atomics
+          while read -r sha file; do
+            t="${file%.yaml}"
+            curl -fsSL --retry 3 -o "atomics/$file" "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/$ART_COMMIT/atomics/$t/$file"
+          done < scripts/ci/b/atomics.sha256
+          (cd atomics && sha256sum -c ../scripts/ci/b/atomics.sha256 --ignore-missing --strict)
+      - name: Install Sysmon for Linux and the ZAAFVesper unit
+        run: ./scripts/ci/b/linux-setup.sh
+      - name: Run the tests
+        continue-on-error: true
+        run: |
+          mkdir -p out
+          sudo env "PATH=$PATH" ./build/artrun run -plan scripts/ci/b/linux-plan.json -atomics atomics -out out/results.json
+      - name: Collect
+        if: always()
+        run: |
+          mkdir -p out/alerts
+          sleep 15
+          sudo systemctl stop zaafvesper || true
+          sudo sh -c 'cp /var/log/zaafvesper/alerts-*.jsonl "$1"' sh out/alerts/ || true
+          sudo journalctl -u zaafvesper --no-pager > out/alerts/zaafvesper-journal.txt || true
+          sudo journalctl -u sysmon --no-pager -o json | python3 -c "import sys,json,collections; c=collections.Counter(); [c.update([ (json.loads(l).get('MESSAGE') or '')[0:200].split('<EventID>')[-1].split('<')[0] ]) for l in sys.stdin]; print(c)" > out/sysmon-event-counts.txt || true
+          sudo chown -R "$(id -u)" out
+          cat out/sysmon-event-counts.txt
+          tail -60 out/alerts/zaafvesper-journal.txt
+      - name: Report
+        if: always()
+        run: |
+          ./build/artrun report -plan scripts/ci/b/linux-plan.json -results out/results.json -alerts out/alerts -rules rules -platform linux -run-url "$RUN_URL" -out out/linux.md -json out/linux.json
+          cat out/linux.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: validation-linux
+          path: out
+          retention-days: 30
