@@ -9,16 +9,26 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/rules"
 )
 
 type alertLine struct {
-	RuleID   string `json:"rule_id"`
-	RuleName string `json:"rule_name"`
-	Output   string `json:"output"`
-	Count    uint64 `json:"count"`
+	RuleID   string    `json:"rule_id"`
+	RuleName string    `json:"rule_name"`
+	Output   string    `json:"output"`
+	Count    uint64    `json:"count"`
+	Time     time.Time `json:"time"`
 }
+
+// Alerts are attributed to a test when their event time falls between the
+// test's start and its end plus this grace (the 2 s gap between tests keeps
+// the windows apart).
+const (
+	windowBefore = 500 * time.Millisecond
+	windowAfter  = 1500 * time.Millisecond
+)
 
 // Row is one rule's line in the validation document.
 type Row struct {
@@ -50,7 +60,7 @@ func cmdReport(args []string) error {
 	if b, err := os.ReadFile(*resultsPath); err == nil {
 		_ = json.Unmarshal(b, &results)
 	}
-	fired, firstOutput, err := readAlerts(*alertsDir)
+	fired, firstOutput, alerts, err := readAlerts(*alertsDir)
 	if err != nil {
 		return err
 	}
@@ -58,7 +68,7 @@ func cmdReport(args []string) error {
 	if err != nil {
 		return err
 	}
-	rows := buildRows(p, results, fired, firstOutput, rs, *platform)
+	rows := buildRows(p, results, fired, firstOutput, alerts, rs, *platform)
 	md := render(rows, p, results, *platform, *runURL, fired)
 	fmt.Print(md)
 	if *out != "" {
@@ -73,11 +83,12 @@ func cmdReport(args []string) error {
 	return nil
 }
 
-func readAlerts(dir string) (map[string]uint64, map[string]string, error) {
+func readAlerts(dir string) (map[string]uint64, map[string]string, []alertLine, error) {
 	fired, first := map[string]uint64{}, map[string]string{}
+	var all []alertLine
 	files, err := filepath.Glob(filepath.Join(dir, "alerts-*.jsonl"))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	for _, f := range files {
 		if strings.Contains(filepath.Base(f), "alerts-high-") {
@@ -85,7 +96,7 @@ func readAlerts(dir string) (map[string]uint64, map[string]string, error) {
 		}
 		fh, err := os.Open(f)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		sc := bufio.NewScanner(fh)
 		sc.Buffer(make([]byte, 1<<20), 1<<20)
@@ -102,24 +113,37 @@ func readAlerts(dir string) (map[string]uint64, map[string]string, error) {
 			if _, ok := first[a.RuleName]; !ok {
 				first[a.RuleName] = a.Output
 			}
+			all = append(all, a)
 		}
 		fh.Close()
 	}
-	return fired, first, nil
+	return fired, first, all, nil
 }
 
-func buildRows(p *Plan, results []Result, fired map[string]uint64, first map[string]string, rs *rules.Ruleset, platform string) []Row {
+// firedIn reports whether rule has an alert inside the test's time window.
+func firedIn(alerts []alertLine, rule string, r Result) bool {
+	if r.Start.IsZero() {
+		return false
+	}
+	from, to := r.Start.Add(-windowBefore), r.End.Add(windowAfter)
+	for _, a := range alerts {
+		if a.RuleName == rule && !a.Time.Before(from) && !a.Time.After(to) {
+			return true
+		}
+	}
+	return false
+}
+
+func buildRows(p *Plan, results []Result, fired map[string]uint64, first map[string]string, alerts []alertLine, rs *rules.Ruleset, platform string) []Row {
 	byRule := map[string][]string{}
 	for _, t := range p.Tests {
 		for _, e := range t.Expect {
 			byRule[e] = append(byRule[e], t.ID)
 		}
 	}
-	errs := map[string]string{}
+	res := map[string]Result{}
 	for _, r := range results {
-		if r.Error != "" && r.Command == "" {
-			errs[r.ID] = r.Error
-		}
+		res[r.ID] = r
 	}
 	untestable := map[string]string{}
 	for _, u := range p.Untestable {
@@ -130,23 +154,43 @@ func buildRows(p *Plan, results []Result, fired map[string]uint64, first map[str
 		if len(r.Platforms) != 1 || r.Platforms[0] != platform {
 			continue
 		}
-		row := Row{Rule: r.Name, File: filepath.ToSlash(r.File), Tests: byRule[r.Name]}
+		row := Row{Rule: r.Name, File: filepath.ToSlash(r.File)}
 		if i := strings.Index(row.File, "rules/"); i >= 0 {
 			row.File = row.File[i:]
 		}
+		hit, miss := 0, 0
+		var notes []string
+		for _, id := range byRule[r.Name] {
+			tr, ran := res[id]
+			switch {
+			case !ran:
+				row.Tests = append(row.Tests, id+": not run")
+				miss++
+			case tr.Command == "" && tr.Error != "":
+				row.Tests = append(row.Tests, id+": not run")
+				notes = append(notes, id+": "+tr.Error)
+				miss++
+			case firedIn(alerts, r.Name, tr):
+				row.Tests = append(row.Tests, id+": fired")
+				hit++
+			default:
+				row.Tests = append(row.Tests, id+": did not fire")
+				miss++
+			}
+		}
 		switch {
-		case fired[r.Name] > 0:
+		case hit > 0 && miss == 0:
 			row.Status = "fired"
 			row.Detail = first[r.Name]
-		case len(row.Tests) > 0:
+		case hit > 0:
+			row.Status = "fired for some tests"
+			row.Detail = strings.Join(append(notes, first[r.Name]), "; ")
+		case len(byRule[r.Name]) > 0:
 			row.Status = "did not fire"
-			var why []string
-			for _, id := range row.Tests {
-				if e := errs[id]; e != "" {
-					why = append(why, id+": "+e)
-				}
+			if fired[r.Name] > 0 {
+				notes = append(notes, fmt.Sprintf("fired %d time(s) outside the test windows", fired[r.Name]))
 			}
-			row.Detail = strings.Join(why, "; ")
+			row.Detail = strings.Join(notes, "; ")
 		case untestable[r.Name] != "":
 			row.Status = "not tested"
 			row.Detail = untestable[r.Name]
@@ -169,10 +213,12 @@ func order(s string) int {
 	switch s {
 	case "fired":
 		return 0
-	case "did not fire":
+	case "fired for some tests":
 		return 1
+	case "did not fire":
+		return 2
 	}
-	return 2
+	return 3
 }
 
 func cell(s string) string {
@@ -191,7 +237,8 @@ func render(rows []Row, p *Plan, results []Result, platform, runURL string, fire
 		count[r.Status]++
 	}
 	fmt.Fprintf(&b, "Run: %s\n\n", runURL)
-	fmt.Fprintf(&b, "%d rules for %s: **%d fired**, **%d did not fire**, **%d not tested**.\n\n", len(rows), platform, count["fired"], count["did not fire"], count["not tested"])
+	fmt.Fprintf(&b, "%d rules for %s: **%d fired**, **%d fired for some tests only**, **%d did not fire**, **%d not tested**.\n\n",
+		len(rows), platform, count["fired"], count["fired for some tests"], count["did not fire"], count["not tested"])
 	b.WriteString("| Rule | Result | Tests | Detail |\n|---|---|---|---|\n")
 	for _, r := range rows {
 		fmt.Fprintf(&b, "| %s<br>`%s` | %s | %s | %s |\n", cell(r.Rule), r.File, r.Status, cell(strings.Join(r.Tests, ", ")), cell(r.Detail))

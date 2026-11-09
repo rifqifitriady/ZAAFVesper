@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/rules"
 )
@@ -98,26 +99,32 @@ func TestReportRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	alerts := `{"rule_id":"x","rule_name":"Cron job file created","output":"bash wrote /etc/cron.d/persistevil"}
-{"rule_id":"y","rule_name":"Something else","output":"noise"}
+	alerts := `{"rule_id":"x","rule_name":"Cron job file created","output":"bash wrote /etc/cron.d/persistevil","time":"2026-11-09T10:00:01Z"}
+{"rule_id":"y","rule_name":"Something else","output":"noise","time":"2026-11-09T10:00:01Z"}
 `
 	if err := os.WriteFile(filepath.Join(dir, "alerts-20261109T000000.000000000Z.jsonl"), []byte(alerts), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	fired, first, err := readAlerts(dir)
+	fired, first, all, err := readAlerts(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rows := buildRows(p, nil, fired, first, rs, "linux")
+	t0 := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
+	results := []Result{
+		{ID: "art-T1053.003-078e69eb", Command: "x", Start: t0, End: t0.Add(2 * time.Second)},
+		{ID: "art-T1053.003-2d943c18", Command: "x", Start: t0.Add(10 * time.Second), End: t0.Add(12 * time.Second)},
+		{ID: "art-T1070.003-a934276e", Command: "x", Start: t0.Add(20 * time.Second), End: t0.Add(21 * time.Second)},
+	}
+	rows := buildRows(p, results, fired, first, all, rs, "linux")
 	status := map[string]string{}
 	for _, r := range rows {
 		status[r.Rule] = r.Status
 	}
-	if status["Cron job file created"] != "fired" || status["Shell history file deleted"] != "did not fire" {
+	if status["Cron job file created"] != "fired for some tests" || status["Shell history file deleted"] != "did not fire" {
 		t.Fatalf("%v", status)
 	}
 	md := render(rows, p, nil, "linux", "https://example.invalid/run", fired)
-	if !strings.Contains(md, "1 fired") || !strings.Contains(md, "Something else (1)") {
+	if !strings.Contains(md, "1 fired for some tests only") || !strings.Contains(md, "078e69eb: fired") || !strings.Contains(md, "2d943c18: did not fire") || !strings.Contains(md, "Something else (1)") {
 		t.Fatalf("%s", md)
 	}
 }

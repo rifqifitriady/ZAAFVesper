@@ -34,7 +34,6 @@ sudo cp -R configs/config.d /usr/local/etc/zaafvesper/config.d
 sudo cp -R rules /usr/local/etc/zaafvesper/rules
 sudo chown -R root:root /usr/local/etc/zaafvesper
 sudo chmod -R go-w /usr/local/etc/zaafvesper
-sudo install -d -m 0700 /var/log/zaafvesper
 sudo install -m 0644 packaging/linux/zaafvesper.service /etc/systemd/system/zaafvesper.service
 sudo systemctl daemon-reload
 sudo systemctl start zaafvesper

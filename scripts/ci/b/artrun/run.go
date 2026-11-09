@@ -29,7 +29,7 @@ type Result struct {
 }
 
 const (
-	testTimeout = 60 * time.Second
+	testTimeout = 120 * time.Second
 	maxOutput   = 4 << 10
 )
 

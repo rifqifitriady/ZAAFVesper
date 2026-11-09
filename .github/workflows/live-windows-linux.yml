@@ -139,7 +139,7 @@ jobs:
           mkdir -p out/alerts
           sleep 15
           sudo systemctl stop zaafvesper || true
-          sudo sh -c 'cp /var/log/zaafvesper/alerts-*.jsonl "$1"' sh out/alerts/ || true
+          sudo sh -c 'cp /var/lib/zaafvesper/logs/alerts-*.jsonl "$1"' sh out/alerts/ || true
           sudo journalctl -u zaafvesper --no-pager > out/alerts/zaafvesper-journal.txt || true
           sudo journalctl -u sysmon --no-pager -o json | python3 -c "import sys,json,collections; c=collections.Counter(); [c.update([ (json.loads(l).get('MESSAGE') or '')[0:200].split('<EventID>')[-1].split('<')[0] ]) for l in sys.stdin]; print(c)" > out/sysmon-event-counts.txt || true
           sudo chown -R "$(id -u)" out
