@@ -1251,6 +1251,18 @@ func TestIsolateNeverBlockSet(t *testing.T) {
 	if err := g2.r.IsolateProcess(netEvent(g2, 7501, "outbound", "192.168.1.10", "203.0.113.50"), TargetProcess, "r", "r"); err != nil {
 		t.Fatalf("no default route: %v", err)
 	}
+	// route times out or crashes (ExitError -1): refused, nothing blocked.
+	g4 := newRig(t, false, nil)
+	g4.r.cfg.Gateways = routeGateways(g4.r.cfg.Runner)
+	g4.run = func(bin string, args []string) ([]byte, error) {
+		if bin == RouteBin {
+			return nil, &ExitError{Code: -1}
+		}
+		return nil, nil
+	}
+	if err := g4.r.IsolateProcess(netEvent(g4, 7503, "outbound", "192.168.1.10", "203.0.113.52"), TargetProcess, "r", "r"); !errors.Is(err, ErrNoPeers) || len(g4.pf()) != 0 {
+		t.Fatalf("route timeout: %v %+v", err, g4.last())
+	}
 	// route cannot run: refused, nothing blocked.
 	g3 := newRig(t, false, nil)
 	g3.r.cfg.Gateways = routeGateways(g3.r.cfg.Runner)

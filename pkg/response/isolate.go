@@ -254,8 +254,9 @@ func (r *Responder) neverBlock() (map[netip.Addr]string, error) {
 
 // routeGateways is the default Config.Gateways: the gateway lines of
 // `/sbin/route -n get default` and `/sbin/route -n get -inet6 default`
-// (pinned, fixed argv). A family without a default route is not an error;
-// a command that cannot run is.
+// (pinned, fixed argv). A family without a default route (exit 1, "not in
+// table") is not an error; a command that cannot run, times out or answers
+// anything else is.
 func routeGateways(run Runner) func() ([]netip.Addr, error) {
 	return func() ([]netip.Addr, error) {
 		var out []netip.Addr
@@ -263,9 +264,11 @@ func routeGateways(run Runner) func() ([]netip.Addr, error) {
 			b, err := run(context.Background(), RouteBin, args, nil)
 			var ee *ExitError
 			switch {
-			case errors.As(err, &ee):
+			case errors.As(err, &ee) && ee.Code == 1 && strings.Contains(ee.Output, "not in table"):
 				continue // no default route for this family
 			case err != nil:
+				// A timeout, a crash or any other answer: the gateway is
+				// unknown, so the caller refuses (fail closed).
 				return nil, err
 			}
 			out = append(out, parseRouteGateway(b)...)
