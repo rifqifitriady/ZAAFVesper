@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -97,6 +98,11 @@ func cmdRun(args []string) error {
 		if step.Cleanup != "" {
 			if _, out, err := execute(step.Executor, step.Cleanup); err != nil {
 				r.CleanupErr = fmt.Sprintf("%v %s", err, out)
+			}
+		}
+		if t.Teardown != nil {
+			if _, out, err := execute(t.Teardown.Executor, t.Teardown.Command); err != nil {
+				r.CleanupErr = strings.TrimSpace(r.CleanupErr + fmt.Sprintf(" teardown: %v %s", err, out))
 			}
 		}
 		fmt.Printf("%-40s exit=%d %s\n", t.ID, code, r.Error)

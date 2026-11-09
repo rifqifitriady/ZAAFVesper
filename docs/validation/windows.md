@@ -2,7 +2,7 @@
 
 **In plain words:** on a fresh Windows machine run by GitHub, Sysmon and ZAAFVesper were installed exactly as our install
 notes say. ZAAFVesper then watched a set of harmless attack simulations. **All 16 rules that were tested raised their
-alert.** 4 rules were deliberately not tested, because testing them would mean touching the machine's real password store
+alert**, out of 20 Windows rules. The other 4 were deliberately not tested, because testing them would mean touching the machine's real password store
 (LSASS) or loading a kernel driver.
 
 > **Validated on a GitHub runner, not on your PC.** The runner is a throw-away `windows-latest` machine (image
@@ -10,6 +10,7 @@ alert.** 4 rules were deliberately not tested, because testing them would mean t
 
 **Words used here.**
 - **Sysmon**: Microsoft's free system monitor. It records process starts, network connections, file and registry changes; ZAAFVesper reads its events.
+- **SigmaHQ**: the public collection of Sigma detection rules; 14 of our Windows rules are converted from it.
 - **Atomic Red Team**: a public library of small, documented attack simulations, one per ATT&CK technique.
 - **Rule fired**: ZAAFVesper raised that rule's alert while the test that should trigger it was running.
 

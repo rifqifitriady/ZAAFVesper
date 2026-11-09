@@ -138,6 +138,23 @@ func (fs FS) Stat(pid int32) (Stat, error) {
 	return st, nil
 }
 
+// TaskStat reads /proc/<pid>/task/<tid>/stat: one thread's stat line (its
+// start time is the thread's own).
+func (fs FS) TaskStat(pid, tid int32) (Stat, error) {
+	b, err := readBounded(filepath.Join(fs.Root, strconv.Itoa(int(pid)), "task", strconv.Itoa(int(tid)), "stat"), maxStatBytes)
+	if err != nil {
+		return Stat{}, err
+	}
+	st, err := ParseStat(b)
+	if err != nil {
+		return Stat{}, err
+	}
+	if st.PID != tid {
+		return Stat{}, fmt.Errorf("procfs: task stat of %d names %d", tid, st.PID)
+	}
+	return st, nil
+}
+
 // BootTime reads btime from /proc/stat.
 func (fs FS) BootTime() (int64, error) {
 	b, err := readBounded(filepath.Join(fs.Root, "stat"), maxProcStatSize)

@@ -52,13 +52,17 @@
       },
       "setup": {
         "executor": "sh",
-        "command": "touch ~/.bash_history"
+        "command": "if [ -e ~/.bash_history ]; then mv ~/.bash_history ~/.bash_history.zaafvesper-saved; fi; touch ~/.bash_history"
       },
       "expect": [
         "Shell history file deleted",
         "History File Deletion"
       ],
-      "note": "The setup step creates the history file first so the delete happens."
+      "note": "The setup moves any existing history file aside and creates an empty one, so the test deletes only that; the teardown puts the original back.",
+      "teardown": {
+        "executor": "sh",
+        "command": "if [ -e ~/.bash_history.zaafvesper-saved ]; then mv ~/.bash_history.zaafvesper-saved ~/.bash_history; fi"
+      }
     },
     {
       "id": "inline-sudoers-dropin",

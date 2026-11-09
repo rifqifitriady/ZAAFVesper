@@ -41,6 +41,9 @@ type Test struct {
 	// Setup runs before the test (for example creating the file an Atomic
 	// test deletes); same executor as Inline.
 	Setup *Inline `json:"setup,omitempty"`
+	// Teardown runs after the test and its cleanup, whatever happened (for
+	// example restoring a file the setup moved aside).
+	Teardown *Inline `json:"teardown,omitempty"`
 	// Expect names the rules (by name) this test should make fire.
 	Expect []string `json:"expect"`
 	Note   string   `json:"note,omitempty"`

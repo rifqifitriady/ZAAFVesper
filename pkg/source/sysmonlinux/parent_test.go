@@ -21,7 +21,7 @@ func TestFixThreadParent(t *testing.T) {
 	}
 	t0 := time.Date(2026, 11, 9, 7, 0, 0, 0, time.UTC)
 	starts := map[int32]time.Time{5209: t0.Add(-time.Minute)}
-	started := func(pid int32) (time.Time, error) {
+	started := func(pid, tid int32) (time.Time, error) {
 		if s, ok := starts[pid]; ok {
 			return s, nil
 		}
@@ -45,7 +45,7 @@ func TestFixThreadParent(t *testing.T) {
 			t.Fatalf("changed: %+v", c.Proc)
 		}
 	}
-	// The thread id now belongs to a process that started after the event
+	// The thread id now belongs to a thread that started after the event
 	// (reused): not attached.
 	starts[5209] = t0.Add(time.Second)
 	r := mk(5212, "")
@@ -78,7 +78,7 @@ func TestLiveThreadParentFixture(t *testing.T) {
 		}
 		return id, nil
 	}
-	started := func(int32) (time.Time, error) { return evTime.Add(-2 * time.Second), nil }
+	started := func(_, _ int32) (time.Time, error) { return evTime.Add(-2 * time.Second), nil }
 	f := sysmon.NewFeeder(nil, nil)
 	f.Fix = func(e *event.Event) { FixThreadParent(e, tgid, started, IdentityTolerance) }
 	out := make(chan *event.Event, 1)

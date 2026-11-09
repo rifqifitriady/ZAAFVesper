@@ -73,6 +73,14 @@ func TestFSReaders(t *testing.T) {
 	if err != nil || !del || exe != "/usr/bin/dash" {
 		t.Fatalf("Exe %q %v %v", exe, del, err)
 	}
+	must(os.MkdirAll(filepath.Join(pd, "task", "78"), 0o755))
+	must(os.WriteFile(filepath.Join(pd, "task", "78", "stat"), []byte("78 (sh) S 1 77 77 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 900 0 0"), 0o644))
+	if ts, err := fs.TaskStat(77, 78); err != nil || ts.StartTicks != 900 {
+		t.Fatalf("TaskStat %+v %v", ts, err)
+	}
+	if _, err := fs.TaskStat(77, 79); err == nil {
+		t.Fatal("TaskStat of a missing thread")
+	}
 	if tg, err := fs.Tgid(77); err != nil || tg != 70 {
 		t.Fatalf("Tgid %d %v", tg, err)
 	}

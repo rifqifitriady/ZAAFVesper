@@ -10,6 +10,7 @@ and Ubuntu 26.04 renamed those (see "What the live runs found"). ZAAFVesper's ow
 
 **Words used here.**
 - **Sysmon**: Microsoft's free system monitor. It records process starts, network connections, file and registry changes; ZAAFVesper reads its events.
+- **SigmaHQ**: the public collection of Sigma detection rules; 11 of our Linux rules are converted from it.
 - **Atomic Red Team**: a public library of small, documented attack simulations, one per ATT&CK technique.
 - **Rule fired**: ZAAFVesper raised that rule's alert while the test that should trigger it was running.
 
@@ -134,7 +135,7 @@ How tests are counted:
    - Tests: `TestFixThreadParent`, and `TestTgidOfOwnThreads` on real Linux. `TestLiveThreadParentFixture` replays the exact
      event captured in [run 7](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42601419858).
    - A parent that exits right after starting its child still loses it, so the Java test keeps its JVM up for 3 s, as a server would.
-3. **Ubuntu 26.04 renames core tools** (seen in runs [7](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42601419858) and 8).
+3. **Ubuntu 26.04 renames core tools** (seen in runs [7](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42601419858) and [8](https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42602354087)).
    - With the switch to Rust coreutils, `rm` and `cp` run as `/usr/bin/gnurm` and `/usr/bin/gnucp`, and `whoami` as
      `/usr/lib/cargo/bin/coreutils/whoami`.
    - The three SigmaHQ rules that match images ending in `/rm` or `/cp` cannot fire there (the rows above). ZAAFVesper's

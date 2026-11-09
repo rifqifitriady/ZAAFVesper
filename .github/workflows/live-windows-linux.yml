@@ -43,10 +43,11 @@ jobs:
       # the new build and update the hash (scripts/ci/b/README.md).
       SYSMON_ZIP_SHA256: 00ecf1b46aec99299d3ae0bca79dc621458bd014b20b509d7c5c8e8c8611aa54
       # sysmon-modular (MIT) at commit a45dedb13a43c0d8ea1fc6b580a0ac396fa74457
-      # (14 Oct 2026). The generated config exists only as an asset of the
-      # release built from that commit: the setup checks that the release tag
-      # points to this full commit, then the file's hash (from the release's
-      # SHA256SUMS).
+      # (14 Oct 2026). The generated config is not in the repository tree,
+      # only an asset of the release whose tag names that commit. The setup
+      # checks that the tag points to this full commit; what pins the content
+      # is the file's SHA-256 below (as listed in that release's SHA256SUMS
+      # when it was reviewed): any other file stops the job.
       SYSMON_MODULAR_COMMIT: a45dedb13a43c0d8ea1fc6b580a0ac396fa74457
       SYSMON_MODULAR_TAG: configs-a45dedb13a43
       SYSMON_CONFIG_URL: https://github.com/olafhartong/sysmon-modular/releases/download/configs-a45dedb13a43/sysmonconfig-excludes-only.xml

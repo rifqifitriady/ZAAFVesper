@@ -27,10 +27,11 @@ const ArgParentThread = "parent_thread_id"
 // thread is gone; the event is then left as Sysmon reported it.
 //
 // The mapping is read some time after the fork (journald delay), so the
-// thread id could meanwhile belong to another process. started gives the
-// start time of the process found; when it started after the event (plus
-// tolerance), it cannot be the parent and the event is left unchanged.
-func FixThreadParent(e *event.Event, tgid func(int32) (int32, error), started func(int32) (time.Time, error), tolerance time.Duration) {
+// thread id could meanwhile belong to another thread or process. started
+// gives the start time of that thread (tid) inside the process found
+// (tgid); when the thread started after the event (plus tolerance), it is
+// not the one that forked and the event is left unchanged.
+func FixThreadParent(e *event.Event, tgid func(int32) (int32, error), started func(tgid, tid int32) (time.Time, error), tolerance time.Duration) {
 	if e == nil || e.Name != event.CreateProcess || e.Proc == nil {
 		return
 	}
@@ -43,7 +44,7 @@ func FixThreadParent(e *event.Event, tgid func(int32) (int32, error), started fu
 	if err != nil || g <= 0 || g == par.PID {
 		return
 	}
-	if st, err := started(g); err != nil || e.Time.IsZero() || st.After(e.Time.Add(tolerance)) {
+	if st, err := started(g, par.PID); err != nil || e.Time.IsZero() || st.After(e.Time.Add(tolerance)) {
 		return
 	}
 	if e.Args == nil {
