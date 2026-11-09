@@ -70,9 +70,9 @@ func procKey(p *event.Proc) string {
 	return fmt.Sprintf("p%d/%d/%d", p.PID, p.PIDVersion, p.StartTime.UnixNano())
 }
 
-// remoteAddrs returns the remote addresses of a network event: the
-// destination of an outbound connection; for an inbound one, both ends
-// (this host's own addresses are filtered later); none for a listener.
+// remoteAddrs returns the remote address of a network event, following the
+// netpoll (Sysmon) convention of event.Net: outbound src=local dst=remote,
+// inbound src=remote dst=local, listen dst=local (no peer).
 func remoteAddrs(n *event.Net) []string {
 	if n == nil {
 		return nil
@@ -81,11 +81,9 @@ func remoteAddrs(n *event.Net) []string {
 	case "outbound":
 		return []string{n.DstIP}
 	case "inbound":
-		return []string{n.SrcIP, n.DstIP}
-	case "listen":
-		return nil
+		return []string{n.SrcIP}
 	}
-	return []string{n.DstIP}
+	return nil
 }
 
 // Observe remembers the remote peers of NetworkConnect and NetworkAccept
@@ -186,10 +184,10 @@ func (r *Responder) peersOf(e *event.Event, p *event.Proc, now time.Time) []neti
 // unspecified, multicast, broadcast, link-local, with a zone, this host's
 // own address, or inside the management allow-list.
 // NeverBlockNetworks are networks isolate_process never blocks, whatever
-// the configuration: Apple's 17.0.0.0/8 (software update, XProtect,
+// the configuration: Apple's 17.0.0.0/8 and 2620:149::/32 (software update, XProtect,
 // notarization, push). Private RFC 1918 addresses can be isolated (owner
 // decision 9 Nov 2026); protect your own servers with response.isolation_allow.
-var NeverBlockNetworks = []netip.Prefix{netip.MustParsePrefix("17.0.0.0/8")}
+var NeverBlockNetworks = []netip.Prefix{netip.MustParsePrefix("17.0.0.0/8"), netip.MustParsePrefix("2620:149::/32")}
 
 // blockable returns why a must never be blocked, or "": invalid, scoped,
 // loopback, unspecified, multicast, broadcast, link-local, this host's own
@@ -516,6 +514,7 @@ func (r *Responder) Tick(now time.Time) {
 		return
 	}
 	defer r.actMu.Unlock()
+	r.recheckNeverBlock(now)
 	var expired []string
 	for a, iso := range r.isolated {
 		if !now.Before(iso.Expires) {
@@ -744,4 +743,49 @@ func ReleaseIsolation(store IsolationStore, run Runner, addr string) ([]string, 
 		return saveIsolationsAt(dfd, keep)
 	})
 	return released, err
+}
+
+// neverRecheckEvery is how often isolated addresses are checked again
+// against the never-block set (the Mac may have moved to a network where
+// one of them is now the gateway or a DNS resolver).
+const neverRecheckEvery = time.Minute
+
+// recheckNeverBlock releases every isolated address that is now in the
+// never-block set (a new gateway or resolver), at most once a minute. A
+// lookup that fails changes nothing. Caller holds actMu.
+func (r *Responder) recheckNeverBlock(now time.Time) {
+	if len(r.isolated) == 0 || now.Sub(r.lastNeverCheck) < neverRecheckEvery {
+		return
+	}
+	r.lastNeverCheck = now
+	never, err := r.neverBlock()
+	if err != nil {
+		return
+	}
+	var release []string
+	for a := range r.isolated {
+		if ip, err := netip.ParseAddr(a); err == nil && r.blockable(ip, never) != "" {
+			release = append(release, a)
+		}
+	}
+	if len(release) == 0 {
+		return
+	}
+	sort.Slice(release, func(i, j int) bool { return addrLess(release[i], release[j]) })
+	_, err = r.pfctl(append([]string{"-a", PFAnchor, "-t", PFTable, "-T", "delete"}, release...)...)
+	for _, a := range release {
+		iso := r.isolated[a]
+		ip, _ := netip.ParseAddr(a)
+		d := Decision{Time: now, Action: ActionIsolateProcess, PID: iso.PID, Target: TargetProcess, Exe: iso.Exe,
+			Reason: iso.Reason, Outcome: OutcomeReleased, Detail: a + " released: now " + r.blockable(ip, never)}
+		if err != nil {
+			d.Outcome, d.Detail = OutcomeError, a+" is now never-block, but pfctl delete failed: "+err.Error()
+		} else {
+			delete(r.isolated, a)
+		}
+		r.mu.Lock()
+		r.logLocked(d)
+		r.mu.Unlock()
+	}
+	_ = r.saveIsolations()
 }

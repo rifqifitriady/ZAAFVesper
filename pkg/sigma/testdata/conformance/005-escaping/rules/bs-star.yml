@@ -1,0 +1,7 @@
+title: backslash then wildcard
+id: c005-bs-star
+logsource: {product: test}
+detection:
+    s:
+        Value: 'a\\*'
+    condition: s

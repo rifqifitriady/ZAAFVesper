@@ -1,0 +1,7 @@
+title: bad-modifier
+id: c025-mod
+logsource: {product: test}
+detection:
+    selection:
+        X|nope: a
+    condition: selection

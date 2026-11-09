@@ -1,0 +1,2 @@
+{"CommandLine": "powershell -ep Bypass -enc AAA"}
+{"CommandLine": "powershell -enc AAA"}

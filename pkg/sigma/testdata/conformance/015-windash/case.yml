@@ -1,0 +1,9 @@
+spec_ref: sigma-appendix-modifiers.md#string-modifiers (windash)
+description: '`windash` expands flag dashes to `-`, `/`, en dash, em dash and horizontal bar.'
+expected:
+  - [c015]
+  - [c015]
+  - [c015]
+  - []
+  - [c015]
+  - [c015]

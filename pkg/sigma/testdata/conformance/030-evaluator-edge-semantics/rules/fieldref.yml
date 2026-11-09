@@ -1,0 +1,7 @@
+title: edge fieldref
+id: c030-ref
+logsource: {product: test}
+detection:
+    s:
+        A|fieldref: B
+    condition: s

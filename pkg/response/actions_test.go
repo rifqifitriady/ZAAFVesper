@@ -20,6 +20,7 @@ import (
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/ps"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/rules"
+	"github.com/rifqifitriady/ZAAFVesper/pkg/source/netpoll"
 	"golang.org/x/sys/unix"
 )
 
@@ -297,7 +298,16 @@ func TestRestoreRefusesProtectedAndSetuid(t *testing.T) {
 	}
 }
 
+// checkTempBundles makes the test temp dir (under /private/var/folders)
+// count as a protected location, so the Apple-bundle checks run there.
+func checkTempBundles(t *testing.T) {
+	old := userWritableBundles
+	userWritableBundles = nil
+	t.Cleanup(func() { userWritableBundles = old })
+}
+
 func TestQuarantineGuardRails(t *testing.T) {
+	checkTempBundles(t)
 	g := newRig(t, false, func(c *Config) {
 		c.MaxQuarantineBytes = 64
 		c.AppleSigned = func(b string) (bool, error) { return strings.HasSuffix(b, "Apple.app"), nil }
@@ -406,6 +416,7 @@ func TestQuarantineForeignExecutable(t *testing.T) {
 // answer (refused), and deep bundle nesting is refused before any codesign
 // run.
 func TestCodesignFailClosed(t *testing.T) {
+	checkTempBundles(t)
 	var runs int
 	check := appleSignedByCodesign(func(ctx context.Context, bin string, args []string, _ []byte) ([]byte, error) {
 		runs++
@@ -514,6 +525,7 @@ func TestQuarantineDryRunAndBudget(t *testing.T) {
 }
 
 func TestRequarantine(t *testing.T) {
+	checkTempBundles(t)
 	g := newRig(t, false, nil)
 	p, _ := g.file("dl/tool", "x", 0o755)
 	e := g.eventFor(p, event.DeleteXattr)
@@ -841,7 +853,7 @@ func TestIsolateProcess(t *testing.T) {
 	g.cmds = nil
 	g.now = g.now.Add(DefaultIsolationTTL)
 	g.r.Tick(g.now)
-	if len(g.r.Isolations()) != 0 || len(g.cmds) != 1 || !strings.Contains(g.cmds[0], "-T delete 198.51.100.9 198.51.100.20 2001:db8::5") {
+	if len(g.r.Isolations()) != 0 || len(g.pf()) != 1 || !strings.Contains(g.pf()[0], "-T delete 198.51.100.9 198.51.100.20 2001:db8::5") {
 		t.Fatalf("expiry: %v %v", g.r.Isolations(), g.cmds)
 	}
 	// Clean shutdown flushes the anchor and releases the pf token.
@@ -1275,5 +1287,158 @@ func TestIsolateNeverBlockSet(t *testing.T) {
 	if err := g3.r.IsolateProcess(netEvent(g3, 7502, "outbound", "192.168.1.10", "203.0.113.51"), TargetProcess, "r", "r"); !errors.Is(err, ErrNoPeers) || len(g3.pf()) != 0 ||
 		!strings.Contains(g3.last().Detail, "default gateway") {
 		t.Fatalf("route fails: %v %+v", err, g3.last())
+	}
+}
+
+// npKernel is a fake netpoll kernel: fixed processes and sockets.
+type npKernel struct {
+	idents map[int32]netpoll.Ident
+	socks  map[int32][]netpoll.Socket
+}
+
+func (k *npKernel) PIDs() ([]int32, error) {
+	var out []int32
+	for p := range k.socks {
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+func (k *npKernel) Ident(pid int32) (netpoll.Ident, error) {
+	id, ok := k.idents[pid]
+	if !ok {
+		return netpoll.Ident{}, errors.New("no such process")
+	}
+	return id, nil
+}
+
+func (k *npKernel) Sockets(pid int32, _ netpoll.Window) (netpoll.SocketList, error) {
+	s := k.socks[pid]
+	return netpoll.SocketList{Socks: s, Calls: len(s), SocketFDs: len(s)}, nil
+}
+
+// TestIsolateWithNetpollEvents runs the real S2 socket poller (pkg/source/
+// netpoll) on a fake kernel and feeds its NetworkConnect / NetworkAccept
+// events to Observe and isolate_process (contract check at the S1/S2
+// merge): a process the table knows is isolated from its outbound peer and
+// from the remote side of an inbound connection (src, never this Mac's own
+// dst); a process the table does not know gets an unverified kernel
+// identity (netpoll sets its unique id itself but marks it Seeded) and is
+// refused.
+func TestIsolateWithNetpollEvents(t *testing.T) {
+	g := newRig(t, false, nil)
+	t0 := start
+	table := map[int32]event.Proc{
+		1:   {PID: 1, Exe: "/sbin/launchd", Name: "launchd", IsPlatform: true, UniqueID: 1, PIDVersion: 1, StartTime: t0.Add(-time.Hour)},
+		700: {PID: 700, PPID: 1, Exe: "/private/tmp/implant", Name: "implant", UniqueID: 7000, PIDVersion: 7, StartTime: t0, UID: 501, EUID: 501},
+	}
+	k := &npKernel{
+		idents: map[int32]netpoll.Ident{
+			700: {PID: 700, PPID: 1, PIDVersion: 7, UniqueID: 7000, Exe: "/private/tmp/implant", StartTime: t0},
+			800: {PID: 800, PPID: 1, PIDVersion: 8, UniqueID: 8000, Exe: "/private/tmp/unknown", StartTime: t0},
+		},
+		socks: map[int32][]netpoll.Socket{
+			700: {
+				{FD: 3, Proto: "tcp", Local: netip.MustParseAddrPort("192.168.1.10:50001"), Remote: netip.MustParseAddrPort("203.0.113.60:4444"), TCPState: netpoll.TCPEstablished, Gen: 1},
+				{FD: 4, Proto: "tcp", Local: netip.MustParseAddrPort("0.0.0.0:7777"), TCPState: netpoll.TCPListen, Gen: 2},
+				{FD: 5, Proto: "tcp", Local: netip.MustParseAddrPort("192.168.1.10:7777"), Remote: netip.MustParseAddrPort("198.51.100.70:61000"), TCPState: netpoll.TCPEstablished, Gen: 3},
+			},
+			800: {{FD: 3, Proto: "tcp", Local: netip.MustParseAddrPort("192.168.1.10:50002"), Remote: netip.MustParseAddrPort("203.0.113.61:443"), TCPState: netpoll.TCPEstablished, Gen: 4}},
+		},
+	}
+	np := netpoll.New(netpoll.Config{Kernel: k, Interval: time.Hour, Now: func() time.Time { return g.now },
+		Lookup: func(pid int32) (event.Proc, bool) { p, ok := table[pid]; return p, ok }})
+	ctx, cancel := context.WithCancel(context.Background())
+	out := make(chan *event.Event, 64)
+	done := make(chan error, 1)
+	go func() { done <- np.Run(ctx, nil, out) }()
+	var evs []*event.Event
+	deadline := time.After(5 * time.Second)
+	for len(evs) < 4 { // 2 connects/accepts of 700, its listener, and 800's connect
+		select {
+		case e := <-out:
+			evs = append(evs, e)
+		case <-deadline:
+			t.Fatalf("netpoll produced %d events", len(evs))
+		}
+	}
+	cancel()
+	<-done
+	var known, unknown *event.Event
+	for _, e := range evs {
+		if e.Source != netpoll.Name {
+			t.Fatalf("source %q", e.Source)
+		}
+		g.r.Observe(e)
+		switch {
+		case e.Proc.PID == 700 && e.Name == event.NetworkConnect:
+			known = e
+		case e.Proc.PID == 800:
+			unknown = e
+		}
+	}
+	if known == nil || unknown == nil {
+		t.Fatalf("events: %+v", evs)
+	}
+	if !unknown.Proc.Seeded || unknown.Args[ps.ArgIdentity] != ps.Unverified || unknown.Proc.UniqueID == 0 {
+		t.Fatalf("unknown process identity: %+v %v", unknown.Proc, unknown.Args)
+	}
+	if known.Proc.Seeded || known.Proc.UniqueID != 7000 || known.Proc.Parent == nil || known.Proc.Parent.PID != 1 {
+		t.Fatalf("known process identity: %+v", known.Proc)
+	}
+	if err := g.r.IsolateProcess(known, TargetProcess, "rule-n", "n"); err != nil {
+		t.Fatalf("isolate known: %v %+v", err, g.last())
+	}
+	add := g.pf()[2]
+	if add != PfctlBin+" -a "+PFAnchor+" -t "+PFTable+" -T add 198.51.100.70 203.0.113.60" {
+		t.Fatalf("add = %q", add)
+	}
+	g.cmds = nil
+	if err := g.r.IsolateProcess(unknown, TargetProcess, "rule-n", "n"); !errors.Is(err, ErrUnknownProc) || len(g.pf()) != 0 {
+		t.Fatalf("isolate unknown: %v %v", err, g.cmds)
+	}
+}
+
+// TestNeverBlockRecheck: an isolated address that later becomes the
+// default gateway (the Mac joined another network) is released at the next
+// minute's check.
+func TestNeverBlockRecheck(t *testing.T) {
+	g := newRig(t, false, nil)
+	gw := ""
+	g.r.cfg.Gateways = func() ([]netip.Addr, error) {
+		if gw == "" {
+			return nil, nil
+		}
+		return []netip.Addr{netip.MustParseAddr(gw)}, nil
+	}
+	if err := g.r.IsolateProcess(netEvent(g, 7600, "outbound", "192.168.1.10", "192.168.0.1"), TargetProcess, "r", "r"); err != nil {
+		t.Fatal(err)
+	}
+	gw = "192.168.0.1"
+	g.cmds = nil
+	g.now = g.now.Add(2 * time.Minute)
+	g.r.Tick(g.now)
+	if len(g.r.Isolations()) != 0 || len(g.pf()) != 1 || !strings.HasSuffix(g.pf()[0], "-T delete 192.168.0.1") ||
+		!strings.Contains(g.last().Detail, "default gateway") {
+		t.Fatalf("recheck: %v %v %+v", g.r.Isolations(), g.cmds, g.last())
+	}
+	// Apple's IPv6 network is never blocked either.
+	if err := g.r.IsolateProcess(netEvent(g, 7601, "outbound", "192.168.1.10", "2620:149:a44::1"), TargetProcess, "r", "r"); !errors.Is(err, ErrNoPeers) {
+		t.Fatalf("apple v6: %v", err)
+	}
+}
+
+// TestUserWritableBundlesNotCodesigned: bundles in temp and home folders
+// are user copies; their signature is not checked (no worker stall), while
+// a bundle in /Applications still is.
+func TestUserWritableBundlesNotCodesigned(t *testing.T) {
+	g := newRig(t, false, nil)
+	var checked []string
+	g.r.cfg.AppleSigned = func(b string) (bool, error) { checked = append(checked, b); return false, nil }
+	if why := g.r.checkBundles("/private/var/folders/x/T/a.app/b.app/c.app/f"); why != "" || len(checked) != 0 {
+		t.Fatalf("temp bundles: %q %v", why, checked)
+	}
+	if why := g.r.checkBundles("/Applications/Tool.app/Contents/MacOS/tool"); why != "" || len(checked) != 1 {
+		t.Fatalf("/Applications: %q %v", why, checked)
 	}
 }

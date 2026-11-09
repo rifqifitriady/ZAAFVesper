@@ -1,0 +1,9 @@
+spec_ref: sigma-rules-specification.md#escape-character
+description: '`\*` is a literal star; `\\*` is a backslash then a wildcard; `\\\*` is backslash + literal star; three or four backslashes are two; a backslash before other characters is literal.'
+expected:
+  - [c005-lit-star]
+  - []
+  - [c005-bs-star]
+  - [c005-bs-star, c005-triple]
+  - [c005-bs-star, c005-quad, c005-three]
+  - [c005-bs-star, c005-single]

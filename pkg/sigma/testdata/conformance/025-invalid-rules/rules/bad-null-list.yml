@@ -1,0 +1,7 @@
+title: bad-null-list
+id: c025-null
+logsource: {product: test}
+detection:
+    selection:
+        X: ['', null]
+    condition: selection

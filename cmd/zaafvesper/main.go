@@ -39,6 +39,7 @@ usage:
   zaafvesper coverage --navigator layer.json|- [--rules dir]
   zaafvesper quarantine list|restore <id> [--state-dir dir]
   zaafvesper isolation list|release <address|all> [--state-dir dir]
+  zaafvesper sigma convert <sigma dir|file> -o <rules dir> [--report report.json] [--force]
   zaafvesper version
 
 run needs root (eslogger). replay, rules and coverage do not. The supported live
@@ -56,7 +57,10 @@ The response actions (kill, suspend, quarantine_file, requarantine,
 remove_persistence, isolate_process) are off unless --enable-response is given;
 --dry-run-response only logs what they would do and wins over --enable-response.
 They act after the event that triggered them: none of them prevents anything.
-quarantine and isolation manage what they did; both need root.`
+quarantine and isolation manage what they did; both need root.
+sigma convert turns Sigma rules (macos, windows, linux) into ZAAFVesper rules;
+rules it cannot convert exactly are skipped with a reason. It never follows
+symbolic links and never replaces an existing rule file unless --force is given.`
 
 func main() {
 	os.Exit(realMain(os.Args[1:], os.Stdout, os.Stderr))
@@ -81,6 +85,8 @@ func realMain(args []string, stdout, stderr io.Writer) int {
 		return cmdQuarantine(args[1:], stdout, stderr)
 	case "isolation":
 		return cmdIsolation(args[1:], stdout, stderr)
+	case "sigma":
+		return cmdSigma(args[1:], stdout, stderr)
 	case "version", "--version", "-version":
 		return cmdVersion(stdout)
 	case "help", "-h", "--help":

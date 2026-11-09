@@ -1,0 +1,7 @@
+title: edge null
+id: c030-null
+logsource: {product: test}
+detection:
+    s:
+        F: null
+    condition: s

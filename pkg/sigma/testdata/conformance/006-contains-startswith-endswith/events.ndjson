@@ -1,0 +1,3 @@
+{"CommandLine": "PowerShell -c Whoami; run.PS1"}
+{"CommandLine": "cmd /c echo"}
+{"CommandLine": "x powershell"}

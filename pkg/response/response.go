@@ -247,6 +247,9 @@ type Responder struct {
 	saved     map[string]bool       // addresses in the state file at the last save
 	pfToken   string                // pfctl -E reference token, released at Close
 	pfLoaded  bool                  // the anchor's table and rules are loaded
+	// lastNeverCheck is when isolated addresses were last checked against
+	// the never-block set (isolate.go recheckNeverBlock).
+	lastNeverCheck time.Time
 
 	// launchRoot, set only by tests, is a fake root for the launch item
 	// directories of remove_persistence.

@@ -1,0 +1,7 @@
+title: default
+id: c003-default
+logsource: {product: test}
+detection:
+    s:
+        User: admin
+    condition: s

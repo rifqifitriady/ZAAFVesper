@@ -1,0 +1,7 @@
+title: bad-base64-cidr
+id: c029-3
+logsource: {product: test}
+detection:
+    selection:
+        E|base64|cidr: 10.0.0.0/8
+    condition: selection

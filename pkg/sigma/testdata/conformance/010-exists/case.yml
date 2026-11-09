@@ -1,0 +1,6 @@
+spec_ref: sigma-rules-specification.md#field-existence
+description: '`exists` checks presence only, whatever the value (null or empty included).'
+expected:
+  - [c010-yes]
+  - [c010-no]
+  - [c010-yes]

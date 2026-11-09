@@ -1,0 +1,7 @@
+title: bad-hour-contains
+id: c029-8
+logsource: {product: test}
+detection:
+    selection:
+        T|hour|contains: 7
+    condition: selection

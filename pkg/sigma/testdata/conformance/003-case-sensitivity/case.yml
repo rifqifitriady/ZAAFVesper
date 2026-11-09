@@ -1,0 +1,6 @@
+spec_ref: 'sigma-rules-specification.md#general; sigma-appendix-modifiers.md#generic-modifiers (cased), #regular-expression'
+description: Strings are case-insensitive by default; `cased` makes them sensitive; `re` is case-sensitive unless `|i`.
+expected:
+  - [c003-default, c003-re-i]
+  - [c003-cased, c003-default, c003-re, c003-re-i]
+  - []

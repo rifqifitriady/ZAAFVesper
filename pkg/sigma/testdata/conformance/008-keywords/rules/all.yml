@@ -1,0 +1,9 @@
+title: keywords all
+id: c008-all
+logsource: {product: test}
+detection:
+    keywords_cmdlet:
+        '|all':
+            - 'OabVirtualDirectory'
+            - ' -ExternalUrl '
+    condition: keywords_cmdlet

@@ -1,0 +1,20 @@
+ZAAFElegia
+Copyright 2026 Rifqi Fitriady and ZAAFElegia contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Sigma rules
+-----------
+ZAAFElegia executes Sigma rules but does not bundle the SigmaHQ rule corpus.
+Rules from https://github.com/SigmaHQ/sigma are licensed under the Detection
+Rule License (DRL) 1.1. When you run them, DRL 1.1 requires that the rule
+author and references remain visible; ZAAFElegia includes both in every alert in the
+`json` and `ndjson` outputs (`unmapped.sigma.author` and `unmapped.sigma.references`)
+and in the `csv` output (`author` and `references` columns). The `table` output shows
+the author only; use `-o json`, `ndjson` or `csv` for references.
+The Sigma specification and logo are public domain.
+
+MITRE ATT&CK and ATLAS
+----------------------
+ATT&CK and ATLAS identifiers used in tags and coverage reports are
+© The MITRE Corporation, used under the ATT&CK and ATLAS terms of use.

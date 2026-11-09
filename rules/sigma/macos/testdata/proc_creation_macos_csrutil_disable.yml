@@ -1,0 +1,14 @@
+match:
+  - desc: "csrutil disable run from a shell (attempt to turn SIP off)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4101, "ppid": 4000, "exe": "/usr/bin/csrutil", "name": "csrutil", "args": ["csrutil", "disable"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.csrutil", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+  - desc: "csrutil authenticated-root disable"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4102, "ppid": 4000, "exe": "/usr/bin/csrutil", "name": "csrutil", "args": ["csrutil", "authenticated-root", "disable"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.csrutil", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+nomatch:
+  - desc: "benign lookalike - csrutil status (read-only SIP check)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4111, "ppid": 4000, "exe": "/usr/bin/csrutil", "name": "csrutil", "args": ["csrutil", "status"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.csrutil", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+  - desc: "another tool mentions disable"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4112, "ppid": 4000, "exe": "/usr/bin/defaults", "name": "defaults", "args": ["defaults", "write", "com.example.app", "disable", "-bool", "true"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.defaults", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}

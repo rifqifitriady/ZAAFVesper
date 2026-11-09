@@ -1,0 +1,30 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Suspicious Microsoft Office Child Process - MacOS
+id: 69483748-1525-4a6c-95ca-90dc8d431b68
+version: 1.0.0
+platforms: [macos]
+description: |-
+  Detects suspicious child processes spawning from microsoft office suite applications such as word or excel. This could indicates malicious macro execution
+
+  Converted from Sigma rule 69483748-1525-4a6c-95ca-90dc8d431b68 by zaafvesper sigma convert. Sigma author: Sohan G (D4rkCiph3r).
+labels:
+  sigma.author: Sohan G (D4rkCiph3r)
+  sigma.id: 69483748-1525-4a6c-95ca-90dc8d431b68
+  sigma.level: high
+  sigma.source: rules/macos/process_creation/proc_creation_macos_office_susp_child_processes.yml
+  sigma.status: test
+  sigma.tags: attack.execution, attack.persistence, attack.t1059.002, attack.t1137.002, attack.t1204.002
+  sigma.title: Suspicious Microsoft Office Child Process - MacOS
+  tactic.id: TA0002, TA0003
+  tactic.name: Execution, Persistence
+  technique.id: T1059.002, T1137.002, T1204.002
+references:
+  - https://redcanary.com/blog/applescript/
+  - https://objective-see.org/blog/blog_0x4B.html
+condition: evt.name in ('CreateProcess') and (ps.parent.exe icontains ('Microsoft Word', 'Microsoft Excel', 'Microsoft PowerPoint', 'Microsoft OneNote') and ps.exe iendswith ('/bash', '/curl', '/dash', '/fish', '/osacompile', '/osascript', '/sh', '/zsh', '/python', '/python3', '/wget'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Sohan G (D4rkCiph3r))'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

@@ -215,6 +215,9 @@ func (s *sensor) startResponse(o runOptions, stderr io.Writer) {
 		}
 	}
 	r.StartWorker(responseQueue)
+	// Remote peers per process, for isolate_process: every event that
+	// passed the exclusions (Observe keeps only network events).
+	s.p.taps = append(s.p.taps, r.Observe)
 	s.closers = append(s.closers, func() error {
 		if !o.asRoot && o.responseRunner == nil {
 			r.StopWorker()

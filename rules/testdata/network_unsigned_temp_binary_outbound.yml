@@ -1,0 +1,50 @@
+match:
+  - desc: unsigned payload dropped in /tmp beacons to a public address
+    events:
+      - name: NetworkConnect
+        platform: macos
+        source: netpoll
+        proc: {pid: 6201, ppid: 6200, exe: /private/tmp/update, name: update, uid: 501, euid: 501, signing_id: update-55554944, is_platform: false, is_signed: false}
+        net: {proto: tcp, direction: outbound, sip: 10.0.0.5, sport: 50500, dip: 203.0.113.50, dport: 443}
+        args: {fd: "5"}
+  - desc: self-signed binary with a forged Team ID in the per-user $TMPDIR
+    events:
+      - name: NetworkConnect
+        platform: macos
+        source: netpoll
+        proc: {pid: 6203, ppid: 6202, exe: /private/var/folders/x1/abcd1234/T/helper, name: helper, uid: 501, euid: 501, signing_id: com.docker.helper, team_id: 9BNSXJN65R, cs_category: local_signing, is_platform: false, is_signed: true}
+        net: {proto: tcp, direction: outbound, sip: 10.0.0.5, sport: 50501, dip: 2001:db8::50, dport: 8443}
+        args: {fd: "6"}
+nomatch:
+  - desc: benign lookalike - Developer ID signed installer helper in /tmp connects out
+    events:
+      - name: NetworkConnect
+        platform: macos
+        source: netpoll
+        proc: {pid: 6211, ppid: 1, exe: /private/tmp/com.docker.install-helper, name: com.docker.install-helper, uid: 0, euid: 0, signing_id: com.docker.install-helper, team_id: 9BNSXJN65R, cs_category: developer_id, is_platform: false, is_signed: true}
+        net: {proto: tcp, direction: outbound, sip: 10.0.0.5, sport: 50510, dip: 203.0.113.60, dport: 443}
+        args: {fd: "4"}
+  - desc: benign lookalike - unsigned dev build in ~/src talks to a public API
+    events:
+      - name: NetworkConnect
+        platform: macos
+        source: netpoll
+        proc: {pid: 6212, ppid: 6210, exe: /Users/rifqi/src/tool/a.out, name: a.out, uid: 501, euid: 501, is_platform: false, is_signed: false}
+        net: {proto: tcp, direction: outbound, sip: 10.0.0.5, sport: 50511, dip: 203.0.113.61, dport: 443}
+        args: {fd: "4"}
+  - desc: unsigned binary in /tmp talking to a private address (lab service)
+    events:
+      - name: NetworkConnect
+        platform: macos
+        source: netpoll
+        proc: {pid: 6213, ppid: 6210, exe: /tmp/probe, name: probe, uid: 501, euid: 501, is_platform: false, is_signed: false}
+        net: {proto: tcp, direction: outbound, sip: 192.168.1.20, sport: 50512, dip: 192.168.1.1, dport: 80}
+        args: {fd: "4"}
+  - desc: kernel-only identity (no signing data) in /tmp is not matched
+    events:
+      - name: NetworkConnect
+        platform: macos
+        source: netpoll
+        proc: {pid: 6214, ppid: 6210, exe: /private/tmp/old_helper, name: old_helper, uid: 501, euid: 501, is_platform: false, seeded: true}
+        net: {proto: tcp, direction: outbound, sip: 10.0.0.5, sport: 50513, dip: 203.0.113.62, dport: 443}
+        args: {fd: "4", identity: unverified}

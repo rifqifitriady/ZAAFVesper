@@ -261,6 +261,23 @@ func appleSignedByCodesign(run Runner) func(string) (bool, error) {
 	}
 }
 
+// userWritableBundles are locations where an Apple-signed bundle can only
+// be a copy a user made (temp folders, home folders, mounted volumes): acting
+// on a file there cannot damage the system, so their signature is not
+// checked. That also keeps malware from stalling the slow-action worker with
+// fake bundles it builds there (codesign on a bundle whose executable is a
+// FIFO waits for its timeout).
+var userWritableBundles = []string{"/private/tmp/", "/private/var/tmp/", "/private/var/folders/", "/Users/", "/Volumes/"}
+
+func userWritableBundle(b string) bool {
+	for _, pre := range userWritableBundles {
+		if hasPrefixFold(b, pre) {
+			return true
+		}
+	}
+	return false
+}
+
 // checkBundles refuses a path inside an Apple-signed bundle, and a path
 // nested in more than maxBundleDepth bundles (each needs a codesign run, so
 // deep nesting would be a cheap way to stall the actions).
@@ -270,6 +287,9 @@ func (r *Responder) checkBundles(p string) string {
 		return fmt.Sprintf("nested in %d bundles (more than %d)", len(bs), maxBundleDepth)
 	}
 	for _, b := range bs {
+		if userWritableBundle(b) {
+			continue
+		}
 		apple, err := r.cfg.AppleSigned(b)
 		if err != nil {
 			return fmt.Sprintf("cannot check the signature of bundle %s (%v); refusing", b, err)

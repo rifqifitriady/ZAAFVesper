@@ -1,0 +1,7 @@
+title: three backslashes
+id: c005-three
+logsource: {product: test}
+detection:
+    s:
+        Value: 'a\\\b'
+    condition: s

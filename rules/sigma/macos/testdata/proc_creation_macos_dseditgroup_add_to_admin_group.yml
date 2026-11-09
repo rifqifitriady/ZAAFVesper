@@ -1,0 +1,11 @@
+match:
+  - desc: "dseditgroup adds a user to admin"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4501, "ppid": 4000, "exe": "/usr/sbin/dseditgroup", "name": "dseditgroup", "args": ["dseditgroup", "-o", "edit", "-a", "eviluser", "-t", "user", "admin"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.dseditgroup", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+nomatch:
+  - desc: "benign lookalike - dseditgroup checks membership"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4511, "ppid": 4000, "exe": "/usr/sbin/dseditgroup", "name": "dseditgroup", "args": ["dseditgroup", "-o", "checkmember", "-m", "bob", "admin"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.dseditgroup", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+  - desc: "dseditgroup removes a user from admin"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 4512, "ppid": 4000, "exe": "/usr/sbin/dseditgroup", "name": "dseditgroup", "args": ["dseditgroup", "-o", "edit", "-d", "bob", "-t", "user", "admin"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.dseditgroup", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}

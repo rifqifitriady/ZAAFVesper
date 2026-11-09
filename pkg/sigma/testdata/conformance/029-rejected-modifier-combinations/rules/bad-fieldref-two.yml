@@ -1,0 +1,7 @@
+title: bad-fieldref-two
+id: c029-5
+logsource: {product: test}
+detection:
+    selection:
+        F|fieldref|startswith|contains: B
+    condition: selection

@@ -1,0 +1,9 @@
+title: all with windash
+id: c026
+logsource: {product: test}
+detection:
+    s:
+        C|windash|contains|all:
+            - ' -a'
+            - ' -b'
+    condition: s

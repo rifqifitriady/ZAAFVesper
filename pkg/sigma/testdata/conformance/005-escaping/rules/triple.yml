@@ -1,0 +1,7 @@
+title: backslash and literal star
+id: c005-triple
+logsource: {product: test}
+detection:
+    s:
+        Value: 'a\\\*'
+    condition: s

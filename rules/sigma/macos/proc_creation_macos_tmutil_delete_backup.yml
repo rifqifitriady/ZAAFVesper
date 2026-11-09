@@ -1,0 +1,31 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Time Machine Backup Deletion Attempt Via Tmutil - MacOS
+id: 452df256-da78-427a-866f-49fa04417d74
+version: 1.0.0
+platforms: [macos]
+description: |-
+  Detects deletion attempts of MacOS Time Machine backups via the native backup utility "tmutil".
+  An adversary may perform this action before launching a ransonware attack to prevent the victim from restoring their files.
+
+  Converted from Sigma rule 452df256-da78-427a-866f-49fa04417d74 by zaafvesper sigma convert. Sigma author: Pratinav Chandra.
+labels:
+  sigma.author: Pratinav Chandra
+  sigma.id: 452df256-da78-427a-866f-49fa04417d74
+  sigma.level: medium
+  sigma.source: rules/macos/process_creation/proc_creation_macos_tmutil_delete_backup.yml
+  sigma.status: test
+  sigma.tags: attack.impact, attack.t1490
+  sigma.title: Time Machine Backup Deletion Attempt Via Tmutil - MacOS
+  tactic.id: TA0040
+  tactic.name: Impact
+  technique.id: T1490
+references:
+  - https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1490/T1490.md#atomic-test-12---disable-time-machine
+  - https://www.loobins.io/binaries/tmutil/
+condition: evt.name in ('CreateProcess') and ((ps.exe iendswith '/tmutil' or ps.cmdline icontains 'tmutil') and ps.cmdline icontains 'delete')
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Pratinav Chandra)'
+severity: medium
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Legitimate activities'
