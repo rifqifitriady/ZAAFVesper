@@ -127,6 +127,18 @@ func (g *rig) eventFor(p, name string) *event.Event {
 	return e
 }
 
+// pf returns the pfctl commands run so far (the gateway lookups through
+// /sbin/route are left out).
+func (g *rig) pf() []string {
+	var out []string
+	for _, c := range g.cmds {
+		if strings.HasPrefix(c, PfctlBin+" ") {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 func (g *rig) last() Decision {
 	g.t.Helper()
 	if len(g.logs) == 0 {
@@ -463,7 +475,8 @@ func TestQuarantineDryRunAndBudget(t *testing.T) {
 	if exists(filepath.Join(g.dir, "state/quarantine")) {
 		t.Fatal("dry-run created the vault")
 	}
-	// Budgets are shared by every action: 10 per rule a minute.
+	// File and network actions have their own budget of 10 per rule a
+	// minute (owner decision 9 Nov 2026), separate from kill and suspend.
 	g = newRig(t, false, nil)
 	for i := 0; i < DefaultMaxPerRulePerMinute; i++ {
 		_, e := g.file("b/f"+strconv.Itoa(i), strconv.Itoa(i), 0o644)
@@ -475,12 +488,28 @@ func TestQuarantineDryRunAndBudget(t *testing.T) {
 	if err := g.r.QuarantineFile(e, TargetFile, "rule-b", "rule B"); !errors.Is(err, ErrRateLimited) || !exists(p) {
 		t.Fatalf("11th: %v", err)
 	}
-	// A kill of the same rule is refused by the same budget.
-	if err := g.r.KillEvent(&event.Event{Source: ESSource, Proc: g.proc(6000, "/private/tmp/p")}, "rule-b", "rule B"); !errors.Is(err, ErrRateLimited) {
+	if len(g.degr) != 1 || !strings.HasPrefix(g.degr[0], CondRateLimited) || !strings.Contains(g.degr[0], "file/network action budget") {
+		t.Fatalf("degraded = %v", g.degr)
+	}
+	// Decoy file actions do not spend the kill budget: the kill of the same
+	// rule still happens.
+	if err := g.r.KillEvent(&event.Event{Source: ESSource, Proc: g.proc(6000, "/private/tmp/p")}, "rule-b", "rule B"); err != nil {
 		t.Fatalf("kill after 10 quarantines: %v", err)
 	}
-	if len(g.degr) != 2 || !strings.HasPrefix(g.degr[0], CondRateLimited) {
-		t.Fatalf("degraded = %v", g.degr)
+	// And the other way round: 30 kills leave the file actions their budget.
+	h := newRig(t, false, nil)
+	for i := 0; i < DefaultMaxPerMinute; i++ {
+		if err := h.r.KillEvent(&event.Event{Source: ESSource, Proc: h.proc(int32(6100+i), "/private/tmp/p")}, "rule-"+strconv.Itoa(i%3), "r"); err != nil {
+			t.Fatalf("kill %d: %v", i, err)
+		}
+	}
+	if err := h.r.KillEvent(&event.Event{Source: ESSource, Proc: h.proc(6200, "/private/tmp/p")}, "rule-x", "r"); !errors.Is(err, ErrRateLimited) ||
+		!strings.Contains(h.degr[0], "global kill/suspend budget") {
+		t.Fatalf("31st kill: %v %v", err, h.degr)
+	}
+	p, e = h.file("b/after", "after", 0o644)
+	if err := h.r.QuarantineFile(e, TargetFile, "rule-x", "r"); err != nil || exists(p) {
+		t.Fatalf("quarantine after 30 kills: %v", err)
 	}
 }
 
@@ -656,14 +685,46 @@ func TestRemovePersistence(t *testing.T) {
 			t.Fatalf("label %q: %v %+v cmds %v", label, err, g.last(), g.cmds)
 		}
 	}
-	// Written by an Apple platform binary: refused.
+	// Written by an Apple tool (cp) under a fully trusted chain: refused,
+	// nothing ran, the plist stays.
+	trusted := &event.Proc{PID: 900, Exe: "/bin/zsh", Name: "zsh", IsPlatform: true}
 	g.cmds = nil
 	e = mk("com.evil.agent")
-	e.Proc.IsPlatform = true
+	e.Proc.IsPlatform, e.Proc.Exe, e.Proc.Parent = true, "/bin/cp", trusted
 	if err := g.r.RemovePersistence(e, "rule-p", "p"); err == nil || g.last().Outcome != OutcomeWriterNotUntrusted || len(g.cmds) != 0 || !exists(plistPath) {
-		t.Fatalf("platform writer: %v %+v %v", err, g.last(), g.cmds)
+		t.Fatalf("cp under a trusted chain: %v %+v %v", err, g.last(), g.cmds)
+	}
+	// A verified Developer ID writer: refused.
+	e = mk("com.evil.agent")
+	e.Proc.TeamID, e.Proc.CSCategory = "ABCDE12345", event.CSDeveloperID
+	if err := g.r.RemovePersistence(e, "rule-p", "p"); err == nil || g.last().Outcome != OutcomeWriterNotUntrusted || !exists(plistPath) {
+		t.Fatalf("developer id writer: %v %+v", err, g.last())
+	}
+	// cp under an untrusted parent, and cp under a trusted parent but with an
+	// untrusted ancestor (`sh -c` from a dropper): acted on (owner decision
+	// 9 Nov 2026).
+	for name, set := range map[string]func(p *event.Proc){
+		"untrusted parent": func(p *event.Proc) {
+			p.Parent = &event.Proc{PID: 901, Exe: "/Volumes/Setup/Setup", CSCategory: event.CSLocalSigning}
+		},
+		"untrusted ancestor": func(p *event.Proc) { p.Parent, p.AncestorsUntrusted = trusted, true },
+	} {
+		g.cmds = nil
+		e = mk("com.evil.agent")
+		e.Proc.IsPlatform, e.Proc.Exe = true, "/bin/cp"
+		set(e.Proc)
+		if err := g.r.RemovePersistence(e, "rule-p", "p"); err != nil || g.last().Outcome != OutcomePersistenceRemoved || exists(plistPath) {
+			t.Fatalf("cp with %s: %v %+v", name, err, g.last())
+		}
+	}
+	g.run = func(bin string, args []string) ([]byte, error) {
+		if bin == LaunchctlBin && args[0] == "print" {
+			return []byte("path = " + loadedFrom + "\n"), nil
+		}
+		return nil, nil
 	}
 	// Seeded writer and unknown platform flag: refused, nothing ran.
+	g.cmds = nil
 	e = mk("com.evil.agent")
 	e.Proc.Seeded = true
 	if err := g.r.RemovePersistence(e, "rule-p", "p"); err == nil || g.last().Outcome != OutcomeUnknown || len(g.cmds) != 0 || !exists(plistPath) {
@@ -744,7 +805,7 @@ func TestIsolateProcess(t *testing.T) {
 		PfctlBin + " -E",
 		PfctlBin + " -a " + PFAnchor + " -t " + PFTable + " -T add 198.51.100.9 198.51.100.20 203.0.113.7 2001:db8::5",
 	}
-	if !reflect.DeepEqual(g.cmds[:3], want) || g.stdins[0] != pfRules {
+	if !reflect.DeepEqual(g.pf()[:3], want) || g.stdins[0] != pfRules {
 		t.Fatalf("pf commands = %q stdin %q", g.cmds, g.stdins)
 	}
 	for _, c := range g.cmds {
@@ -820,13 +881,13 @@ func TestIsolateRefusals(t *testing.T) {
 	if err := g.r.IsolateProcess(oe, TargetParent, "r", "r"); !errors.Is(err, ErrUnknownProc) {
 		t.Fatalf("unknown parent: %v", err)
 	}
-	if len(g.cmds) != 0 {
+	if len(g.pf()) != 0 {
 		t.Fatalf("pfctl ran on a refusal: %v", g.cmds)
 	}
-	// Dry-run: nothing runs.
+	// Dry-run: no pfctl (only the read-only gateway lookup runs).
 	g = newRig(t, true, nil)
 	if err := g.r.IsolateProcess(netEvent(g, 7105, "outbound", "192.168.1.10", "203.0.113.1"), TargetProcess, "r", "r"); err != nil ||
-		len(g.cmds) != 0 || g.last().Outcome != OutcomeDryRun {
+		len(g.pf()) != 0 || g.last().Outcome != OutcomeDryRun {
 		t.Fatalf("dry-run: %v %v", err, g.cmds)
 	}
 	// The peer table stays bounded.
@@ -1000,7 +1061,7 @@ func TestIsolateNeverBlocksResolvers(t *testing.T) {
 		c.Resolvers = func() []netip.Addr { return []netip.Addr{netip.MustParseAddr("192.168.1.1")} }
 	})
 	if err := g.r.IsolateProcess(netEvent(g, 7200, "outbound", "192.168.1.10", "192.168.1.1"), TargetProcess, "r", "r"); !errors.Is(err, ErrNoPeers) ||
-		!strings.Contains(g.last().Detail, "DNS resolver") || len(g.cmds) != 0 {
+		!strings.Contains(g.last().Detail, "DNS resolver") || len(g.pf()) != 0 {
 		t.Fatalf("resolver: %v %+v %v", err, g.last(), g.cmds)
 	}
 }
@@ -1146,5 +1207,61 @@ func TestCloseResumesFirstAndDropsQueue(t *testing.T) {
 	<-closed
 	if ran || g.r.Stats()["worker dropped at shutdown"] != 1 {
 		t.Fatalf("queued action ran=%v stats=%v", ran, g.r.Stats())
+	}
+}
+
+// TestIsolateNeverBlockSet: the default gateways (from /sbin/route) and
+// Apple's 17.0.0.0/8 are never blocked; private RFC 1918 peers can be (owner
+// decision 9 Nov 2026); a gateway lookup that cannot run refuses.
+func TestIsolateNeverBlockSet(t *testing.T) {
+	g := newRig(t, false, func(c *Config) { c.Gateways = nil })
+	g.r.cfg.Gateways = routeGateways(g.r.cfg.Runner)
+	g.run = func(bin string, args []string) ([]byte, error) {
+		if bin == RouteBin {
+			if args[2] == "-inet6" {
+				return []byte("   route to: default\n    gateway: fe80::1%en0\n  interface: en0\n"), nil
+			}
+			return []byte("   route to: default\ndestination: default\n    gateway: 192.168.1.1\n  interface: en0\n"), nil
+		}
+		return nil, nil
+	}
+	for _, ip := range []string{"192.168.1.1", "17.253.144.10", "10.20.30.40"} {
+		g.r.Observe(netEvent(g, 7500, "outbound", "192.168.1.10", ip))
+	}
+	if err := g.r.IsolateProcess(netEvent(g, 7500, "outbound", "192.168.1.10", "10.20.30.40"), TargetProcess, "r", "r"); err != nil {
+		t.Fatalf("isolate: %v %+v", err, g.last())
+	}
+	d := g.last().Detail
+	add := g.pf()[2]
+	if !strings.HasSuffix(add, "-T add 10.20.30.40") || !strings.Contains(d, "192.168.1.1 (a default gateway") || !strings.Contains(d, "17.253.144.10 (Apple's network 17.0.0.0/8)") {
+		t.Fatalf("add %q detail %q", add, d)
+	}
+	if got := parseRouteGateway([]byte("    gateway: link#14\n")); got != nil {
+		t.Fatalf("interface gateway parsed as %v", got)
+	}
+	// No default route (route exits non-zero): not an error.
+	g2 := newRig(t, false, nil)
+	g2.r.cfg.Gateways = routeGateways(g2.r.cfg.Runner)
+	g2.run = func(bin string, args []string) ([]byte, error) {
+		if bin == RouteBin {
+			return nil, &ExitError{Code: 1, Output: "route: writing to routing socket: not in table"}
+		}
+		return nil, nil
+	}
+	if err := g2.r.IsolateProcess(netEvent(g2, 7501, "outbound", "192.168.1.10", "203.0.113.50"), TargetProcess, "r", "r"); err != nil {
+		t.Fatalf("no default route: %v", err)
+	}
+	// route cannot run: refused, nothing blocked.
+	g3 := newRig(t, false, nil)
+	g3.r.cfg.Gateways = routeGateways(g3.r.cfg.Runner)
+	g3.run = func(bin string, args []string) ([]byte, error) {
+		if bin == RouteBin {
+			return nil, errors.New("exec: permission denied")
+		}
+		return nil, nil
+	}
+	if err := g3.r.IsolateProcess(netEvent(g3, 7502, "outbound", "192.168.1.10", "203.0.113.51"), TargetProcess, "r", "r"); !errors.Is(err, ErrNoPeers) || len(g3.pf()) != 0 ||
+		!strings.Contains(g3.last().Detail, "default gateway") {
+		t.Fatalf("route fails: %v %+v", err, g3.last())
 	}
 }

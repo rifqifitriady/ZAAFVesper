@@ -542,6 +542,8 @@ func untrustedRemover(p *event.Proc) bool {
 	if !p.IsPlatform {
 		return !verifiedVendor(p)
 	}
+	// Unlike untrustedChain, ps.ancestors_untrusted is not used here: the
+	// rule judges only the direct parent (macro untrusted_quarantine_remover).
 	par := p.Parent
 	return par == nil || par.Seeded || !(par.IsPlatform || verifiedVendor(par))
 }

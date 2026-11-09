@@ -310,7 +310,11 @@ process snapshot), `yara.meta[attack]` and `yara.meta[description]` (output only
   developer identity" quarantines the executable (the running process keeps running);
   "Quarantine attribute removed by an untrusted process" re-adds the attribute; "Launch
   Agent or Daemon written by an untrusted process" boots the job out (only when launchd
-  loaded that label from this plist) and quarantines the plist. Limits: when the payload
+  loaded that label from this plist) and quarantines the plist; since 9 Nov 2026 (owner
+  decision) it also covers an Apple tool such as `/bin/cp` or `sh -c` whose parent is
+  untrusted or unknown, or with an untrusted ancestor, which adds false positives for
+  installer scripts of unsigned installers and for plists copied by hand from a terminal
+  app that was running before the sensor started. Limits: when the payload
   ran the prompt through `system()`/`popen()`, the parent is a platform `/bin/sh` and is
   refused, so nothing is suspended or killed; when the parent is unknown there is nothing
   to act on. Acting on the first untrusted *ancestor* would need a new target kind. On
@@ -367,8 +371,9 @@ process snapshot), `yara.meta[attack]` and `yara.meta[description]` (output only
 
 - `zaafvesper rules validate --rules rules`: 43 rules, 4 sequences, 70 macros/lists, 0 warnings
   (v0.2 active response, 9 Nov 2026).
-- `zaafvesper rules test --rules rules`: 281 scenarios, 281 passed, 0 failed (194 before
-  round 2, 250 after round 2, 253 after round 3, 261 after round 4, 263 after round 5). Includes the security reviewer's SEC-R3
+- `zaafvesper rules test --rules rules`: 287 scenarios, 287 passed, 0 failed (194 before
+  round 2, 250 after round 2, 253 after round 3, 261 after round 4, 263 after round 5,
+  281 with the v0.2 response companions). Includes the security reviewer's SEC-R3
   (double fork, script(1)+vim) and three SEC-R4 (untrusted ancestor) fixtures.
 - Every `technique.id`/`tactic.id` re-checked against `enterprise-attack.json`; every
   `tests.atomic` GUID is indexed under the rule's technique (or its parent).
@@ -453,3 +458,10 @@ loader and the unknown-parent `xattr` are companion matches; a user's `xattr -d`
 platform zsh stays on the medium rule; forged and unreported Team IDs and unsigned writers
 of launch plists are companion matches; `cp`, Developer ID vendors and
 `homebrew.mxcl.redis.plist` are companion nomatches.
+
+Owner decision of 9 Nov 2026 (R1-4): macro `untrusted_launch_item_writer` also covers an Apple
+tool (`ps.is_platform = true`) with an untrusted or unknown parent or `ps.ancestors_untrusted`.
+The ART `sudo cp` fixtures now carry their trusted parent (sudo) and the `installd` fixture
+its parent launchd, so they stay on the alert-only rules; new companion matches: a dropper
+writing with `/bin/cp`, and `sh -c cp` under a dropper ancestor; new companion nomatch: `cp`
+under Terminal -> zsh with a trusted chain.

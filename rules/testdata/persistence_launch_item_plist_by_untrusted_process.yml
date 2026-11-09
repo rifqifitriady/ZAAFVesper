@@ -29,21 +29,31 @@ match:
       - name: CreateFile
         proc: {pid: 5301, ppid: 1, exe: /private/tmp/.updater, name: .updater, uid: 0, euid: 0, signing_id: a.out, is_platform: false, is_signed: true, cs_category: local_signing}
         file: {path: /Library/LaunchDaemons/com.system.updater.plist}
-nomatch:
-  - desc: 'sudo cp drops the atomic plist into the user''s LaunchAgents (ART T1543.001 #1)'
+  - desc: dropper writes its LaunchAgent with /bin/cp (Apple tool, untrusted parent)
     events:
       - name: CreateFile
-        proc: {pid: 2101, ppid: 2100, exe: /bin/cp, name: cp, cmdline: "cp /tmp/atomicredteam_T1543_001.plist /Users/rifqi/Library/LaunchAgents/com.atomicredteam.plist", args: [cp, /tmp/atomicredteam_T1543_001.plist, /Users/rifqi/Library/LaunchAgents/com.atomicredteam.plist], uid: 0, euid: 0, signing_id: com.apple.cp, is_platform: true, is_signed: true}
+        proc: {pid: 5401, ppid: 5400, exe: /bin/cp, name: cp, cmdline: "cp /tmp/.a.plist /Users/rifqi/Library/LaunchAgents/com.update.agent.plist", uid: 501, euid: 501, signing_id: com.apple.cp, is_platform: true, is_signed: true, parent: {pid: 5400, ppid: 1, exe: /Volumes/Setup/Setup.app/Contents/MacOS/Setup, name: Setup, signing_id: Setup-5555, is_platform: false, is_signed: true, cs_category: local_signing}}
+        file: {path: /Users/rifqi/Library/LaunchAgents/com.update.agent.plist}
+  - desc: dropper runs `sh -c 'cp ...'`; cp's parent is a platform shell, the dropper is an untrusted ancestor
+    events:
+      - name: CreateFile
+        proc: {pid: 5412, ppid: 5411, exe: /bin/cp, name: cp, uid: 0, euid: 0, signing_id: com.apple.cp, is_platform: true, is_signed: true, ancestors_untrusted: true, parent: {pid: 5411, ppid: 5410, exe: /bin/sh, name: sh, signing_id: com.apple.sh, is_platform: true, is_signed: true, ancestors_untrusted: true}}
+        file: {path: /Library/LaunchDaemons/com.update.daemon.plist}
+nomatch:
+  - desc: 'sudo cp drops the atomic plist into the user''s LaunchAgents (ART T1543.001 #1) from a terminal: trusted chain'
+    events:
+      - name: CreateFile
+        proc: {pid: 2101, ppid: 2100, exe: /bin/cp, name: cp, cmdline: "cp /tmp/atomicredteam_T1543_001.plist /Users/rifqi/Library/LaunchAgents/com.atomicredteam.plist", args: [cp, /tmp/atomicredteam_T1543_001.plist, /Users/rifqi/Library/LaunchAgents/com.atomicredteam.plist], uid: 0, euid: 0, signing_id: com.apple.cp, is_platform: true, is_signed: true, parent: {pid: 2100, ppid: 2099, exe: /usr/bin/sudo, name: sudo, signing_id: com.apple.sudo, is_platform: true, is_signed: true}}
         file: {path: /Users/rifqi/Library/LaunchAgents/com.atomicredteam.plist}
   - desc: benign lookalike - Google Keystone (Developer ID, team EQHXZ8M8AV) installs its updater agent
     events:
       - name: CreateFile
         proc: {pid: 4100, ppid: 1, exe: /Users/rifqi/Library/Google/GoogleSoftwareUpdate/GoogleSoftwareUpdate.bundle/Contents/Helpers/GoogleSoftwareUpdateAgent.app/Contents/MacOS/GoogleSoftwareUpdateAgent, name: GoogleSoftwareUpdateAgent, uid: 501, euid: 501, signing_id: com.google.Keystone.Agent, team_id: EQHXZ8M8AV, cs_category: developer_id, is_platform: false, is_signed: true}
         file: {path: /Users/rifqi/Library/LaunchAgents/com.google.keystone.agent.plist}
-  - desc: 'sudo cp drops the atomic plist into /Library/LaunchDaemons (ART T1543.004 #1)'
+  - desc: 'sudo cp drops the atomic plist into /Library/LaunchDaemons (ART T1543.004 #1) from a terminal: trusted chain'
     events:
       - name: CreateFile
-        proc: {pid: 2201, ppid: 2200, exe: /bin/cp, name: cp, cmdline: "cp atomicredteam_T1543_004.plist /Library/LaunchDaemons/com.atomicredteam.plist", args: [cp, atomicredteam_T1543_004.plist, /Library/LaunchDaemons/com.atomicredteam.plist], uid: 0, euid: 0, signing_id: com.apple.cp, is_platform: true, is_signed: true}
+        proc: {pid: 2201, ppid: 2200, exe: /bin/cp, name: cp, cmdline: "cp atomicredteam_T1543_004.plist /Library/LaunchDaemons/com.atomicredteam.plist", args: [cp, atomicredteam_T1543_004.plist, /Library/LaunchDaemons/com.atomicredteam.plist], uid: 0, euid: 0, signing_id: com.apple.cp, is_platform: true, is_signed: true, parent: {pid: 2200, ppid: 2199, exe: /usr/bin/sudo, name: sudo, signing_id: com.apple.sudo, is_platform: true, is_signed: true}}
         file: {path: /Library/LaunchDaemons/com.atomicredteam.plist}
   - desc: benign lookalike - Developer ID signed vendor helper writes its daemon (routed to the low-severity companion rule)
     events:
@@ -55,3 +65,8 @@ nomatch:
       - name: CreateFile
         proc: {pid: 5201, ppid: 5200, exe: /opt/homebrew/Cellar/ruby/3.3.0/bin/ruby, name: ruby, uid: 501, euid: 501, signing_id: ruby, is_platform: false, is_signed: true, cs_category: local_signing}
         file: {path: /Users/rifqi/Library/LaunchAgents/homebrew.mxcl.redis.plist}
+  - desc: Apple tool under a fully trusted chain (Terminal -> zsh -> cp) stays alert-only
+    events:
+      - name: CreateFile
+        proc: {pid: 5421, ppid: 5420, exe: /bin/cp, name: cp, uid: 501, euid: 501, signing_id: com.apple.cp, is_platform: true, is_signed: true, ancestors_untrusted: false, parent: {pid: 5420, ppid: 5419, exe: /bin/zsh, name: zsh, signing_id: com.apple.zsh, is_platform: true, is_signed: true}}
+        file: {path: /Users/rifqi/Library/LaunchAgents/com.example.mine.plist}

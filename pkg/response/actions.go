@@ -85,9 +85,10 @@ const (
 	PfctlBin     = "/sbin/pfctl"
 	LaunchctlBin = "/bin/launchctl"
 	CodesignBin  = "/usr/bin/codesign"
+	RouteBin     = "/sbin/route"
 )
 
-var pinnedBins = map[string]bool{PfctlBin: true, LaunchctlBin: true, CodesignBin: true}
+var pinnedBins = map[string]bool{PfctlBin: true, LaunchctlBin: true, CodesignBin: true, RouteBin: true}
 
 // ExitError is a command that ran and exited with a non-zero status.
 type ExitError struct {
@@ -300,7 +301,7 @@ func refused(outcome string, err error, format string, args ...any) result {
 }
 
 // act runs one action other than kill and suspend under actMu (never
-// under mu, so kill and suspend do not wait for it): perform applies the guard rails, calls budget (the shared per-rule
+// under mu, so kill and suspend do not wait for it): perform applies the guard rails, calls budget (the file and network per-rule
 // and global budgets) right before the first side effect, honours DryRun,
 // and returns the result, which act counts and logs.
 func (r *Responder) act(d Decision, rule string, perform func(budget func() *result) result) error {
@@ -317,7 +318,7 @@ func (r *Responder) act(d Decision, rule string, perform func(budget func() *res
 	budget := func() *result {
 		r.mu.Lock()
 		defer r.mu.Unlock()
-		if o, det, err := r.spend(rule, d.Reason, now, &notice); err != nil {
+		if o, det, err := r.spend(budgetAction, rule, d.Reason, now, &notice); err != nil {
 			return &result{o, det, err}
 		}
 		return nil
@@ -409,8 +410,9 @@ const (
 	// requarantine): that process must not be seeded or unverified, and its
 	// platform flag must be known.
 	preWriter
-	// preUntrustedWriter: preWriter, and the writer itself must not be an
-	// Apple platform binary (remove_persistence).
+	// preUntrustedWriter: preWriter, and the writer must be untrusted: no
+	// verified identity, or an Apple tool (cp, sh) in an untrusted chain
+	// (untrustedChain; owner decision 9 Nov 2026) (remove_persistence).
 	preUntrustedWriter
 	// preExecutable: the file is the executable of the event's process
 	// (quarantine_file target process): preWriter, and never an Apple
@@ -447,8 +449,11 @@ func (r *Responder) preflight(e *event.Event, target string, kind int) (*event.P
 			return ref(refused(OutcomeSigningUnknown, ErrUnknownProc, "signing category unreported"))
 		}
 	case preUntrustedWriter:
-		if p.IsPlatform {
-			return ref(refused(OutcomeWriterNotUntrusted, ErrProtected, "written by an Apple platform binary"))
+		switch {
+		case p.IsPlatform && !untrustedChain(p):
+			return ref(refused(OutcomeWriterNotUntrusted, ErrProtected, "written by an Apple platform binary whose parent and ancestors are trusted"))
+		case !p.IsPlatform && verifiedVendor(p):
+			return ref(refused(OutcomeWriterNotUntrusted, ErrProtected, "written by a process with a verified Developer ID or App Store identity"))
 		}
 	case preExecutable:
 		if p.IsPlatform {
@@ -456,4 +461,16 @@ func (r *Responder) preflight(e *event.Event, target string, kind int) (*event.P
 		}
 	}
 	return p, nil
+}
+
+// untrustedChain reports whether the chain above p is untrusted: its parent
+// is unknown, seeded, or has no trusted identity (neither an Apple platform
+// binary nor a verified vendor), or the process table found an ancestor up
+// to launchd without a trusted identity (ps.ancestors_untrusted).
+func untrustedChain(p *event.Proc) bool {
+	if p.AncestorsUntrusted {
+		return true
+	}
+	par := p.Parent
+	return par == nil || par.Seeded || !(par.IsPlatform || verifiedVendor(par))
 }

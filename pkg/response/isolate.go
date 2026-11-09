@@ -185,7 +185,18 @@ func (r *Responder) peersOf(e *event.Event, p *event.Proc, now time.Time) []neti
 // blockable returns why a must never be blocked, or "": invalid, loopback,
 // unspecified, multicast, broadcast, link-local, with a zone, this host's
 // own address, or inside the management allow-list.
-func (r *Responder) blockable(a netip.Addr, local map[netip.Addr]bool) string {
+// NeverBlockNetworks are networks isolate_process never blocks, whatever
+// the configuration: Apple's 17.0.0.0/8 (software update, XProtect,
+// notarization, push). Private RFC 1918 addresses can be isolated (owner
+// decision 9 Nov 2026); protect your own servers with response.isolation_allow.
+var NeverBlockNetworks = []netip.Prefix{netip.MustParsePrefix("17.0.0.0/8")}
+
+// blockable returns why a must never be blocked, or "": invalid, scoped,
+// loopback, unspecified, multicast, broadcast, link-local, this host's own
+// address, a default gateway or DNS resolver of this Mac (never), Apple's
+// 17.0.0.0/8, or inside the management allow-list. never holds the host's
+// addresses, gateways and resolvers.
+func (r *Responder) blockable(a netip.Addr, never map[netip.Addr]string) string {
 	switch {
 	case !a.IsValid():
 		return "invalid"
@@ -199,10 +210,13 @@ func (r *Responder) blockable(a netip.Addr, local map[netip.Addr]bool) string {
 		return "multicast or broadcast"
 	case a.IsLinkLocalUnicast():
 		return "link-local"
-	case local[a]:
-		return "this host's address"
-	case r.resolvers()[a]:
-		return "a DNS resolver of this Mac (/etc/resolv.conf)"
+	case never[a] != "":
+		return never[a]
+	}
+	for _, p := range NeverBlockNetworks {
+		if p.Contains(a) {
+			return "Apple's network " + p.String()
+		}
 	}
 	for _, p := range r.cfg.IsolationAllow {
 		if p.Contains(a) {
@@ -210,6 +224,67 @@ func (r *Responder) blockable(a netip.Addr, local map[netip.Addr]bool) string {
 		}
 	}
 	return ""
+}
+
+// neverBlock returns this Mac's own addresses, default gateways and DNS
+// resolvers with the reason each is never blocked. It fails (and the
+// isolation is refused) when the addresses or the gateways cannot be read.
+// Caller holds actMu.
+func (r *Responder) neverBlock() (map[netip.Addr]string, error) {
+	never := map[netip.Addr]string{}
+	as, err := r.cfg.LocalAddrs()
+	if err != nil {
+		return nil, fmt.Errorf("cannot list this host's addresses (%v)", err)
+	}
+	for _, a := range as {
+		never[a.WithZone("").Unmap()] = "this host's address"
+	}
+	gws, err := r.cfg.Gateways()
+	if err != nil {
+		return nil, fmt.Errorf("cannot read the default gateway (%v)", err)
+	}
+	for _, a := range gws {
+		never[a.WithZone("").Unmap()] = "a default gateway of this Mac"
+	}
+	for a := range r.resolvers() {
+		never[a] = "a DNS resolver of this Mac (/etc/resolv.conf)"
+	}
+	return never, nil
+}
+
+// routeGateways is the default Config.Gateways: the gateway lines of
+// `/sbin/route -n get default` and `/sbin/route -n get -inet6 default`
+// (pinned, fixed argv). A family without a default route is not an error;
+// a command that cannot run is.
+func routeGateways(run Runner) func() ([]netip.Addr, error) {
+	return func() ([]netip.Addr, error) {
+		var out []netip.Addr
+		for _, args := range [][]string{{"-n", "get", "default"}, {"-n", "get", "-inet6", "default"}} {
+			b, err := run(context.Background(), RouteBin, args, nil)
+			var ee *ExitError
+			switch {
+			case errors.As(err, &ee):
+				continue // no default route for this family
+			case err != nil:
+				return nil, err
+			}
+			out = append(out, parseRouteGateway(b)...)
+		}
+		return out, nil
+	}
+}
+
+// parseRouteGateway returns the address on the "gateway:" line of `route
+// get` output (none when the gateway is an interface, not an address).
+func parseRouteGateway(b []byte) []netip.Addr {
+	for _, line := range strings.Split(string(b), "\n") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(line), "gateway:"); ok {
+			if a, err := netip.ParseAddr(strings.TrimSpace(v)); err == nil {
+				return []netip.Addr{a.WithZone("").Unmap()}
+			}
+		}
+	}
+	return nil
 }
 
 // resolvers returns the DNS resolvers that are never blocked.
@@ -264,10 +339,11 @@ func interfaceAddrs() ([]netip.Addr, error) {
 // The peers are the event's own (a NetworkConnect or NetworkAccept) and
 // those Observe saw for the same process in the last ten minutes. Guard
 // rails: the process identity rules of kill (protected pids, paths, names,
-// platform binaries, seeded or unverified identity, signing category);
-// never loopback, link-local, multicast, this host's addresses or the
-// management allow-list; at most 16 addresses per action and 256 in all;
-// the shared budgets; dry-run. pf filters by address, not by process: every
+// platform binaries, seeded or unverified identity, signing category, a
+// platform flag that must be known); never loopback, link-local, multicast,
+// this host's addresses, its default gateways and DNS resolvers, Apple's
+// 17.0.0.0/8 or the management allow-list; at most 16 addresses per action
+// and 256 in all; the file/network budget; dry-run. pf filters by address, not by process: every
 // program on this Mac loses those peers until the isolation expires or is
 // released. Connections the process opens to new peers later are not
 // blocked.
@@ -283,18 +359,18 @@ func (r *Responder) IsolateProcess(e *event.Event, target, rule, reason string) 
 			return *res
 		}
 		now := r.cfg.Now()
-		local := map[netip.Addr]bool{}
-		if as, err := r.cfg.LocalAddrs(); err == nil {
-			for _, a := range as {
-				local[a] = true
-			}
-		} else {
-			return refused(OutcomeNoPeers, ErrNoPeers, "cannot list this host's addresses (%v)", err)
+		peers := r.peersOf(e, p, now)
+		if len(peers) == 0 {
+			return refused(OutcomeNoPeers, ErrNoPeers, "no remote peer seen for this process")
+		}
+		never, err := r.neverBlock()
+		if err != nil {
+			return refused(OutcomeNoPeers, ErrNoPeers, "%v; refusing to block anything", err)
 		}
 		var block []netip.Addr
 		var skipped []string
-		for _, a := range r.peersOf(e, p, now) {
-			if why := r.blockable(a, local); why != "" {
+		for _, a := range peers {
+			if why := r.blockable(a, never); why != "" {
 				skipped = append(skipped, a.String()+" ("+why+")")
 				continue
 			}

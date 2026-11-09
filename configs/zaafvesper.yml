@@ -42,8 +42,10 @@ exclude: []
 # Response actions (only with --enable-response; see docs/operations.md).
 response:
   # Addresses and networks isolate_process never blocks (the management
-  # allow-list): your DNS resolvers, proxy, MDM, log collector. Loopback,
-  # link-local, multicast and this Mac's own addresses are never blocked anyway.
+  # allow-list): your proxy, MDM, log collector, internal servers. Loopback,
+  # link-local, multicast, this Mac's own addresses, its default gateway and
+  # DNS resolvers, and Apple's 17.0.0.0/8 are never blocked anyway; private
+  # RFC 1918 addresses CAN be blocked unless listed here.
   isolation_allow: []
   isolation_ttl: 1h          # how long an isolation lasts
   suspend_for: 30s           # a suspended process is resumed after this unless killed

@@ -229,8 +229,9 @@ func (s *sensor) startResponse(o runOptions, stderr io.Writer) {
 }
 
 // warnIsolation warns when an enabled rule uses isolate_process while the
-// management allow-list is empty: only loopback, link-local, multicast, this
-// Mac's addresses and its DNS resolvers are then protected from a block.
+// management allow-list is empty: only the built-in never-block set
+// (loopback, link-local, multicast, this Mac's addresses, its default
+// gateways and DNS resolvers, Apple's 17.0.0.0/8) is then protected.
 func warnIsolation(rs *rules.Ruleset, cfg *config.Config, stderr io.Writer) {
 	if len(cfg.Response.IsolationAllow) > 0 {
 		return
@@ -238,7 +239,7 @@ func warnIsolation(rs *rules.Ruleset, cfg *config.Config, stderr io.Writer) {
 	for _, r := range rs.Enabled() {
 		for _, a := range r.Action {
 			if a.Name == rules.ActionIsolateProcess {
-				say(stderr, "warning: rule %q uses isolate_process but response.isolation_allow is empty; add your gateway, proxy, MDM and log collector, or the rule can block them for the whole Mac", r.Name)
+				say(stderr, "warning: rule %q uses isolate_process but response.isolation_allow is empty; the gateway, DNS resolvers and Apple's 17.0.0.0/8 are never blocked, but add your proxy, MDM and log collector, or the rule can block them for the whole Mac", r.Name)
 				return
 			}
 		}

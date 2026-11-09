@@ -209,8 +209,11 @@ type Config struct {
 	IsolationAllow []netip.Prefix
 	LocalAddrs     func() ([]netip.Addr, error)
 	// Resolvers returns the DNS resolvers that are never blocked either
-	// (default: the nameservers of /etc/resolv.conf).
+	// (default: the nameservers of /etc/resolv.conf); Gateways the default
+	// gateways (default: /sbin/route -n get default, IPv4 and IPv6, through
+	// Runner). A gateway lookup that fails refuses the isolation.
 	Resolvers func() []netip.Addr
+	Gateways  func() ([]netip.Addr, error)
 	// SuspendFor is how long a suspended process stays stopped before it is
 	// resumed unless killed (default DefaultSuspendFor, at most
 	// MaxSuspendFor).
@@ -223,10 +226,13 @@ type Responder struct {
 	mu        sync.Mutex
 	cfg       Config
 	protected map[int32]bool
-	recent    []time.Time            // actions (or dry-run actions) inside the last minute, all rules
-	perRule   map[string][]time.Time // the same, by rule
-	logged    map[string]time.Time   // last logged refusal by rule|target|pid|outcome
-	stats     map[string]uint64
+	// budgets: [budgetSignal] for kill and suspend, [budgetAction] for the
+	// file and network actions (owner decision 9 Nov 2026: decoy file
+	// actions must not spend the kill budget). Each: Max* per rule and in
+	// all per minute.
+	budgets [2]*budget
+	logged  map[string]time.Time // last logged refusal by rule|target|pid|outcome
+	stats   map[string]uint64
 
 	// actMu serialises the file and network actions and guards their state
 	// (isolated, saved, pfToken, pfLoaded). It is held across their slow
@@ -297,6 +303,9 @@ func New(cfg Config) *Responder {
 	if cfg.Resolvers == nil {
 		cfg.Resolvers = resolvConfAddrs
 	}
+	if cfg.Gateways == nil {
+		cfg.Gateways = routeGateways(cfg.Runner)
+	}
 	if cfg.SuspendFor <= 0 {
 		cfg.SuspendFor = DefaultSuspendFor
 	}
@@ -305,8 +314,9 @@ func New(cfg Config) *Responder {
 	}
 	// The vault and the state directory are ZAAFVesper's own files.
 	cfg.ProtectPaths = append(append([]string(nil), cfg.ProtectPaths...), cfg.VaultDir, cfg.StateDir)
-	r := &Responder{cfg: cfg, protected: map[int32]bool{}, perRule: map[string][]time.Time{},
-		logged: map[string]time.Time{}, stats: map[string]uint64{},
+	r := &Responder{cfg: cfg, protected: map[int32]bool{},
+		budgets: [2]*budget{{name: "kill/suspend", perRule: map[string][]time.Time{}}, {name: "file/network action", perRule: map[string][]time.Time{}}},
+		logged:  map[string]time.Time{}, stats: map[string]uint64{},
 		suspended: map[int32]*suspension{}, isolated: map[string]*Isolation{}, peers: map[string]*peerSet{}}
 	r.protected[int32(os.Getpid())] = true
 	r.protected[int32(os.Getppid())] = true
@@ -637,7 +647,7 @@ func (r *Responder) decide(p *event.Proc, target, rule, reason, unknown string, 
 		free = true
 	}
 	if !free {
-		if outcome, detail, err := r.spend(rule, reason, now, &notice); err != nil {
+		if outcome, detail, err := r.spend(budgetSignal, rule, reason, now, &notice); err != nil {
 			return finish(outcome, detail, err)
 		}
 	}
@@ -655,29 +665,45 @@ func (r *Responder) decide(p *event.Proc, target, rule, reason, unknown string, 
 	return finish(OutcomeKilled, note, nil)
 }
 
-// spend takes one unit of the per-rule and of the global response budget
-// for an action at now, or refuses. Every action (kill, suspend, quarantine,
-// requarantine, remove_persistence, isolate_process) shares these budgets.
-// On a refusal, *notice is set to the response_rate_limited detail; the
-// caller raises it after unlocking. Caller holds mu.
-func (r *Responder) spend(rule, reason string, now time.Time, notice *string) (string, string, error) {
-	r.recent = pruneWindow(r.recent, now)
-	ruleTimes := pruneWindow(r.perRule[rule], now)
+// Budgets (Responder.budgets).
+const (
+	budgetSignal = 0 // kill and suspend
+	budgetAction = 1 // quarantine_file, requarantine, remove_persistence, isolate_process
+)
+
+// budget is one response budget: the actions (or dry-run actions) inside
+// the last minute, in all and by rule.
+type budget struct {
+	name    string
+	recent  []time.Time
+	perRule map[string][]time.Time
+}
+
+// spend takes one unit of the per-rule and of the global budget kind at
+// now, or refuses. kill and suspend share one budget; the file and network
+// actions share the other, of the same size, so decoy file actions cannot
+// spend the kill budget. On a refusal, *notice is set to the
+// response_rate_limited detail, which names the budget; the caller raises it
+// after unlocking. Caller holds mu.
+func (r *Responder) spend(kind int, rule, reason string, now time.Time, notice *string) (string, string, error) {
+	b := r.budgets[kind]
+	b.recent = pruneWindow(b.recent, now)
+	ruleTimes := pruneWindow(b.perRule[rule], now)
 	if len(ruleTimes) == 0 {
-		delete(r.perRule, rule)
+		delete(b.perRule, rule)
 	}
 	if len(ruleTimes) >= r.cfg.MaxPerRulePerMinute {
-		r.perRule[rule] = ruleTimes
-		*notice = fmt.Sprintf("response budget of %d per minute reached for %s", r.cfg.MaxPerRulePerMinute, reason)
-		return OutcomeRateLimited, fmt.Sprintf("%d responses by this rule in the last minute", len(ruleTimes)), ErrRateLimited
+		b.perRule[rule] = ruleTimes
+		*notice = fmt.Sprintf("%s budget of %d per minute reached for %s", b.name, r.cfg.MaxPerRulePerMinute, reason)
+		return OutcomeRateLimited, fmt.Sprintf("%d %s responses by this rule in the last minute", len(ruleTimes), b.name), ErrRateLimited
 	}
-	if len(r.recent) >= r.cfg.MaxPerMinute {
-		r.perRule[rule] = ruleTimes
-		*notice = fmt.Sprintf("global response budget of %d per minute reached (last: %s)", r.cfg.MaxPerMinute, reason)
-		return OutcomeRateLimited, fmt.Sprintf("%d responses in the last minute (all rules)", len(r.recent)), ErrRateLimited
+	if len(b.recent) >= r.cfg.MaxPerMinute {
+		b.perRule[rule] = ruleTimes
+		*notice = fmt.Sprintf("global %s budget of %d per minute reached (last: %s)", b.name, r.cfg.MaxPerMinute, reason)
+		return OutcomeRateLimited, fmt.Sprintf("%d %s responses in the last minute (all rules)", len(b.recent), b.name), ErrRateLimited
 	}
-	r.recent = append(r.recent, now)
-	r.perRule[rule] = append(ruleTimes, now)
+	b.recent = append(b.recent, now)
+	b.perRule[rule] = append(ruleTimes, now)
 	return "", "", nil
 }
 
