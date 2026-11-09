@@ -2,11 +2,11 @@
 match:
   - desc: "a Java service spawns a shell (Log4Shell style)"
     events:
-      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24101, "ppid": 24090, "exe": "/bin/sh", "name": "sh", "uid": -1, "euid": -1, "username": "www-data", "cmdline": "/bin/sh -c id", "parent": {"pid": 24000, "exe": "/usr/lib/jvm/java-17-openjdk/bin/java", "name": "java", "cmdline": "/usr/lib/jvm/java-17-openjdk/bin/java -jar app.jar"}}}
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24101, "ppid": 24000, "exe": "/bin/sh", "name": "sh", "uid": -1, "euid": -1, "username": "www-data", "cmdline": "/bin/sh -c id", "parent": {"pid": 24000, "exe": "/usr/lib/jvm/java-17-openjdk/bin/java", "name": "java", "cmdline": "/usr/lib/jvm/java-17-openjdk/bin/java -jar app.jar"}}}
 nomatch:
   - desc: "benign lookalike - jstack against the Java service"
     events:
-      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24110, "ppid": 24090, "exe": "/usr/lib/jvm/java-17-openjdk/bin/jstack", "name": "jstack", "uid": -1, "euid": -1, "username": "www-data", "cmdline": "jstack 24000", "parent": {"pid": 24000, "exe": "/usr/lib/jvm/java-17-openjdk/bin/java", "name": "java", "cmdline": "/usr/lib/jvm/java-17-openjdk/bin/java -jar app.jar"}}}
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24110, "ppid": 24000, "exe": "/usr/lib/jvm/java-17-openjdk/bin/jstack", "name": "jstack", "uid": -1, "euid": -1, "username": "www-data", "cmdline": "jstack 24000", "parent": {"pid": 24000, "exe": "/usr/lib/jvm/java-17-openjdk/bin/java", "name": "java", "cmdline": "/usr/lib/jvm/java-17-openjdk/bin/java -jar app.jar"}}}
   - desc: "a shell started from an interactive bash"
     events:
       - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24111, "ppid": 24090, "exe": "/bin/sh", "name": "sh", "uid": -1, "euid": -1, "username": "www-data", "cmdline": "/bin/sh -c id", "parent": {"pid": 24090, "exe": "/usr/bin/bash", "name": "bash"}}}

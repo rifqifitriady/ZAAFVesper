@@ -62,6 +62,24 @@ Uninstall: `systemctl disable --now zaafvesper`, then remove the files above.
 | `RestrictAddressFamilies=AF_UNIX`, `IPAddressDeny=any` | no network at all (alerts go to files). |
 | no `ProtectProc=invisible` | the sensor must see every process. |
 
+## Network outputs
+
+The unit allows no network at all, so `--syslog` and `--webhook` (SIEM and
+ZAAFElegia forwarding) do not work under it as shipped. To use them, add a
+drop-in (`systemctl edit zaafvesper`) that changes three things:
+
+```
+[Service]
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressAllow=192.0.2.10
+ReadWritePaths=/var/log/zaafvesper /var/db/zaafvesper
+```
+
+`IPAddressAllow` names only your receiver(s) (keep `IPAddressDeny=any`), and
+`/var/db/zaafvesper` holds the outputs' spool (create it with
+`install -d -m 0700 /var/db/zaafvesper`). Name resolution also needs the DNS
+server's address in `IPAddressAllow`, or use an IP address for the receiver.
+
 ## Kill response on Linux
 
 With `--enable-response`, a rule's `kill` action is carried out only when:

@@ -39,8 +39,11 @@ MemoryDenyWriteExecute=yes
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
-# No network: alerts go to files. (Add AF_INET AF_INET6 here if an output
-# that sends alerts over the network is configured.)
+# No network: alerts go to files. To use --syslog or --webhook, change all
+# three (see packaging/linux/README.md, "Network outputs"):
+#   RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+#   IPAddressAllow=<the receiver's address>   (keep IPAddressDeny=any)
+#   ReadWritePaths=/var/log/zaafvesper /var/db/zaafvesper   (the outputs' spool)
 RestrictAddressFamilies=AF_UNIX
 IPAddressDeny=any
 # Do not set ProtectProc=invisible or PrivatePIDs: the sensor must see every
