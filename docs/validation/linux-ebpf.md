@@ -1,7 +1,7 @@
 # Live validation: Linux eBPF source (no Sysmon)
 
 **In plain words:** on fresh Linux machines run by GitHub, ZAAFVesper ran as root with its own eBPF event source and no
-Sysmon installed. Its kernel programs passed all 10 live tests on both Ubuntu images, and the same harmless attack
+Sysmon installed. Its kernel programs passed all its live tests (16 after the review fixes) on both Ubuntu images, and the same harmless attack
 simulations as the Sysmon run ([linux.md](linux.md)) were replayed. **Ubuntu 24.04: 16 of 16 Linux rules fired. Ubuntu
 26.04: 13 of 16**, the same three SigmaHQ rules as with Sysmon, which look for `rm` and `cp` while Ubuntu 26.04 runs
 `gnurm` and `gnucp`; ZAAFVesper's own rules for the same behaviour still fired. No event was lost: `events_missed=0` and
@@ -11,9 +11,12 @@ simulations as the Sysmon run ([linux.md](linux.md)) were replayed. **Ubuntu 24.
 > 7.0.0-1017-azure) and `ubuntu-latest` (Ubuntu 26.04, kernel 7.0.0-1019-azure) machines. Other kernels and
 > distributions will differ; the source needs BTF (`/sys/kernel/btf/vmlinux`).
 
-**Run:** <https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42649231114> (commit `ad6913b`, workflow
-`.github/workflows/live-linux-ebpf.yml`). The committed eBPF objects were checked byte for byte against `zaaf.bpf.c` in
-run 42649231086 (workflow `.github/workflows/ebpf-objects.yml`).
+**Run:** <https://github.com/rifqifitriady/ZAAFVesper/actions/runs/42655385386> (commit `5f30f86`, after the fixes for the
+security review F1 to F6 and F10, workflow `.github/workflows/live-linux-ebpf.yml`): all 16 kernel-program tests passed on
+both images with no skip, `events_missed=0`, `seq_gaps=0`, `recursion_misses=0`; **16 of 16 rules fired on Ubuntu 24.04 and
+13 of 16 on Ubuntu 26.04**, the same as before. The committed eBPF objects were checked byte for byte against `zaaf.bpf.c`
+in run 42655385402 (workflow `.github/workflows/ebpf-objects.yml`). The per-rule tables below are from the earlier run
+42649231114 (commit `ad6913b`); the results did not change.
 
 ## What the live runs found
 
@@ -37,6 +40,12 @@ run 42649231086 (workflow `.github/workflows/ebpf-objects.yml`).
 | `TestLiveDNS` | pass | pass |
 | `TestLiveKernelModule` | pass | pass |
 | `TestLiveDropsAreCounted` | pass | pass |
+| `TestLiveCloneParentImage` (F1, run 42655385386) | pass | pass |
+| `TestLiveFilelessExec` (F2, memfd and unlinked executable) | pass | pass |
+| `TestLiveLongArgv` (F3) | pass | pass |
+| `TestLiveDeepPath` (F6) | pass | pass |
+| `TestLiveMountNamespace` (F5) | pass | pass |
+| `TestLiveConcurrentRecordsStayWhole` (F4: 600 of 600 creations seen, none missed) | pass | pass |
 
 ## Ubuntu 24.04
 
