@@ -138,6 +138,23 @@ func (fs FS) Stat(pid int32) (Stat, error) {
 	return st, nil
 }
 
+// TaskStat reads /proc/<pid>/task/<tid>/stat: one thread's stat line (its
+// start time is the thread's own).
+func (fs FS) TaskStat(pid, tid int32) (Stat, error) {
+	b, err := readBounded(filepath.Join(fs.Root, strconv.Itoa(int(pid)), "task", strconv.Itoa(int(tid)), "stat"), maxStatBytes)
+	if err != nil {
+		return Stat{}, err
+	}
+	st, err := ParseStat(b)
+	if err != nil {
+		return Stat{}, err
+	}
+	if st.PID != tid {
+		return Stat{}, fmt.Errorf("procfs: task stat of %d names %d", tid, st.PID)
+	}
+	return st, nil
+}
+
 // BootTime reads btime from /proc/stat.
 func (fs FS) BootTime() (int64, error) {
 	b, err := readBounded(filepath.Join(fs.Root, "stat"), maxProcStatSize)
@@ -209,6 +226,26 @@ func (fs FS) UIDs(pid int32) (real, effective int64, err error) {
 		}
 	}
 	return -1, -1, errors.New("procfs: no Uid line in status")
+}
+
+// Tgid returns the thread group (process) id of a task id: for a thread,
+// the process it belongs to; for a process, itself. /proc/<tid> exists for
+// every thread even though the proc root lists only processes.
+func (fs FS) Tgid(tid int32) (int32, error) {
+	b, err := readBounded(fs.pidPath(tid, "status"), maxStatusBytes)
+	if err != nil && !errors.Is(err, errTruncated) {
+		return 0, err
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if v, ok := strings.CutPrefix(line, "Tgid:"); ok {
+			n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 32)
+			if err != nil || n <= 0 {
+				break
+			}
+			return int32(n), nil
+		}
+	}
+	return 0, errors.New("procfs: no Tgid line in status")
 }
 
 // PIDs lists the numeric entries of the proc root.

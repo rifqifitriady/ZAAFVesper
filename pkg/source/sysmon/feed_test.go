@@ -73,3 +73,25 @@ func TestFeeder(t *testing.T) {
 		t.Fatal("blocked send did not return the context error")
 	}
 }
+
+// TestFeederAppliesFix: Fix sees every decoded event, before the identity
+// binding and before the event is sent (the Linux source corrects parents
+// there).
+func TestFeederAppliesFix(t *testing.T) {
+	raw := mustRead(t, "testdata/l01_process_create.xml")
+	var order []string
+	b := NewBinder(func(int32) (Stamp, error) { order = append(order, "bind"); return Stamp{}, errors.New("none") }, time.Millisecond)
+	f := NewFeeder(nil, b)
+	f.Fix = func(e *event.Event) {
+		order = append(order, "fix")
+		e.Args["fixed"] = "yes"
+	}
+	out := make(chan *event.Event, 1)
+	if err := f.Handle(context.Background(), raw, out); err != nil {
+		t.Fatal(err)
+	}
+	e := <-out
+	if e.Args["fixed"] != "yes" || len(order) != 2 || order[0] != "fix" || order[1] != "bind" {
+		t.Fatalf("order %v args %v", order, e.Args)
+	}
+}
