@@ -24,7 +24,7 @@ import (
 func TestNetOutFlagChecks(t *testing.T) {
 	ok := netOutOptions{netInterval: time.Second, syslogFacility: "local4", webhookFormat: "json",
 		spoolMaxBytes: 1, ocsfMaxBytes: 1,
-		elegia: elegiaOptions{outMax: 1, segBytes: 1, segAge: time.Second, keepBytes: 1}}
+		elegia: elegiaOptions{outMax: 1, segBytes: 4096, segAge: time.Second, keepBytes: 4096}}
 	if err := ok.check(); err != nil {
 		t.Fatal(err)
 	}
