@@ -295,3 +295,28 @@ func TestWindowsSuspendResume(t *testing.T) {
 		t.Fatal("SIGTERM accepted")
 	}
 }
+
+func TestWindowsOwnerOK(t *testing.T) {
+	u, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	acct, dom, _, err := u.User.Sid.LookupAccount("")
+	if err != nil {
+		t.Skip(err)
+	}
+	e := &event.Event{Proc: &event.Proc{Username: dom + `\` + acct}}
+	if !ownerOK(fileInfo{Owner: u.User.Sid.String()}, e) {
+		t.Fatal("own file refused")
+	}
+	if ownerOK(fileInfo{Owner: SIDAdministrators}, e) {
+		t.Fatal("Administrators-owned file accepted for a medium-integrity process")
+	}
+	e.Proc.Integrity = "High"
+	if !ownerOK(fileInfo{Owner: SIDAdministrators}, e) {
+		t.Fatal("Administrators-owned file refused for an elevated process")
+	}
+	if ownerOK(fileInfo{Owner: "S-1-5-21-1-2-3-4242"}, e) {
+		t.Fatal("another user's file accepted")
+	}
+}
