@@ -13,13 +13,21 @@ SBIN=/usr/local/sbin/zaafvesper
 OUTDIR=/var/log/zaafvesper-ci
 SPOOL=/var/db/zaafvesper/spool
 status() { printf '%s\t%s\n' "$1" "$2" >>"$ART/status.tsv"; }
+# alive_for PID SECONDS: wait up to SECONDS for PID to exit; 0 when it did.
+alive_for() {
+	local i
+	for i in $(seq 1 $(($2 * 5))); do kill -0 "$1" 2>/dev/null || return 0; sleep 0.2; done
+	return 1
+}
 
 echo "== 1. eslogger under sudo"
 sudo /usr/bin/eslogger exec >"$work/es.json" 2>"$ART/eslogger-probe.err" &
 espid=$!
 sleep 3; /usr/bin/true; sleep 1
-sudo /usr/bin/pkill -INT -x eslogger || true
-wait "$espid" || true
+# eslogger ignores SIGINT; SIGTERM stops it (as the sensor does).
+sudo /usr/bin/pkill -TERM -x eslogger || true
+alive_for "$espid" 10 || { sudo /usr/bin/pkill -KILL -x eslogger || true; }
+wait "$espid" 2>/dev/null || true
 n=$(wc -l <"$work/es.json" | tr -d ' ')
 if [ "$n" -gt 0 ]; then status eslogger "ok ($n exec events in 4 s)"; else status eslogger "blocked: $(head -c 300 "$ART/eslogger-probe.err" | tr '\n\t' '  ')"; fi
 csrutil status >>"$ART/runner.txt" 2>&1 || true; sw_vers >>"$ART/runner.txt"
@@ -76,7 +84,8 @@ sleep 1.5
 holder=$!
 echo "$nclisten $holder" >"$ART/netpoll-pids.txt"
 sleep 5
-kill "$nclisten" 2>/dev/null || true; wait "$holder" 2>/dev/null || true
+kill "$nclisten" 2>/dev/null || true
+alive_for "$holder" 10 || kill "$holder" 2>/dev/null || true
 
 echo "== 6. triggers (receivers up)"
 "$here/triggers.sh" a "$ART/triggers.tsv" "$work/a" "$BIN/dropped"
@@ -99,7 +108,14 @@ status spool_after_up "$left spool file(s) left"
 
 echo "== 9. stop the sensor"
 sudo /usr/bin/pkill -INT -f "^$SBIN run" || true
-wait "$pipe" || true
+if ! alive_for "$pipe" 30; then
+	status sensor_stop "did not stop within 30 s of SIGINT"
+	sudo /usr/bin/pkill -KILL -f "^$SBIN run" || true
+	alive_for "$pipe" 10 || kill "$pipe" 2>/dev/null || true
+else
+	status sensor_stop "stopped cleanly on SIGINT"
+fi
+wait "$pipe" 2>/dev/null || true
 kill "$(cat "$work/receiver.pid")" 2>/dev/null || true
 sudo /bin/cp -R "$OUTDIR" "$ART/outdir"
 sudo /usr/sbin/chown -R "$(id -u)" "$ART/outdir"
