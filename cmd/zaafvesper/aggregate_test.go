@@ -109,7 +109,7 @@ func TestAggregationEndToEnd(t *testing.T) {
 	}
 	for i := 0; i < 100; i++ {
 		now = t0.Add(time.Duration(i) * 500 * time.Millisecond)
-		pid := int32(3000 + i)
+		pid := awayFromOwnPIDs(int32(3000 + i))
 		exe := fmt.Sprintf("/tmp/dropper%d", i%7)
 		p.handle(&event.Event{Name: event.CreateFile, Time: now, Proc: &event.Proc{PID: pid, Exe: exe, StartTime: t0, UniqueID: uint64(pid)},
 			File: &event.File{Path: fmt.Sprintf("/Library/LaunchAgents/x%d.plist", i)}}, false)
@@ -288,4 +288,15 @@ min-engine-version: 0.1.0
 	if !strings.Contains(sink.String(), condSourcesExhausted) {
 		t.Fatalf("no SensorDegraded alert for %s in the alert file", condSourcesExhausted)
 	}
+}
+
+// awayFromOwnPIDs moves a fixed test pid off this test process's own pid
+// and its parent's, which the responder always protects. CI runners hand
+// out small pids, so one of 3000-3099 can be either; the kill would then be
+// refused as protected and the budget check would fail.
+func awayFromOwnPIDs(n int32) int32 {
+	for n == int32(os.Getpid()) || n == int32(os.Getppid()) {
+		n += 100000
+	}
+	return n
 }

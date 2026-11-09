@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -467,6 +468,9 @@ func TestClassifyStderr(t *testing.T) {
 }
 
 func TestRunRequiresRoot(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("eslogger exists only on macOS; on other systems Run returns an unsupported-OS error before the root check")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("running as root")
 	}

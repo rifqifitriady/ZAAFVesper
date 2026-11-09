@@ -1,0 +1,110 @@
+# CI: every push and pull request. Read-only token, no secrets, every action
+# pinned to a full commit SHA (the tag is in the comment).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint, test and rules (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: go vet (darwin, linux, windows)
+        run: make vet-all
+      - name: go test -race
+        # The ownership tests refuse a world-writable TMPDIR, so use a
+        # private one.
+        run: |
+          mkdir -m 0700 "$RUNNER_TEMP/gotmp"
+          TMPDIR="$RUNNER_TEMP/gotmp" go test -race -count=1 ./...
+      - name: rules validate and rules test
+        run: |
+          go build -trimpath -o "$RUNNER_TEMP/zaafvesper" ./cmd/zaafvesper
+          "$RUNNER_TEMP/zaafvesper" rules validate rules
+          "$RUNNER_TEMP/zaafvesper" rules test rules
+
+  cross:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: darwin, goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
+          - { goos: windows, goarch: amd64 }
+          - { goos: windows, goarch: arm64 }
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Build
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          go build ./...
+          go build -trimpath -o "$RUNNER_TEMP/zaafvesper-$GOOS-$GOARCH" ./cmd/zaafvesper
+
+  macos:
+    name: macOS tests and static YARA build
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: go test -race (macOS)
+        run: |
+          mkdir -m 0700 "$RUNNER_TEMP/gotmp"
+          TMPDIR="$RUNNER_TEMP/gotmp" go test -race -count=1 ./...
+      - name: Install YARA from Homebrew
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: |
+          brew install yara pkg-config
+          brew list --versions yara libmagic jansson
+          echo "BREW_PREFIX=$(brew --prefix)" >> "$GITHUB_ENV"
+      - name: Static YARA build (check-static)
+        run: make build-yara BREW_PREFIX="$BREW_PREFIX"
+      - name: make test-yara
+        run: |
+          mkdir -p "$RUNNER_TEMP/gotmp"
+          TMPDIR="$RUNNER_TEMP/gotmp" make test-yara BREW_PREFIX="$BREW_PREFIX"
+      - name: Package builds (unsigned, pure Go)
+        run: make package VERSION=0.0.0-ci
