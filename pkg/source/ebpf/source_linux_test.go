@@ -357,12 +357,12 @@ func TestLiveSetUIDExec(t *testing.T) {
 	if err := os.WriteFile(bin, data, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(bin, 0o4755); err != nil { // owned by root
+	if err := os.Chmod(bin, os.ModeSetuid|0o755); err != nil { // owned by root (Go ignores a raw 0o4000)
 		t.Fatal(err)
 	}
 	cmd := exec.Command(setpriv, "--reuid=65534", "--regid=65534", "--clear-groups", bin)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Skipf("set-uid exec not possible here (nosuid mount?): %v: %s", err, out)
+		t.Fatalf("%v: %s", err, out)
 	}
 	e := c.waitFor(t, "SetUID by exec", func(e *event.Event) bool {
 		return e.Name == event.SetUID && e.Proc.PID == int32(cmd.Process.Pid) &&
