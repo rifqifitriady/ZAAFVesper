@@ -1,0 +1,28 @@
+name: Cryptocurrency miner started
+id: 3c9e1a74-5b2d-4f60-8e17-9a4c6b2d0f81
+version: 1.0.0
+description: |
+  A process started with a mining pool URL (stratum+tcp, stratum+ssl, stratum+tls,
+  stratum2+tcp), typical miner options (--donate-level, --coin=monero, rx/0 algorithms,
+  --cpu-max-threads-hint), or from a well-known miner binary (xmrig, xmr-stak, minerd,
+  cpuminer, t-rex, nbminer, lolminer). Stolen compute is the most common payload of
+  opportunistic intrusions on every platform. Applies to macOS, Windows and Linux.
+labels:
+  tactic.id: TA0040
+  tactic.name: Impact
+  technique.id: T1496
+  technique.name: Resource Hijacking
+references:
+  - https://attack.mitre.org/techniques/T1496/
+condition: >
+  spawn_process
+  and (
+    ps.cmdline icontains ('stratum+tcp://', 'stratum+ssl://', 'stratum+tls://', 'stratum2+tcp://',
+                          '--donate-level', '--coin=monero', '--algo=rx/0', ' -a rx/0', '--cpu-max-threads-hint')
+    or ps.exe iendswith ('/xmrig', '\\xmrig.exe', '/xmr-stak', '\\xmr-stak.exe', '/minerd', '/cpuminer', '\\cpuminer.exe',
+                         '/t-rex', '\\t-rex.exe', '/nbminer', '\\nbminer.exe', '/lolminer', '\\lolminer.exe')
+  )
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) looks like a miner: %ps.cmdline"
+severity: high
+action: []
+min-engine-version: 0.1.0

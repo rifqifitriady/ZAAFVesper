@@ -1,0 +1,33 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Creation Of A Local User Account
+id: 51719bf5-e4fd-4e44-8ba8-b830e7ac0731
+version: 1.0.0
+platforms: [macos]
+description: |-
+  Detects the creation of a new user account. Such accounts may be used for persistence that do not require persistent remote access tools to be deployed on the system.
+
+  Converted from Sigma rule 51719bf5-e4fd-4e44-8ba8-b830e7ac0731 by zaafvesper sigma convert. Sigma author: Alejandro Ortuno, oscd.community.
+labels:
+  sigma.author: Alejandro Ortuno, oscd.community
+  sigma.id: 51719bf5-e4fd-4e44-8ba8-b830e7ac0731
+  sigma.level: low
+  sigma.source: rules/macos/process_creation/proc_creation_macos_create_account.yml
+  sigma.status: test
+  sigma.tags: attack.t1136.001, attack.persistence
+  sigma.title: Creation Of A Local User Account
+  tactic.id: TA0003
+  tactic.name: Persistence
+  technique.id: T1136.001
+references:
+  - https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1136.001/T1136.001.md
+  - https://ss64.com/osx/sysadminctl.html
+condition: evt.name in ('CreateProcess') and ((ps.exe iendswith '/dscl' and ps.cmdline icontains 'create') or (ps.exe iendswith '/sysadminctl' and ps.cmdline icontains 'addUser'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Alejandro Ortuno, oscd.community)'
+severity: low
+action: []
+tests:
+  atomic:
+    - 01993ba5-1da3-4e15-a719-b690d4f0f0b2
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Legitimate administration activities'

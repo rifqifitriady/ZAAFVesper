@@ -1,0 +1,20 @@
+match:
+  - desc: "ditto archive of the Keychains folder (ART T1560.001 ditto)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5101, "ppid": 4000, "exe": "/usr/bin/ditto", "name": "ditto", "args": ["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", "/Users/rifqi/Library/Keychains", "/tmp/T1560.001_ditto_archive.zip"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.ditto", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "zip --password over staged files (ART T1560.001 zip and gpg)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5102, "ppid": 4000, "exe": "/usr/bin/zip", "name": "zip", "args": ["zip", "--password", "s3cret", "/tmp/T1560/T1560.zip", "./a", "./b"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.zip", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "tar of ~/.ssh on Linux"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24501, "ppid": 24000, "exe": "/usr/bin/tar", "name": "tar", "uid": -1, "euid": -1, "username": "alice", "cmdline": "tar -czf /tmp/k.tgz /home/alice/.ssh", "args": ["tar", "-czf", "/tmp/k.tgz", "/home/alice/.ssh"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}
+nomatch:
+  - desc: "benign lookalike - zip of a source folder without a password"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5111, "ppid": 4000, "exe": "/usr/bin/zip", "name": "zip", "args": ["zip", "-r", "/Users/rifqi/Desktop/project.zip", "/Users/rifqi/code/project"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.zip", "tty": "/dev/ttys001", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "ditto copies Documents to a backup volume"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5112, "ppid": 4000, "exe": "/usr/bin/ditto", "name": "ditto", "args": ["ditto", "/Users/rifqi/Documents", "/Volumes/Backup/Documents"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.ditto", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "unzip of an archive that mentions .ssh"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5113, "ppid": 4000, "exe": "/usr/bin/unzip", "name": "unzip", "args": ["unzip", "/tmp/dotfiles.zip", "-d", "/Users/rifqi/.ssh-backup"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.unzip", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}

@@ -1,0 +1,30 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Potential Linux Process Code Injection Via DD Utility
+id: 4cad6c64-d6df-42d6-8dae-eb78defdc415
+version: 1.0.0
+platforms: [linux]
+description: |-
+  Detects the injection of code by overwriting the memory map of a Linux process using the "dd" Linux command.
+
+  Converted from Sigma rule 4cad6c64-d6df-42d6-8dae-eb78defdc415 by zaafvesper sigma convert. Sigma author: Joseph Kamau.
+labels:
+  sigma.author: Joseph Kamau
+  sigma.id: 4cad6c64-d6df-42d6-8dae-eb78defdc415
+  sigma.level: medium
+  sigma.source: rules/linux/process_creation/proc_creation_lnx_dd_process_injection.yml
+  sigma.status: test
+  sigma.tags: attack.privilege-escalation, attack.stealth, attack.t1055.009
+  sigma.title: Potential Linux Process Code Injection Via DD Utility
+  tactic.id: TA0004, TA0005
+  tactic.name: Privilege Escalation, Stealth
+  technique.id: T1055.009
+references:
+  - https://www.aon.com/cyber-solutions/aon_cyber_labs/linux-based-inter-process-code-injection-without-ptrace2/
+  - https://github.com/AonCyberLabs/Cexigua/blob/34d338620afae4c6335ba8d8d499e1d7d3d5d7b5/overwrite.sh
+condition: evt.name in ('CreateProcess') and (ps.exe iendswith '/dd' and (ps.cmdline icontains 'of=' and ps.cmdline icontains '/proc/' and ps.cmdline icontains '/mem'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Joseph Kamau)'
+severity: medium
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

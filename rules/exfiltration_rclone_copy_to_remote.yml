@@ -1,0 +1,25 @@
+name: rclone copies data to a remote
+id: 9c4e7b12-3a6d-4f85-b2e9-1d0c8a7f6e53
+version: 1.0.0
+description: |
+  rclone ran a transfer command (copy, sync, move, copyto, moveto, rcat). rclone is a
+  favourite exfiltration tool because it speaks to every cloud storage service. Some
+  people back up with it on purpose; tune with an exclusion for your own backup job.
+  Applies to every platform (rclone and rclone.exe).
+labels:
+  tactic.id: TA0010
+  tactic.name: Exfiltration
+  technique.id: T1567.002
+  technique.name: Exfiltration to Cloud Storage
+references:
+  - https://attack.mitre.org/techniques/T1567/002/
+condition: >
+  spawn_process
+  and ps.exe iendswith ('/rclone', '\\rclone.exe')
+  and ps.args in ('copy', 'sync', 'move', 'copyto', 'moveto', 'rcat')
+output: "rclone (pid %ps.pid, parent %ps.parent.exe) transferred data: %ps.cmdline"
+severity: medium
+action: []
+tests:
+  atomic: [a4b74723-5cee-4300-91c3-5e34166909b4]
+min-engine-version: 0.1.0

@@ -1,0 +1,29 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Suspicious Regsvr32 Execution From Remote Share
+id: 88a87a10-384b-4ad7-8871-2f9bf9259ce5
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects REGSVR32.exe to execute DLL hosted on remote shares
+
+  Converted from Sigma rule 88a87a10-384b-4ad7-8871-2f9bf9259ce5 by zaafvesper sigma convert. Sigma author: Nasreddine Bencherchali (Nextron Systems).
+labels:
+  sigma.author: Nasreddine Bencherchali (Nextron Systems)
+  sigma.id: 88a87a10-384b-4ad7-8871-2f9bf9259ce5
+  sigma.level: high
+  sigma.source: rules/windows/process_creation/proc_creation_win_regsvr32_remote_share.yml
+  sigma.status: test
+  sigma.tags: attack.stealth, attack.t1218.010
+  sigma.title: Suspicious Regsvr32 Execution From Remote Share
+  tactic.id: TA0005
+  tactic.name: Stealth
+  technique.id: T1218.010
+references:
+  - https://thedfirreport.com/2022/10/31/follina-exploit-leads-to-domain-compromise/
+condition: evt.name in ('CreateProcess') and ((ps.exe iendswith '\\regsvr32.exe' or ps.original_name iin ('\\REGSVR32.EXE')) and ps.cmdline icontains ' \\\\')
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Nasreddine Bencherchali (Nextron Systems))'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

@@ -1,0 +1,33 @@
+name: Sensitive folder archived or archive encrypted with a password
+id: 0b3f6c1e-7a52-4d8e-9f64-2c1a8e5d7b90
+version: 1.0.0
+platforms: [macos, linux]
+description: |
+  zip, ditto or tar archived a folder that holds secrets (Keychains, ~/.ssh, browser
+  profiles, Mail, Messages, Cookies), or zip was told to encrypt the archive with a
+  password (-e, -P, --password, --encrypt). Collecting and packing data before
+  exfiltration is the usual first half of a theft; a password hides the content from
+  inspection. Not covered: archives written by GUI apps (Finder "Compress" uses
+  Archive Utility) and 7z (see the T1486 rule).
+labels:
+  tactic.id: TA0009
+  tactic.name: Collection
+  technique.id: T1560.001
+  technique.name: Archive via Utility
+references:
+  - https://attack.mitre.org/techniques/T1560/001/
+condition: >
+  spawn_process
+  and (
+    (ps.name = 'zip' and ps.args in ('-e', '-P', '--password', '--encrypt'))
+    or (ps.name in ('zip', 'ditto', 'tar', 'gtar', 'bsdtar')
+        and ps.cmdline icontains ('/Library/Keychains', '/.ssh', '/Library/Cookies', '/Library/Messages',
+                                  '/Library/Mail', '/Library/Application Support/Google/Chrome',
+                                  '/Library/Application Support/Firefox', '/Library/Safari', '/.gnupg'))
+  )
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) archived: %ps.cmdline"
+severity: medium
+action: []
+tests:
+  atomic: [0286eb44-e7ce-41a0-b109-3da516e05a5f, 2794f321-55c4-4484-9eef-0557996f715a]
+min-engine-version: 0.1.0

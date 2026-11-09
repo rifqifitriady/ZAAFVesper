@@ -1,0 +1,33 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Suspicious History File Operations
+id: 508a9374-ad52-4789-b568-fc358def2c65
+version: 1.0.0
+platforms: [macos]
+description: |-
+  Detects commandline operations on shell history files
+
+  Converted from Sigma rule 508a9374-ad52-4789-b568-fc358def2c65 by zaafvesper sigma convert. Sigma author: Mikhail Larin, oscd.community.
+labels:
+  sigma.author: Mikhail Larin, oscd.community
+  sigma.id: 508a9374-ad52-4789-b568-fc358def2c65
+  sigma.level: medium
+  sigma.source: rules/macos/process_creation/proc_creation_macos_susp_histfile_operations.yml
+  sigma.status: test
+  sigma.tags: attack.credential-access, attack.t1552.003
+  sigma.title: Suspicious History File Operations
+  tactic.id: TA0006
+  tactic.name: Credential Access
+  technique.id: T1552.003
+references:
+  - https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1552.003/T1552.003.md
+condition: evt.name in ('CreateProcess') and (ps.cmdline icontains ('.bash_history', '.zsh_history', '.zhistory', '.history', '.sh_history', 'fish_history'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Mikhail Larin, oscd.community)'
+severity: medium
+action: []
+tests:
+  atomic:
+    - 3cfde62b-7c33-4b26-a61e-755d6131c8ce
+    - 8f2765a8-e795-438b-a102-5e25a7adcce1
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Legitimate administrative activity; Legitimate software, cleaning hist file'

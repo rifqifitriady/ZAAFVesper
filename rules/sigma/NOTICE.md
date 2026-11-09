@@ -19,7 +19,7 @@ Apache-2.0; the DRL applies to these rule files only.
 - Every alert from these rules carries the author twice: in the alert text
   ("Sigma rule by ...") and in the `sigma.author` label of the alert.
 
-**Changes made.** The detection logic is unchanged. The rule format is translated:
+**Changes made.** The detection logic is unchanged. Where an Atomic Red Team test exercises a rule, its GUID is added to `tests.atomic` from a curated map (`pkg/sigma/testdata/atomics-<platform>.yml`, `--atomics`). The rule format is translated:
 Sigma fields become ZAAFVesper fields through `pkg/sigmamap`, the log source becomes an
 `evt.name` constraint and `platforms: [macos]`, the level becomes the severity, and the
 ATT&CK tags become `technique.id` and `tactic.id` labels.
@@ -27,18 +27,24 @@ ATT&CK tags become `technique.id` and `tactic.id` labels.
 **The originals** are kept unchanged in `pkg/sigma/testdata/sigmahq/rules/macos/`. A test
 converts them again and fails if the files here differ. To regenerate:
 
-    zaafvesper sigma convert pkg/sigma/testdata/sigmahq -o rules/sigma/macos --force
+    zaafvesper sigma convert pkg/sigma/testdata/sigmahq -o rules/sigma/macos --force \
+      --atomics pkg/sigma/testdata/atomics-macos.yml
 
 | Rule | Original file (SigmaHQ) | Author |
 |---|---|---|
+| Creation Of A Local User Account | `rules/macos/process_creation/proc_creation_macos_create_account.yml` | Alejandro Ortuno, oscd.community |
 | System Integrity Protection (SIP) Disabled | `rules/macos/process_creation/proc_creation_macos_csrutil_disable.yml` | Joseliyo Sanchez, @Joseliyo_Jstnk |
 | User Added To Admin Group Via Dscl | `rules/macos/process_creation/proc_creation_macos_dscl_add_user_to_admin_group.yml` | Sohan G (D4rkCiph3r) |
 | User Added To Admin Group Via DseditGroup | `rules/macos/process_creation/proc_creation_macos_dseditgroup_add_to_admin_group.yml` | Sohan G (D4rkCiph3r) |
 | Root Account Enable Via Dsenableroot | `rules/macos/process_creation/proc_creation_macos_dsenableroot_enable_root_account.yml` | Sohan G (D4rkCiph3r) |
 | JXA In-memory Execution Via OSAScript | `rules/macos/process_creation/proc_creation_macos_jxa_in_memory_execution.yml` | Sohan G (D4rkCiph3r) |
+| MacOS Network Service Scanning | `rules/macos/process_creation/proc_creation_macos_network_service_scanning.yml` | Alejandro Ortuno, oscd.community |
 | Suspicious Microsoft Office Child Process - MacOS | `rules/macos/process_creation/proc_creation_macos_office_susp_child_processes.yml` | Sohan G (D4rkCiph3r) |
 | OSACompile Run-Only Execution | `rules/macos/process_creation/proc_creation_macos_osacompile_runonly_execution.yml` | Sohan G (D4rkCiph3r) |
 | Potential Persistence Via PlistBuddy | `rules/macos/process_creation/proc_creation_macos_persistence_via_plistbuddy.yml` | Sohan G (D4rkCiph3r) |
+| Split A File Into Pieces | `rules/macos/process_creation/proc_creation_macos_split_file_into_pieces.yml` | Igor Fits, Mikhail Larin, oscd.community |
+| Potential Discovery Activity Using Find - MacOS | `rules/macos/process_creation/proc_creation_macos_susp_find_execution.yml` | Nasreddine Bencherchali (Nextron Systems) |
+| Suspicious History File Operations | `rules/macos/process_creation/proc_creation_macos_susp_histfile_operations.yml` | Mikhail Larin, oscd.community |
 | Guest Account Enabled Via Sysadminctl | `rules/macos/process_creation/proc_creation_macos_sysadminctl_enable_guest_account.yml` | Sohan G (D4rkCiph3r) |
 | Potential Base64 Decoded From Images | `rules/macos/process_creation/proc_creation_macos_tail_base64_decode_from_image.yml` | Joseliyo Sanchez, @Joseliyo_Jstnk |
 | Time Machine Backup Deletion Attempt Via Tmutil - MacOS | `rules/macos/process_creation/proc_creation_macos_tmutil_delete_backup.yml` | Pratinav Chandra |
@@ -54,8 +60,10 @@ SigmaHQ paths, in `pkg/sigma/testdata/sigmahq-windows/` and
 `pkg/sigma/testdata/sigmahq-linux/`; `TestShippedSigmaWindowsLinuxRegenerate`
 converts them again and fails if the files here differ. To regenerate:
 
-    zaafvesper sigma convert pkg/sigma/testdata/sigmahq-windows -o rules/sigma/windows --force
-    zaafvesper sigma convert pkg/sigma/testdata/sigmahq-linux -o rules/sigma/linux --force
+    zaafvesper sigma convert pkg/sigma/testdata/sigmahq-windows -o rules/sigma/windows --force \
+      --atomics pkg/sigma/testdata/atomics-windows.yml
+    zaafvesper sigma convert pkg/sigma/testdata/sigmahq-linux -o rules/sigma/linux --force \
+      --atomics pkg/sigma/testdata/atomics-linux.yml
 
 The fixtures in `<platform>/testdata/` are hand-written (the converter does not
 generate them): at least one match and two benign lookalikes per rule.
@@ -109,16 +117,32 @@ ATT&CK tactic tag in Sigma, so `rules validate` warns that they have no
 |---|---|---|
 | Password Dumper Remote Thread in LSASS | `rules/windows/create_remote_thread/create_remote_thread_win_susp_password_dumper_lsass.yml` | Thomas Patzke |
 | Driver Load From A Temporary Directory | `rules/windows/driver_load/driver_load_win_susp_temp_use.yml` | Florian Roth (Nextron Systems) |
+| Prefetch File Deleted | `rules/windows/file/file_delete/file_delete_win_delete_prefetch.yml` | Cedric MAURUGEON |
 | LSASS Process Memory Dump Files | `rules/windows/file/file_event/file_event_win_lsass_default_dump_file_names.yml` | Florian Roth (Nextron Systems) |
 | CobaltStrike Named Pipe | `rules/windows/pipe_created/pipe_created_hktl_cobaltstrike.yml` | Florian Roth (Nextron Systems), Wojciech Lesicki |
 | Lsass Memory Dump via Comsvcs DLL | `rules/windows/process_access/proc_access_win_lsass_dump_comsvcs_dll.yml` | Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research) |
 | Boot Configuration Tampering Via Bcdedit.EXE | `rules/windows/process_creation/proc_creation_win_bcdedit_boot_conf_tamper.yml` | E.M. Anhaus (originally from Atomic Blue Detections, Endgame), oscd.community |
+| File Download Via Bitsadmin | `rules/windows/process_creation/proc_creation_win_bitsadmin_download.yml` | Michael Haag, FPT.EagleEye |
 | Suspicious File Downloaded From Direct IP Via Certutil.EXE | `rules/windows/process_creation/proc_creation_win_certutil_download_direct_ip.yml` | Nasreddine Bencherchali (Nextron Systems) |
+| CMSTP Execution Process Creation | `rules/windows/process_creation/proc_creation_win_cmstp_execution_by_creation.yml` | Nik Seetharaman |
+| Findstr GPP Passwords | `rules/windows/process_creation/proc_creation_win_findstr_gpp_passwords.yml` | frack113 |
+| HackTool - WinRM Access Via Evil-WinRM | `rules/windows/process_creation/proc_creation_win_hktl_evil_winrm.yml` | frack113 |
 | HackTool - Mimikatz Execution | `rules/windows/process_creation/proc_creation_win_hktl_mimikatz_command_line.yml` | Teymur Kheirkhabarov, oscd.community, David ANDRE (additional keywords), Tim Shelton |
+| HackTool - Rubeus Execution | `rules/windows/process_creation/proc_creation_win_hktl_rubeus.yml` | Florian Roth (Nextron Systems) |
+| MMC20 Lateral Movement | `rules/windows/process_creation/proc_creation_win_mmc_mmc20_lateral_movement.yml` | @2xxeformyshirt (Security Risk Advisors) - rule; Teymur Kheirkhabarov (idea) |
 | Remotely Hosted HTA File Executed Via Mshta.EXE | `rules/windows/process_creation/proc_creation_win_mshta_http.yml` | Nasreddine Bencherchali (Nextron Systems) |
+| Msxsl.EXE Execution | `rules/windows/process_creation/proc_creation_win_msxsl_execution.yml` | Timur Zinniatullin, oscd.community |
+| Invocation of Active Directory Diagnostic Tool (ntdsutil.exe) | `rules/windows/process_creation/proc_creation_win_ntdsutil_usage.yml` | Thomas Patzke |
+| Enumeration for Credentials in Registry | `rules/windows/process_creation/proc_creation_win_reg_enumeration_for_credentials_in_registry.yml` | frack113 |
+| Potential Tampering With RDP Related Registry Keys Via Reg.EXE | `rules/windows/process_creation/proc_creation_win_reg_rdp_keys_tamper.yml` | pH-T (Nextron Systems), @Kostastsale, TheDFIRReport |
+| Suspicious Regsvr32 Execution From Remote Share | `rules/windows/process_creation/proc_creation_win_regsvr32_remote_share.yml` | Nasreddine Bencherchali (Nextron Systems) |
 | Process Memory Dump Via Comsvcs.DLL | `rules/windows/process_creation/proc_creation_win_rundll32_process_dump_via_comsvcs.yml` | Florian Roth (Nextron Systems), Modexp, Nasreddine Bencherchali (Nextron Systems), Swachchhanda Shrawan Poudel (Nextron Systems) |
+| Potentially Suspicious Rundll32 Activity | `rules/windows/process_creation/proc_creation_win_rundll32_susp_activity.yml` | juju4, Jonhnathan Ribeiro, oscd.community, Nasreddine Bencherchali (Nextron Systems) |
 | Suspicious Eventlog Clearing or Configuration Change Activity | `rules/windows/process_creation/proc_creation_win_susp_eventlog_clear.yml` | Ecco, Daniil Yugoslavskiy, oscd.community, D3F7A5105, Swachchhanda Shrawan Poudel (Nextron Systems) |
 | Shadow Copies Deletion Using Operating Systems Utilities | `rules/windows/process_creation/proc_creation_win_susp_shadow_copies_deletion.yml` | Florian Roth (Nextron Systems), Michael Haag, Teymur Kheirkhabarov, Daniil Yugoslavskiy, oscd.community, Andreas Hunkeler (@Karneades) |
+| Psexec Execution | `rules/windows/process_creation/proc_creation_win_sysinternals_psexec_execution.yml` | omkar72 |
+| Windows Credential Manager Access via VaultCmd | `rules/windows/process_creation/proc_creation_win_vaultcmd_list_creds.yml` | frack113 |
+| WMIC Remote Command Execution | `rules/windows/process_creation/proc_creation_win_wmic_remote_execution.yml` | frack113, Nasreddine Bencherchali (Nextron Systems) |
 | Potential Credential Dumping Via LSASS SilentProcessExit Technique | `rules/windows/registry/registry_event/registry_event_silentprocessexit_lsass.yml` | Florian Roth (Nextron Systems) |
 | Bypass UAC Using Event Viewer | `rules/windows/registry/registry_set/registry_set_bypass_uac_using_eventviewer.yml` | frack113 |
 
@@ -127,15 +151,20 @@ ATT&CK tactic tag in Sigma, so `rules validate` warns that they have no
 | Rule | Original file (SigmaHQ) | Author |
 |---|---|---|
 | Linux Reverse Shell Indicator | `rules/linux/network_connection/net_connection_lnx_back_connect_shell_dev.yml` | Florian Roth (Nextron Systems) |
+| Remove Immutable File Attribute | `rules/linux/process_creation/proc_creation_lnx_chattr_immutable_removal.yml` | Nasreddine Bencherchali (Nextron Systems) |
 | Syslog Clearing or Removal Via System Utilities | `rules/linux/process_creation/proc_creation_lnx_clear_syslog.yml` | Max Altgelt (Nextron Systems), Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC |
 | Copy Passwd Or Shadow From TMP Path | `rules/linux/process_creation/proc_creation_lnx_cp_passwd_or_shadow_tmp.yml` | Joseliyo Sanchez, @Joseliyo_Jstnk |
+| Potential Linux Process Code Injection Via DD Utility | `rules/linux/process_creation/proc_creation_lnx_dd_process_injection.yml` | Joseph Kamau |
 | Potential Netcat Reverse Shell Execution | `rules/linux/process_creation/proc_creation_lnx_netcat_reverse_shell.yml` | @d4ns4n_, Nasreddine Bencherchali (Nextron Systems) |
 | Potential Perl Reverse Shell Execution | `rules/linux/process_creation/proc_creation_lnx_perl_reverse_shell.yml` | @d4ns4n_, Nasreddine Bencherchali (Nextron Systems) |
 | Potential PHP Reverse Shell | `rules/linux/process_creation/proc_creation_lnx_php_reverse_shell.yml` | @d4ns4n_ |
 | Python Reverse Shell Execution Via PTY And Socket Modules | `rules/linux/process_creation/proc_creation_lnx_python_reverse_shell.yml` | @d4ns4n_, Nasreddine Bencherchali (Nextron Systems) |
+| Disable Or Stop Services | `rules/linux/process_creation/proc_creation_lnx_services_stop_and_disable.yml` | Nasreddine Bencherchali (Nextron Systems) |
 | History File Deletion | `rules/linux/process_creation/proc_creation_lnx_susp_history_delete.yml` | Florian Roth (Nextron Systems) |
 | Linux HackTool Execution | `rules/linux/process_creation/proc_creation_lnx_susp_hktl_execution.yml` | Nasreddine Bencherchali (Nextron Systems), Georg Lauenstein (sure[secure]) |
 | Suspicious Java Children Processes | `rules/linux/process_creation/proc_creation_lnx_susp_java_children.yml` | Nasreddine Bencherchali (Nextron Systems) |
+| Touch Suspicious Service File | `rules/linux/process_creation/proc_creation_lnx_touch_susp.yml` | Joseliyo Sanchez, @Joseliyo_Jstnk |
+| User Has Been Deleted Via Userdel | `rules/linux/process_creation/proc_creation_lnx_userdel.yml` | Tuan Le (NCSGroup) |
 | Linux Webshell Indicators | `rules/linux/process_creation/proc_creation_lnx_webshell_detection.yml` | Florian Roth (Nextron Systems), Nasreddine Bencherchali (Nextron Systems) |
 
 THE RULES ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND (see the license).

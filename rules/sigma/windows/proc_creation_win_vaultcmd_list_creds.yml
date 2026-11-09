@@ -1,0 +1,32 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Windows Credential Manager Access via VaultCmd
+id: 58f50261-c53b-4c88-bd12-1d71f12eda4c
+version: 1.0.0
+platforms: [windows]
+description: |-
+  List credentials currently stored in Windows Credential Manager via the native Windows utility vaultcmd.exe
+
+  Converted from Sigma rule 58f50261-c53b-4c88-bd12-1d71f12eda4c by zaafvesper sigma convert. Sigma author: frack113.
+labels:
+  sigma.author: frack113
+  sigma.id: 58f50261-c53b-4c88-bd12-1d71f12eda4c
+  sigma.level: medium
+  sigma.source: rules/windows/process_creation/proc_creation_win_vaultcmd_list_creds.yml
+  sigma.status: test
+  sigma.tags: attack.credential-access, attack.t1555.004
+  sigma.title: Windows Credential Manager Access via VaultCmd
+  tactic.id: TA0006
+  tactic.name: Credential Access
+  technique.id: T1555.004
+references:
+  - https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1555.004/T1555.004.md#atomic-test-1---access-saved-credentials-via-vaultcmd
+condition: evt.name in ('CreateProcess') and ((ps.exe iendswith '\\VaultCmd.exe' or ps.original_name iin ('VAULTCMD.EXE')) and ps.cmdline icontains '/listcreds:')
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by frack113)'
+severity: medium
+action: []
+tests:
+  atomic:
+    - 9c2dd36d-5c8b-4b29-8d72-a11b0d5d7439
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

@@ -1,0 +1,15 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "nmap -Pn -sV over a port range (ART T1046 nmap range)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7081, "ppid": 4000, "exe": "/opt/homebrew/bin/nmap", "name": "nmap", "args": ["nmap", "-Pn", "-sV", "-p", "1-1024", "192.168.1.10"], "uid": 501, "euid": 501, "is_platform": false, "is_signed": true, "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "nc -nv connects to probe a port (ART T1046 #2)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7082, "ppid": 4000, "exe": "/usr/bin/nc", "name": "nc", "args": ["nc", "-nv", "192.168.1.10", "22"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.nc", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+nomatch:
+  - desc: "benign lookalike - nc -l listens on a port"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7091, "ppid": 4000, "exe": "/usr/bin/nc", "name": "nc", "args": ["nc", "-l", "8080"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.nc", "tty": "/dev/ttys003", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "ncat-like name in a path but another tool"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7092, "ppid": 4000, "exe": "/usr/bin/ssh", "name": "ssh", "args": ["ssh", "-p", "22", "host.example.org"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.ssh", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}

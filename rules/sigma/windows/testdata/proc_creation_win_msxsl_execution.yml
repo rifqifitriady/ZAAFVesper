@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "msxsl runs a local XSL script (ART T1220 #1)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8281, "ppid": 4000, "exe": "C:\\AtomicRedTeam\\ExternalPayloads\\msxsl.exe", "name": "msxsl.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "msxsl.exe C:\\AtomicRedTeam\\atomics\\T1220\\src\\msxslxmlfile.xml C:\\AtomicRedTeam\\atomics\\T1220\\src\\msxslscript.xsl", "args": ["msxsl.exe", "C:\\AtomicRedTeam\\atomics\\T1220\\src\\msxslxmlfile.xml", "C:\\AtomicRedTeam\\atomics\\T1220\\src\\msxslscript.xsl"], "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - wmic with /format:csv"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8291, "ppid": 4000, "exe": "C:\\Windows\\System32\\wbem\\WMIC.exe", "name": "WMIC.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "wmic process list brief /format:csv", "args": ["wmic", "process", "list", "brief", "/format:csv"], "original_name": "wmic.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "xcopy (unrelated tool)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8292, "ppid": 4000, "exe": "C:\\Windows\\System32\\xcopy.exe", "name": "xcopy.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "xcopy C:\\a C:\\b /e", "args": ["xcopy", "C:\\a", "C:\\b", "/e"], "original_name": "XCOPY.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

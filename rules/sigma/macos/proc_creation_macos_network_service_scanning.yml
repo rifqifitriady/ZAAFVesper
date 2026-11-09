@@ -1,0 +1,33 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: MacOS Network Service Scanning
+id: 84bae5d4-b518-4ae0-b331-6d4afd34d00f
+version: 1.0.0
+platforms: [macos]
+description: |-
+  Detects enumeration of local or remote network services.
+
+  Converted from Sigma rule 84bae5d4-b518-4ae0-b331-6d4afd34d00f by zaafvesper sigma convert. Sigma author: Alejandro Ortuno, oscd.community.
+labels:
+  sigma.author: Alejandro Ortuno, oscd.community
+  sigma.id: 84bae5d4-b518-4ae0-b331-6d4afd34d00f
+  sigma.level: low
+  sigma.source: rules/macos/process_creation/proc_creation_macos_network_service_scanning.yml
+  sigma.status: test
+  sigma.tags: attack.discovery, attack.t1046
+  sigma.title: MacOS Network Service Scanning
+  tactic.id: TA0007
+  tactic.name: Discovery
+  technique.id: T1046
+references:
+  - https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1046/T1046.md
+condition: evt.name in ('CreateProcess') and ((ps.exe iendswith ('/nc', '/netcat') and not (ps.cmdline regex '\\s(?:--listen\\b|-[46DdknrtuUvz]{0,10}l[46DdknrtuUvz]{0,10})')) or ps.exe iendswith ('/nmap', '/telnet'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Alejandro Ortuno, oscd.community)'
+severity: low
+action: []
+tests:
+  atomic:
+    - 515942b0-a09f-4163-a7bb-22fefb6f185f
+    - 0d5a2b03-3a26-45e4-96ae-89485b4d1f97
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Legitimate administration activities'

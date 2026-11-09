@@ -1,0 +1,35 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Msxsl.EXE Execution
+id: 9e50a8b3-dd05-4eb8-9153-bdb6b79d50b0
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects the execution of the MSXSL utility. This can be used to execute Extensible Stylesheet Language (XSL) files. These files are commonly used to describe the processing and rendering of data within XML files.
+  Adversaries can abuse this functionality to execute arbitrary files while potentially bypassing application whitelisting defenses.
+
+  Converted from Sigma rule 9e50a8b3-dd05-4eb8-9153-bdb6b79d50b0 by zaafvesper sigma convert. Sigma author: Timur Zinniatullin, oscd.community.
+labels:
+  sigma.author: Timur Zinniatullin, oscd.community
+  sigma.id: 9e50a8b3-dd05-4eb8-9153-bdb6b79d50b0
+  sigma.level: medium
+  sigma.source: rules/windows/process_creation/proc_creation_win_msxsl_execution.yml
+  sigma.status: test
+  sigma.tags: attack.stealth, attack.t1220
+  sigma.title: Msxsl.EXE Execution
+  tactic.id: TA0005
+  tactic.name: Stealth
+  technique.id: T1220
+references:
+  - https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1220/T1220.md
+  - https://lolbas-project.github.io/lolbas/OtherMSBinaries/Msxsl/
+condition: evt.name in ('CreateProcess') and (ps.exe iendswith '\\msxsl.exe')
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Timur Zinniatullin, oscd.community)'
+severity: medium
+action: []
+tests:
+  atomic:
+    - ca23bfb2-023f-49c5-8802-e66997de462d
+    - a7c3ab07-52fb-49c8-ab6d-e9c6d4a0a985
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Msxsl is not installed by default and is deprecated, so unlikely on most systems.'

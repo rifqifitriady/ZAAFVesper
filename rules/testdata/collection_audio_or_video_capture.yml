@@ -1,0 +1,17 @@
+match:
+  - desc: "osascript starts a QuickTime audio recording (ART T1123 #1)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 6101, "ppid": 4000, "exe": "/usr/bin/osascript", "name": "osascript", "args": ["osascript", "-e", "on run argv\n tell application \"Quicktime Player\"\n start (new audio recording)\n end tell\nend run", "/tmp/T1123.m4a", "5"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.osascript", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "ffmpeg records the camera"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 6102, "ppid": 4000, "exe": "/opt/homebrew/bin/ffmpeg", "name": "ffmpeg", "args": ["ffmpeg", "-f", "avfoundation", "-framerate", "30", "-i", "0", "-t", "10", "/tmp/.v.mp4"], "uid": 501, "euid": 501, "is_platform": false, "is_signed": true, "parent": {"pid": 4000, "exe": "/usr/bin/python3", "name": "python3", "is_platform": true, "is_signed": true}}}
+nomatch:
+  - desc: "benign lookalike - ffmpeg converts a video file"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 6111, "ppid": 4000, "exe": "/opt/homebrew/bin/ffmpeg", "name": "ffmpeg", "args": ["ffmpeg", "-i", "talk.mov", "talk.mp4"], "uid": 501, "euid": 501, "is_platform": false, "is_signed": true, "tty": "/dev/ttys001", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "osascript opens a file in QuickTime"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 6112, "ppid": 4000, "exe": "/usr/bin/osascript", "name": "osascript", "args": ["osascript", "-e", "tell application \"QuickTime Player\" to open POSIX file \"/Users/rifqi/Movies/a.mov\""], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.osascript", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "screencapture of the screen (different technique)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 6113, "ppid": 4000, "exe": "/usr/sbin/screencapture", "name": "screencapture", "args": ["screencapture", "-i", "/tmp/s.png"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.screencapture", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}

@@ -1,0 +1,17 @@
+match:
+  - desc: "shell rewrites authorized_keys (ART T1098.004 #1)"
+    events:
+      - {"name": "WriteFile", "platform": "macos", "proc": {"pid": 5100, "ppid": 4000, "exe": "/bin/bash", "name": "bash", "uid": 501, "euid": 501, "is_platform": true, "signing_id": "com.apple.bash"}, "file": {"path": "/Users/rifqi/.ssh/authorized_keys"}}
+  - desc: "curl drops a key file on Linux"
+    events:
+      - {"name": "CreateFile", "platform": "linux", "proc": {"pid": 24507, "ppid": 4000, "exe": "/usr/bin/curl", "name": "curl", "uid": -1, "euid": -1}, "file": {"path": "/root/.ssh/authorized_keys"}}
+nomatch:
+  - desc: "benign lookalike - vim edits authorized_keys"
+    events:
+      - {"name": "WriteFile", "platform": "macos", "proc": {"pid": 5100, "ppid": 4000, "exe": "/usr/bin/vim", "name": "vim", "uid": 501, "euid": 501, "is_platform": true, "signing_id": "com.apple.vim"}, "file": {"path": "/Users/rifqi/.ssh/authorized_keys"}}
+  - desc: "ssh updates known_hosts"
+    events:
+      - {"name": "WriteFile", "platform": "macos", "proc": {"pid": 5100, "ppid": 4000, "exe": "/usr/bin/ssh", "name": "ssh", "uid": 501, "euid": 501, "is_platform": true, "signing_id": "com.apple.ssh"}, "file": {"path": "/Users/rifqi/.ssh/known_hosts"}}
+  - desc: "a backup copy named authorized_keys.bak"
+    events:
+      - {"name": "CreateFile", "platform": "linux", "proc": {"pid": 24512, "ppid": 4000, "exe": "/usr/bin/cp", "name": "cp", "uid": -1, "euid": -1}, "file": {"path": "/home/alice/.ssh/authorized_keys.bak"}}

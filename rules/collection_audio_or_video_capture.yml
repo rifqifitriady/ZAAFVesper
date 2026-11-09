@@ -1,0 +1,30 @@
+name: Microphone or camera recorded from the command line
+id: 6a2c8e17-9f4b-4d35-b7e0-1c3d5a9f8e42
+version: 1.0.0
+platforms: [macos]
+description: |
+  ffmpeg captured from an AVFoundation device (-f avfoundation), imagesnap or videosnap
+  took a camera picture or video, or osascript made QuickTime Player start a new audio
+  or movie recording. Spyware records the microphone and camera this way. TCC still asks
+  the user the first time unless access was already granted to the parent app.
+labels:
+  tactic.id: TA0009
+  tactic.name: Collection
+  technique.id: T1123, T1125
+  technique.name: Audio Capture; Video Capture
+references:
+  - https://attack.mitre.org/techniques/T1123/
+  - https://attack.mitre.org/techniques/T1125/
+condition: >
+  spawn_process
+  and (
+    (base(ps.exe) iin ('ffmpeg') and ps.args = 'avfoundation')
+    or ps.name in ('imagesnap', 'videosnap')
+    or (ps.name = 'osascript' and ps.cmdline icontains ('new audio recording', 'new movie recording'))
+  )
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) recorded audio or video: %ps.cmdline"
+severity: medium
+action: []
+tests:
+  atomic: [c7a0bb71-70ce-4a53-b115-881f241b795b]
+min-engine-version: 0.1.0

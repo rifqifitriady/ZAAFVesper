@@ -1,0 +1,35 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: WMIC Remote Command Execution
+id: 7773b877-5abb-4a3e-b9c9-fd0369b59b00
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects the execution of WMIC to query information on a remote system
+
+  Converted from Sigma rule 7773b877-5abb-4a3e-b9c9-fd0369b59b00 by zaafvesper sigma convert. Sigma author: frack113, Nasreddine Bencherchali (Nextron Systems).
+labels:
+  sigma.author: frack113, Nasreddine Bencherchali (Nextron Systems)
+  sigma.id: 7773b877-5abb-4a3e-b9c9-fd0369b59b00
+  sigma.level: medium
+  sigma.source: rules/windows/process_creation/proc_creation_win_wmic_remote_execution.yml
+  sigma.status: test
+  sigma.tags: attack.execution, attack.t1047
+  sigma.title: WMIC Remote Command Execution
+  tactic.id: TA0002
+  tactic.name: Execution
+  technique.id: T1047
+references:
+  - https://securelist.com/moonbounce-the-dark-side-of-uefi-firmware/105468/
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wmic
+condition: evt.name in ('CreateProcess') and (((ps.exe iendswith '\\WMIC.exe' or ps.original_name iin ('wmic.exe')) and ps.cmdline icontains ('-node:', '/node:', '–node:', '—node:', '―node:')) and not (ps.cmdline icontains ('localhost', '127.0.0.1')))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by frack113, Nasreddine Bencherchali (Nextron Systems))'
+severity: medium
+action: []
+tests:
+  atomic:
+    - 9c8ef159-c666-472f-9874-90c8d60d136b
+    - 00738d2a-4651-4d76-adf2-c43a41dfb243
+    - 0fd48ef7-d890-4e93-a533-f7dedd5191d3
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

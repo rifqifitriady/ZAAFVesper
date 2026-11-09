@@ -1,10 +1,15 @@
-# ZAAFVesper built-in rules (macOS)
+# ZAAFVesper built-in rules
 
-46 hand-written behaviour rules, 12 rules converted from SigmaHQ (see
-[Sigma import](#sigma-import)), 5 YARA signatures and two shared macro files (`macros.yml`, `network.yml`). Every
-hand-written rule maps to one MITRE ATT&CK technique, has a fixture file with at least one `match` and two `nomatch`
-scenarios (one of them a realistic benign lookalike), and, where Atomic Red Team ships a
-macOS test for the behaviour, lists that test's GUID in `tests.atomic`.
+133 rules: 58 hand-written rules in `rules/` (macOS, some of them also Linux or every
+platform), 12 hand-written Windows and Linux rules in `rules/windows/` and `rules/linux/`,
+and 63 rules converted from SigmaHQ (17 macOS, 30 Windows, 16 Linux; see
+[Sigma import](#sigma-import)). Also 5 YARA signatures and two shared macro files
+(`macros.yml`, `network.yml`). Together they cover **109 ATT&CK techniques** (see
+[Coverage and benchmark](#coverage-and-benchmark)). Every hand-written rule maps to one
+MITRE ATT&CK technique (two where one command line serves both, such as audio and video
+capture), has a fixture file with at least one `match` and two `nomatch` scenarios (one of
+them a realistic benign lookalike), and, where Atomic Red Team ships a test for the
+behaviour on the rule's platforms, lists that test's GUID in `tests.atomic`.
 
 ATT&CK IDs follow the data bundled with the Atomic Red Team checkout used for this work
 (`atomic_red_team/enterprise-attack.json`). That release renamed TA0005 to **Stealth**,
@@ -25,7 +30,7 @@ file: not revoked, name identical, tactic is one of the technique's tactics.
 
 ## Sigma import
 
-`zaafvesper sigma convert <sigma dir|file> -o <rules dir> [--report report.json] [--force]`
+`zaafvesper sigma convert <sigma dir|file> -o <rules dir> [--report report.json] [--force] [--atomics map.yml]`
 converts Sigma rules (Sigma 2.1 rule format) into ZAAFVesper rules. A rule is converted only
 when ZAAFVesper can express it exactly; anything else is skipped with a reason. The one
 deliberate narrowing is keyword searches, which look in the category's mapped string
@@ -119,7 +124,7 @@ with at least one `match` and two `nomatch` scenarios. The converter does not ge
 fixtures, because fixtures written from the rule itself would prove nothing. The fixture
 requirement is unchanged.
 
-**Shipped converted rules (`rules/sigma/macos/`).** 12 SigmaHQ macOS rules, chosen because
+**Shipped converted rules (`rules/sigma/macos/`).** 17 SigmaHQ macOS rules, chosen because
 they use only fields ZAAFVesper's eslogger source reports (image, command line, parent
 image) and their logic holds on real macOS argument shapes. Each has hand-written
 fixtures. Their originals are in `pkg/sigma/testdata/sigmahq/` and a test checks the
@@ -134,29 +139,104 @@ Enable Via Dsenableroot" excludes ` -d ` with surrounding spaces, so a bare
 `dsenableroot -d` (which disables root) still fires; its fixture shows this.
 
 **Shipped converted rules for Windows and Linux (`rules/sigma/windows/`, `rules/sigma/linux/`).**
-14 Windows and 11 Linux SigmaHQ rules for the Sysmon sources, chosen because they use
+30 Windows and 16 Linux SigmaHQ rules for the Sysmon sources, chosen because they use
 only fields the Sysmon decoder fills on that platform. Hand-written fixtures; originals in
 `pkg/sigma/testdata/sigmahq-windows/` and `-linux/`, checked the same way. Selection and
 exclusions: [`rules/sigma/NOTICE.md`](../rules/sigma/NOTICE.md).
 
 | Rule (file) | Tactic | Technique | Severity | Sigma author |
 |---|---|---|---|---|
+| Creation Of A Local User Account<br>`proc_creation_macos_create_account.yml` | Persistence | T1136.001 | low | Alejandro Ortuno, oscd.community |
 | System Integrity Protection (SIP) Disabled<br>`proc_creation_macos_csrutil_disable.yml` | Discovery | T1518.001 | medium | Joseliyo Sanchez, @Joseliyo_Jstnk |
 | User Added To Admin Group Via Dscl<br>`proc_creation_macos_dscl_add_user_to_admin_group.yml` | Initial Access, Persistence, Privilege Escalation, Stealth | T1078.003 | medium | Sohan G (D4rkCiph3r) |
 | User Added To Admin Group Via DseditGroup<br>`proc_creation_macos_dseditgroup_add_to_admin_group.yml` | Initial Access, Persistence, Privilege Escalation, Stealth | T1078.003 | medium | Sohan G (D4rkCiph3r) |
 | Root Account Enable Via Dsenableroot<br>`proc_creation_macos_dsenableroot_enable_root_account.yml` | Initial Access, Persistence, Privilege Escalation, Stealth | T1078, T1078.001, T1078.003 | medium | Sohan G (D4rkCiph3r) |
 | JXA In-memory Execution Via OSAScript<br>`proc_creation_macos_jxa_in_memory_execution.yml` | Execution | T1059.002, T1059.007 | high | Sohan G (D4rkCiph3r) |
+| MacOS Network Service Scanning<br>`proc_creation_macos_network_service_scanning.yml` | Discovery | T1046 | low | Alejandro Ortuno, oscd.community |
 | Suspicious Microsoft Office Child Process - MacOS<br>`proc_creation_macos_office_susp_child_processes.yml` | Execution, Persistence | T1059.002, T1137.002, T1204.002 | high | Sohan G (D4rkCiph3r) |
 | OSACompile Run-Only Execution<br>`proc_creation_macos_osacompile_runonly_execution.yml` | Execution | T1059.002 | high | Sohan G (D4rkCiph3r) |
 | Potential Persistence Via PlistBuddy<br>`proc_creation_macos_persistence_via_plistbuddy.yml` | Persistence, Privilege Escalation | T1543.001, T1543.004 | high | Sohan G (D4rkCiph3r) |
+| Split A File Into Pieces<br>`proc_creation_macos_split_file_into_pieces.yml` | Exfiltration | T1030 | low | Igor Fits, Mikhail Larin, oscd.community |
+| Potential Discovery Activity Using Find - MacOS<br>`proc_creation_macos_susp_find_execution.yml` | Discovery | T1083 | medium | Nasreddine Bencherchali (Nextron Systems) |
+| Suspicious History File Operations<br>`proc_creation_macos_susp_histfile_operations.yml` | Credential Access | T1552.003 | medium | Mikhail Larin, oscd.community |
 | Guest Account Enabled Via Sysadminctl<br>`proc_creation_macos_sysadminctl_enable_guest_account.yml` | Initial Access, Persistence, Privilege Escalation, Stealth | T1078, T1078.001 | low | Sohan G (D4rkCiph3r) |
 | Potential Base64 Decoded From Images<br>`proc_creation_macos_tail_base64_decode_from_image.yml` | Stealth | T1140 | high | Joseliyo Sanchez, @Joseliyo_Jstnk |
 | Time Machine Backup Deletion Attempt Via Tmutil - MacOS<br>`proc_creation_macos_tmutil_delete_backup.yml` | Impact | T1490 | medium | Pratinav Chandra |
 | Time Machine Backup Disabled Via Tmutil - MacOS<br>`proc_creation_macos_tmutil_disable_backup.yml` | Impact | T1490 | medium | Pratinav Chandra |
 
-These rules keep SigmaHQ's ATT&CK tags. Unlike the hand-written rules, their technique
-and tactic IDs were not checked against the bundled `enterprise-attack.json` (only the
-revoked IDs listed above are rewritten), and no atomic test has been run against them.
+These rules keep SigmaHQ's ATT&CK tags (only the revoked IDs listed above are rewritten).
+Since v0.4 the CI coverage job checks every rule's technique and tactic IDs against the
+same `enterprise-attack.json` and fails on an unknown, revoked or deprecated ID; four
+converted rules carry a tactic tag that ATT&CK does not list for their techniques (an
+Execution tag on a Stealth or Lateral Movement technique), reported as warnings. Atomic
+tests are linked where one exercises the rule (`--atomics`, below), but none has been run
+against the sensor.
+
+**Atomic tests for converted rules.** `zaafvesper sigma convert --atomics map.yml` adds
+Atomic Red Team GUIDs to `tests.atomic`. The map is YAML, Sigma rule id to a list of GUIDs,
+read strictly (GUIDs only); an entry whose Sigma id matches no input rule is an error. The
+shipped maps are `pkg/sigma/testdata/atomics-macos.yml`, `-windows.yml` and `-linux.yml`;
+they list only tests whose command lines match the rule's condition.
+
+## Coverage and benchmark
+
+**Coverage (v0.4, 9 Nov 2026).** 133 enabled rules cover **109 ATT&CK techniques**, up
+from 63 before v0.4: 61 on macOS, 43 on Windows and 27 on Linux (a rule without
+`platforms:` counts for every platform). Techniques per tactic, thinnest first:
+
+| Tactic | Techniques | | Tactic | Techniques |
+|---|:-:|---|---|:-:|
+| Resource Development | 1 | | Impact | 11 |
+| Exfiltration | 3 | | Lateral Movement | 11 |
+| Initial Access | 3 | | Privilege Escalation | 13 |
+| Discovery | 4 | | Execution | 18 |
+| Collection | 5 | | Credential Access | 20 |
+| Command and Control | 6 | | Stealth | 24 |
+| Defense Impairment | 10 | | Persistence | 28 |
+
+67 of the 133 rules link at least one Atomic Red Team test. The other 66 are listed by the
+report; most are converted SigmaHQ rules for tools that have no atomic (hacktools, malware
+families) or hand-written rules for behaviour no atomic exercises.
+
+What v0.4 added, thinnest tactics first:
+
+- **macOS, hand-written (rules 47–58):** Exfiltration (plain-text curl/wget upload,
+  rclone), Lateral Movement (Remote Login, Screen Sharing or ARD enabled), Impact (file
+  encryption, dd overwrite and disk erase, scripted shutdown, account deletion,
+  crypto miners), Collection (sensitive-folder or password archives, background clipboard
+  reads, audio and video capture), and SSH `authorized_keys` writes. Several also run on
+  Linux, and the miner and rclone rules on every platform.
+- **Linux:** a hand-written `/etc/shadow` reader rule, and converted SigmaHQ rules for
+  immutable-flag removal, `/proc/<pid>/mem` writes with dd, services stopped or disabled,
+  backdated systemd units and `userdel`.
+- **Windows (converted SigmaHQ):** credential access (ntdsutil, Rubeus, VaultCmd,
+  registry and GPP password searches), lateral movement (MMC20 over DCOM, RDP registry
+  changes, remote WMIC, PsExec, evil-winrm) and defense evasion (rundll32, regsvr32 from a
+  share, cmstp children, BITS downloads, msxsl, prefetch deletion).
+- **Left out on purpose:** the SigmaHQ macOS discovery rules for `netstat`, `arp`, `id`,
+  `w`, `last`, `tcpdump` and similar (informational and very noisy), the SigmaHQ macOS
+  binary-padding rule (it matches any `dd if=/dev/zero`) and its timestomp rule (it
+  matches `-d` anywhere in the command line). Discovery stays thin by choice.
+
+**Report.** `zaafvesper coverage --report [--attack enterprise-attack.json] [--json]`
+prints techniques per platform and per tactic and the rules without an atomic test. With
+`--attack` it also checks every rule's technique and tactic IDs against an ATT&CK STIX
+bundle and exits 1 on an unknown, revoked or deprecated ID (a tactic tag that is not one of
+the rule's techniques' tactics is a warning). The CI job "ATT&CK coverage and rule
+benchmark" downloads the bundle shipped with Atomic Red Team at commit `a0e3f9bc`, checks
+its SHA-256, runs the report and writes it to the job summary. Result on this branch: 0
+problems, 4 warnings (converted SigmaHQ tags).
+
+**Benchmark.** `go test -run '^$' -bench BenchmarkShippedRules -benchtime 3s ./cmd/zaafvesper`
+runs the rule engine with all 133 rules enabled (every platform) over the 664 events of all
+fixture scenarios, in a loop, on one goroutine. On an Apple M4 (Go 1.27.3) it processes
+about **77 000 events per second** (12.9 µs per event, 227 allocations); before v0.4, with
+94 rules, it was about 153 000. A CPU profile shows about a third of the time in rule
+evaluation, mostly lower-casing for `icontains`, and the rest in allocation and garbage
+collection; no single rule dominates. The CI job runs the same benchmark on GitHub's
+`ubuntu-latest` runner and prints its number in the job summary. Limits: this measures the
+engine only (no eslogger decoding, process table, YARA or output sinks), on fixture events
+rather than a live event mix, and a real sensor loads only its own platform's rules.
 
 ## Network rules (42–44)
 
@@ -220,11 +300,25 @@ Seq = sequence rule. Action = response taken only when ZAAFVesper runs with `--e
 | 44 | Script interpreter connects to a public IP on an uncommon port<br>`rules/network_interpreter_raw_ip_uncommon_port.yml` | TA0011 Command and Control | T1571 Non-Standard Port | medium |  |  | (none indexed for this technique) |
 | 45 | Quarantine attribute removed by an untrusted process<br>`rules/defense_impairment_quarantine_attribute_removed_by_untrusted_process.yml` | TA0112 Defense Impairment | T1553.001 Gatekeeper Bypass | high |  | requarantine | (none indexed for this technique) |
 | 46 | Launch Agent or Daemon written by an untrusted process<br>`rules/persistence_launch_item_plist_by_untrusted_process.yml` | TA0003 Persistence | T1543.001 Launch Agent, T1543.004 Launch Daemon | high |  | remove_persistence | (none indexed for this technique) |
+| 47 | Sensitive folder archived or archive encrypted with a password (macos, linux)<br>`rules/collection_archive_sensitive_or_encrypted.yml` | TA0009 Collection | T1560.001 Archive via Utility | medium |  |  | `0286eb44-e7ce-41a0-b109-3da516e05a5f`<br>`2794f321-55c4-4484-9eef-0557996f715a` |
+| 48 | Microphone or camera recorded from the command line (macos)<br>`rules/collection_audio_or_video_capture.yml` | TA0009 Collection | T1123 Audio Capture, T1125 Video Capture | medium |  |  | `c7a0bb71-70ce-4a53-b115-881f241b795b` |
+| 49 | Clipboard read by a script without a terminal (macos)<br>`rules/collection_clipboard_read_by_script.yml` | TA0009 Collection | T1115 Clipboard Data | medium |  |  | `1ac2247f-65f8-4051-b51f-b0ccdfaaa5ff` |
+| 50 | File uploaded with curl or wget over unencrypted HTTP or FTP (macos, linux)<br>`rules/exfiltration_upload_over_plain_http_or_ftp.yml` | TA0010 Exfiltration | T1048.003 Exfiltration Over Unencrypted Non-C2 Protocol | medium |  |  | (none indexed for this behaviour) |
+| 51 | rclone copies data to a remote (all)<br>`rules/exfiltration_rclone_copy_to_remote.yml` | TA0010 Exfiltration | T1567.002 Exfiltration to Cloud Storage | medium |  |  | `a4b74723-5cee-4300-91c3-5e34166909b4` |
+| 52 | User account deleted or its password reset with dscl or sysadminctl (macos)<br>`rules/impact_account_deleted_or_password_reset.yml` | TA0040 Impact | T1531 Account Access Removal | medium |  |  | `4d938c43-2fe8-4d70-a5b3-5bf239aa7846`<br>`d3812c4e-30ee-466a-a0aa-07e355b561d6` |
+| 53 | Cryptocurrency miner started (all)<br>`rules/impact_cryptocurrency_miner.yml` | TA0040 Impact | T1496 Resource Hijacking | high |  |  | (none indexed for this behaviour) |
+| 54 | File or disk overwritten with dd, or disk erased with diskutil (macos, linux)<br>`rules/impact_data_destruction_overwrite_or_disk_erase.yml` | TA0040 Impact | T1485 Data Destruction, T1561.001 Disk Content Wipe | high |  |  | `38deee99-fd65-4031-bec8-bfa4f9f26146` |
+| 55 | Files encrypted with openssl, gpg or 7z from the command line (macos, linux)<br>`rules/impact_file_encryption_with_cli_tool.yml` | TA0040 Impact | T1486 Data Encrypted for Impact | medium |  |  | `645f0f5a-ef09-48d8-b9bc-f0e24c642d72`<br>`1a01f6b8-b1e8-418e-bbe3-78a6f822759e` |
+| 56 | Shutdown or reboot run without a terminal (macos, linux)<br>`rules/impact_shutdown_or_reboot_without_terminal.yml` | TA0040 Impact | T1529 System Shutdown/Reboot | low |  |  | `6326dbc4-444b-4c04-88f4-27e94d0327cb`<br>`4963a81e-a3ad-4f02-adda-812343b351de`<br>`47d0b042-a918-40ab-8cf9-150ffe919027`<br>`918f70ab-e1ef-49ff-bc57-b27021df84dd`<br>`78f92e14-f1e9-4446-b3e9-f1b921f2459e`<br>`73a90cd2-48a2-4ac5-8594-2af35fa909fa`<br>`61303105-ff60-427b-999e-efb90b314e41` |
+| 57 | Remote Login, Screen Sharing or Apple Remote Desktop enabled from the command line (macos)<br>`rules/lateral_movement_remote_access_enabled.yml` | TA0008 Lateral Movement | T1021.005 VNC, T1021.004 SSH | medium |  |  | `8a930abe-841c-4d4f-a877-72e9fe90b9ea` |
+| 58 | SSH authorized_keys written by a non-editor process (macos, linux)<br>`rules/persistence_ssh_authorized_keys_written.yml` | TA0003 Persistence, TA0004 Privilege Escalation | T1098.004 SSH Authorized Keys | high |  |  | `342cc723-127c-4d3a-8292-9c0c6b4ecadc` |
 
-Totals: 46 rules, 4 sequence rules, 28 rules with at least one macOS atomic indexed under the rule's own technique (59 GUIDs), 4 rules with response actions (see [operations.md](operations.md#response)). Every action needs `--enable-response` and happens after the event: none of them prevents anything.
+Totals: 58 rules, 4 sequence rules, 38 rules with at least one atomic indexed under the rule's own technique (78 GUIDs; rules that also run on Linux list the Linux atomics too), 4 rules with response actions (see [operations.md](operations.md#response)). Every action needs `--enable-response` and happens after the event: none of them prevents anything.
 
-`tests.atomic` lists only GUIDs that `atomics/Indexes/Indexes-CSV/macos-index.csv` files
-under the rule's own technique (or its parent). Atomics filed under another technique that
+`tests.atomic` lists only GUIDs that `atomics/Indexes/Indexes-CSV/<platform>-index.csv` files
+under the rule's own technique (or its parent), and only tests whose command lines match the
+rule's condition (rules 47–58 were checked against the atomic YAML at Atomic Red Team commit
+`a0e3f9bc69fed2fd711bd1f1aa87a40c33482fe6`). Atomics filed under another technique that
 also exercise a rule are cited in that rule's `references` instead, as
 "atomic <guid> (indexed <technique>) also exercises this behaviour":
 `d0c88567` (T1059.004) on the T1105 download-then-shell sequence; `3a15c372` (T1140) on the
@@ -553,7 +647,7 @@ Hand-written starters for the Sysmon sources, each with `platforms:`, one or mor
 tactics were checked against the same `enterprise-attack.json` as the macOS rules;
 the Atomic Red Team GUIDs were checked in that checkout (test name and platform).
 The fixtures are hand-written from Sysmon's documented fields, not captured from a
-live host. Converted SigmaHQ rules for Windows (14) and Linux (11) are in `rules/sigma/windows/`
+live host. Converted SigmaHQ rules for Windows (30) and Linux (16) are in `rules/sigma/windows/`
 and `rules/sigma/linux/`; how they were chosen and what was left out is in
 [`rules/sigma/NOTICE.md`](../rules/sigma/NOTICE.md).
 
@@ -570,6 +664,7 @@ and `rules/sigma/linux/`; how they were chosen and what was left out is in
 | Sudoers file created outside visudo<br>`rules/linux/privilege_escalation_sudoers_file_write.yml` | TA0004 Privilege Escalation | T1548.003 Sudo and Sudo Caching | high | (the Atomic tests edit with sed -i: a rename, which Sysmon for Linux does not report as FileCreate of sudoers) |
 | Shell history file deleted<br>`rules/linux/stealth_shell_history_deleted.yml` | TA0005 Stealth | T1070.003 Clear Command History | medium | `a934276e-2be5-4a36-93fd-98adbb5bd4fc` |
 | Interactive shell redirected to a network socket<br>`rules/linux/execution_reverse_shell_dev_tcp.yml` | TA0002 Execution | T1059.004 Unix Shell | critical | (none for this pattern) |
+| /etc/shadow read with a file or text tool<br>`rules/linux/credential_access_shadow_read_by_tool.yml` | TA0006 Credential Access | T1003.008 /etc/passwd and /etc/shadow | high | `3723ab77-c546-403c-8fb4-bb577033b235`<br>`df1a55ae-019d-4120-bc35-94f4bc5c4b0a` |
 
 Field notes for Sysmon events: `ps.uid` is -1 (Sysmon reports a user name, in
 `ps.username`); `ps.original_name` is the PE original file name, which survives a

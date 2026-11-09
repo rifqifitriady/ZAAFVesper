@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "chattr -i removes the immutable flag (ART T1222.002 chattr)"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 25001, "ppid": 24000, "exe": "/usr/bin/chattr", "name": "chattr", "uid": -1, "euid": -1, "username": "root", "cmdline": "chattr -i /var/spool/cron/crontabs/root", "args": ["chattr", "-i", "/var/spool/cron/crontabs/root"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}
+nomatch:
+  - desc: "benign lookalike - chattr +i makes a file immutable"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 25011, "ppid": 24000, "exe": "/usr/bin/chattr", "name": "chattr", "uid": -1, "euid": -1, "username": "root", "cmdline": "chattr +i /etc/resolv.conf", "args": ["chattr", "+i", "/etc/resolv.conf"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "lsattr lists attributes"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 25012, "ppid": 24000, "exe": "/usr/bin/lsattr", "name": "lsattr", "uid": -1, "euid": -1, "username": "root", "cmdline": "lsattr -i /etc/passwd", "args": ["lsattr", "-i", "/etc/passwd"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}

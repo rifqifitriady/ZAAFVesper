@@ -1,0 +1,33 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: HackTool - WinRM Access Via Evil-WinRM
+id: a197e378-d31b-41c0-9635-cfdf1c1bb423
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Adversaries may use Valid Accounts to log into a computer using the Remote Desktop Protocol (RDP). The adversary may then perform actions as the logged-on user.
+
+  Converted from Sigma rule a197e378-d31b-41c0-9635-cfdf1c1bb423 by zaafvesper sigma convert. Sigma author: frack113.
+labels:
+  sigma.author: frack113
+  sigma.id: a197e378-d31b-41c0-9635-cfdf1c1bb423
+  sigma.level: medium
+  sigma.source: rules/windows/process_creation/proc_creation_win_hktl_evil_winrm.yml
+  sigma.status: test
+  sigma.tags: attack.lateral-movement, attack.t1021.006
+  sigma.title: HackTool - WinRM Access Via Evil-WinRM
+  tactic.id: TA0008
+  tactic.name: Lateral Movement
+  technique.id: T1021.006
+references:
+  - https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1021.006/T1021.006.md#atomic-test-3---winrm-access-with-evil-winrm
+  - https://github.com/Hackplayers/evil-winrm
+condition: evt.name in ('CreateProcess') and (ps.exe iendswith '\\ruby.exe' and (ps.cmdline icontains '-i ' and ps.cmdline icontains '-u ' and ps.cmdline icontains '-p '))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by frack113)'
+severity: medium
+action: []
+tests:
+  atomic:
+    - efe86d95-44c4-4509-ae42-7bfd9d1f5b3d
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

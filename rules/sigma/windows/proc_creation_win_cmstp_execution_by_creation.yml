@@ -1,0 +1,29 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: CMSTP Execution Process Creation
+id: 7d4cdc5a-0076-40ca-aac8-f7e714570e47
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects various indicators of Microsoft Connection Manager Profile Installer execution
+
+  Converted from Sigma rule 7d4cdc5a-0076-40ca-aac8-f7e714570e47 by zaafvesper sigma convert. Sigma author: Nik Seetharaman.
+labels:
+  sigma.author: Nik Seetharaman
+  sigma.id: 7d4cdc5a-0076-40ca-aac8-f7e714570e47
+  sigma.level: high
+  sigma.source: rules/windows/process_creation/proc_creation_win_cmstp_execution_by_creation.yml
+  sigma.status: stable
+  sigma.tags: attack.execution, attack.stealth, attack.t1218.003, attack.g0069, car.2019-04-001
+  sigma.title: CMSTP Execution Process Creation
+  tactic.id: TA0002, TA0005
+  tactic.name: Execution, Stealth
+  technique.id: T1218.003
+references:
+  - https://web.archive.org/web/20190720093911/http://www.endurant.io/cmstp/detecting-cmstp-enabled-code-execution-and-uac-bypass-with-sysmon/
+condition: evt.name in ('CreateProcess') and (ps.parent.exe iendswith '\\cmstp.exe')
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Nik Seetharaman)'
+severity: high
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Legitimate CMSTP use (unlikely in modern enterprise environments)'

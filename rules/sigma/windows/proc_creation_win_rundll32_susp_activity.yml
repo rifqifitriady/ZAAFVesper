@@ -1,0 +1,41 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Potentially Suspicious Rundll32 Activity
+id: e593cf51-88db-4ee1-b920-37e89012a3c9
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects suspicious execution of rundll32, with specific calls to some DLLs with known LOLBIN functionalities
+
+  Converted from Sigma rule e593cf51-88db-4ee1-b920-37e89012a3c9 by zaafvesper sigma convert. Sigma author: juju4, Jonhnathan Ribeiro, oscd.community, Nasreddine Bencherchali (Nextron Systems).
+labels:
+  sigma.author: juju4, Jonhnathan Ribeiro, oscd.community, Nasreddine Bencherchali (Nextron Systems)
+  sigma.id: e593cf51-88db-4ee1-b920-37e89012a3c9
+  sigma.level: medium
+  sigma.source: rules/windows/process_creation/proc_creation_win_rundll32_susp_activity.yml
+  sigma.status: test
+  sigma.tags: attack.stealth, attack.t1218.011
+  sigma.title: Potentially Suspicious Rundll32 Activity
+  tactic.id: TA0005
+  tactic.name: Stealth
+  technique.id: T1218.011
+references:
+  - http://www.hexacorn.com/blog/2017/05/01/running-programs-via-proxy-jumping-on-a-edr-bypass-trampoline/
+  - https://twitter.com/Hexacorn/status/885258886428725250
+  - https://gist.github.com/ryhanson/227229866af52e2d963cf941af135a52
+  - https://twitter.com/nas_bench/status/1433344116071583746
+  - https://twitter.com/eral4m/status/1479106975967240209
+  - https://twitter.com/eral4m/status/1479080793003671557
+condition: evt.name in ('CreateProcess') and (((ps.cmdline icontains 'javascript:' and ps.cmdline icontains '.RegisterXLL') or (ps.cmdline icontains 'url.dll' and ps.cmdline icontains 'OpenURL') or (ps.cmdline icontains 'url.dll' and ps.cmdline icontains 'OpenURLA') or (ps.cmdline icontains 'url.dll' and ps.cmdline icontains 'FileProtocolHandler') or (ps.cmdline icontains 'zipfldr.dll' and ps.cmdline icontains 'RouteTheCall') or (ps.cmdline icontains 'shell32.dll' and ps.cmdline icontains 'Control_RunDLL') or (ps.cmdline icontains 'shell32.dll' and ps.cmdline icontains 'ShellExec_RunDLL') or (ps.cmdline icontains 'mshtml.dll' and ps.cmdline icontains 'PrintHTML') or (ps.cmdline icontains 'advpack.dll' and ps.cmdline icontains 'LaunchINFSection') or (ps.cmdline icontains 'advpack.dll' and ps.cmdline icontains 'RegisterOCX') or (ps.cmdline icontains 'ieadvpack.dll' and ps.cmdline icontains 'LaunchINFSection') or (ps.cmdline icontains 'ieadvpack.dll' and ps.cmdline icontains 'RegisterOCX') or (ps.cmdline icontains 'ieframe.dll' and ps.cmdline icontains 'OpenURL') or (ps.cmdline icontains 'shdocvw.dll' and ps.cmdline icontains 'OpenURL') or (ps.cmdline icontains 'syssetup.dll' and ps.cmdline icontains 'SetupInfObjectInstallAction') or (ps.cmdline icontains 'setupapi.dll' and ps.cmdline icontains 'InstallHinfSection') or (ps.cmdline icontains 'pcwutl.dll' and ps.cmdline icontains 'LaunchApplication') or (ps.cmdline icontains 'dfshim.dll' and ps.cmdline icontains 'ShOpenVerbApplication') or (ps.cmdline icontains 'dfshim.dll' and ps.cmdline icontains 'ShOpenVerbShortcut') or (ps.cmdline icontains 'scrobj.dll' and ps.cmdline icontains 'GenerateTypeLib' and ps.cmdline icontains 'http') or (ps.cmdline icontains 'shimgvw.dll' and ps.cmdline icontains 'ImageView_Fullscreen' and ps.cmdline icontains 'http') or (ps.cmdline icontains 'comsvcs.dll' and ps.cmdline icontains 'MiniDump')) and not (ps.cmdline icontains 'shell32.dll,Control_RunDLL desk.cpl,screensaver,@screensaver' or (ps.parent.exe iin ('C:\\Windows\\System32\\control.exe') and ps.parent.cmdline icontains '.cpl' and (ps.cmdline icontains 'Shell32.dll' and ps.cmdline icontains 'Control_RunDLL' and ps.cmdline icontains '.cpl')) or (ps.parent.exe iin ('C:\\Windows\\System32\\control.exe') and ps.cmdline istartswith '"C:\\Windows\\system32\\rundll32.exe" Shell32.dll,Control_RunDLL "C:\\Windows\\System32\\' and ps.cmdline iendswith '.cpl",')))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by juju4, Jonhnathan Ribeiro, oscd.community, Nasreddine Bencherchali (Nextron Systems))'
+severity: medium
+action: []
+tests:
+  atomic:
+    - 22cfde89-befe-4e15-9753-47306b37a6e3
+    - f3ad3c5b-1db1-45c1-81bf-d3370ebab6c8
+    - 8a7f56ee-10e7-444c-a139-0109438288eb
+    - e4c04b6f-c492-4782-82c7-3bf75eb8077e
+    - d91cae26-7fc1-457b-a854-34c8aad48c89
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: False positives depend on scripts and administrative tools used in the monitored environment'

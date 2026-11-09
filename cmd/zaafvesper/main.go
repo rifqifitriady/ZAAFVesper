@@ -38,9 +38,10 @@ usage:
                <file.rcap|events.jsonl|eslogger.jsonl>
   zaafvesper rules list|validate|test [--rules dir | dir] [--config file] [-v]
   zaafvesper coverage --navigator layer.json|- [--rules dir]
+  zaafvesper coverage --report [--attack enterprise-attack.json] [--json] [--rules dir]
   zaafvesper quarantine list|restore <id> [--state-dir dir]
   zaafvesper isolation list|release <address|all> [--state-dir dir]
-  zaafvesper sigma convert <sigma dir|file> -o <rules dir> [--report report.json] [--force]
+  zaafvesper sigma convert <sigma dir|file> -o <rules dir> [--report report.json] [--force] [--atomics map.yml]
   zaafvesper version
 
 run needs root (eslogger). replay, rules and coverage do not. The supported live

@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -64,6 +65,7 @@ func cmdSigma(args []string, stdout, stderr io.Writer) int {
 	out := fs.String("o", "", "output rules directory")
 	reportPath := fs.String("report", "", "write a JSON report to this file")
 	force := fs.Bool("force", false, "replace existing rule files in the output directory")
+	atomicsPath := fs.String("atomics", "", "YAML map of Sigma rule id to Atomic Red Team test GUIDs to list in tests.atomic")
 	// Flags may come before or after the input path.
 	var pos []string
 	rest := args[1:]
@@ -78,10 +80,18 @@ func cmdSigma(args []string, stdout, stderr io.Writer) int {
 		rest = fs.Args()[1:]
 	}
 	if len(pos) != 1 || *out == "" {
-		say(stderr, "zaafvesper sigma convert: expected <sigma dir|file> -o <rules dir> [--report report.json] [--force]")
+		say(stderr, "zaafvesper sigma convert: expected <sigma dir|file> -o <rules dir> [--report report.json] [--force] [--atomics map.yml]")
 		return 2
 	}
-	rep, err := sigmaConvert(pos[0], *out, *force)
+	var atomics map[string][]string
+	if *atomicsPath != "" {
+		var err error
+		if atomics, err = loadAtomicsMap(*atomicsPath); err != nil {
+			sayLines(stderr, "zaafvesper sigma convert: ", err.Error())
+			return 1
+		}
+	}
+	rep, err := sigmaConvert(pos[0], *out, *force, atomics)
 	if err != nil {
 		sayLines(stderr, "zaafvesper sigma convert: ", err.Error())
 		return 1
@@ -183,7 +193,35 @@ func outName(src string) string {
 	return s + ".yml"
 }
 
-func sigmaConvert(in, outDir string, force bool) (*sigmaReport, error) {
+// loadAtomicsMap reads a YAML map of Sigma rule id to Atomic Red Team test
+// GUIDs (strict: one document, no unknown structure, GUIDs only).
+func loadAtomicsMap(path string) (map[string][]string, error) {
+	data, err := config.SecureRead(path, 1<<20)
+	if err != nil {
+		return nil, err
+	}
+	dec := yaml.NewDecoder(strings.NewReader(string(data)))
+	dec.KnownFields(true)
+	m := map[string][]string{}
+	if err := dec.Decode(&m); err != nil {
+		return nil, fmt.Errorf("%s: %v", path, err)
+	}
+	for id, gs := range m {
+		if id == "" || len(gs) == 0 {
+			return nil, fmt.Errorf("%s: entry %q needs at least one test GUID", path, id)
+		}
+		for _, g := range gs {
+			if !atomicGUID.MatchString(g) {
+				return nil, fmt.Errorf("%s: %q: %q is not a GUID", path, id, g)
+			}
+		}
+	}
+	return m, nil
+}
+
+var atomicGUID = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+func sigmaConvert(in, outDir string, force bool, atomics map[string][]string) (*sigmaReport, error) {
 	root, files, ioErrs, err := sigmaInputs(in)
 	if err != nil {
 		return nil, err
@@ -197,6 +235,7 @@ func sigmaConvert(in, outDir string, force bool) (*sigmaReport, error) {
 	rep := &sigmaReport{Tool: "zaafvesper sigma convert", Input: in, Output: outDir,
 		Converted: []sigmaItem{}, Skipped: []sigmaItem{}, Errors: ioErrs}
 	usedName := map[string]string{}
+	usedAtomics := map[string]bool{}
 	usedID := map[string]string{}
 	for _, f := range files {
 		rel, err := filepath.Rel(root, f)
@@ -215,7 +254,10 @@ func sigmaConvert(in, outDir string, force bool) (*sigmaReport, error) {
 		var res *sigma.Result
 		if err == nil {
 			item.SigmaID, item.Title = r.ID, r.Title
-			res, err = sigma.Convert(r, sigma.Options{Source: rel})
+			res, err = sigma.Convert(r, sigma.Options{Source: rel, Atomics: atomics[r.ID]})
+			if _, ok := atomics[r.ID]; ok {
+				usedAtomics[r.ID] = true
+			}
 		}
 		if err != nil {
 			se := sigma.AsSkip(err)
@@ -257,6 +299,11 @@ func sigmaConvert(in, outDir string, force bool) (*sigmaReport, error) {
 		}
 		usedName[name], usedID[res.ID] = rel, rel
 		rep.Converted = append(rep.Converted, item)
+	}
+	for id := range atomics {
+		if !usedAtomics[id] {
+			rep.Errors = append(rep.Errors, sigmaItem{SigmaID: id, Kind: "error", Reason: "atomics map names Sigma id " + id + ", which no input rule has"})
+		}
 	}
 	s := &rep.Summary
 	s.Files, s.Converted, s.Skipped, s.Errors = len(files), len(rep.Converted), len(rep.Skipped), len(rep.Errors)

@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "cmstp spawns a child from a malicious INF"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8241, "ppid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "cmd.exe /c calc.exe", "args": ["cmd.exe", "/c", "calc.exe"], "original_name": "Cmd.Exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmstp.exe", "name": "cmstp.exe"}}}
+nomatch:
+  - desc: "benign lookalike - cmstp itself installs a profile"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8251, "ppid": 4000, "exe": "C:\\Windows\\System32\\cmstp.exe", "name": "cmstp.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "cmstp.exe /s C:\\Profiles\\corp_vpn.inf", "args": ["cmstp.exe", "/s", "C:\\Profiles\\corp_vpn.inf"], "original_name": "CMSTP.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "cmd started by explorer"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8252, "ppid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "cmd.exe", "args": ["cmd.exe"], "original_name": "Cmd.Exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\explorer.exe", "name": "explorer.exe"}}}

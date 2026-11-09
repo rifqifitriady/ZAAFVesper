@@ -1,0 +1,29 @@
+name: File uploaded with curl or wget over unencrypted HTTP or FTP
+id: 6d8e2a47-1c9b-4f0e-a3d5-8b7c6e1f2a34
+version: 1.0.0
+platforms: [macos, linux]
+description: |
+  curl uploaded a local file (-T/--upload-file, or a form or body read from a file with
+  @) or wget posted a file (--post-file/--body-file) to an http:// or ftp:// URL.
+  Unencrypted uploads of local files to an external host are rare in normal use and
+  common in exfiltration over a non-C2 channel. HTTPS uploads are not covered here
+  (T1048.002 and normal API traffic look alike).
+labels:
+  tactic.id: TA0010
+  tactic.name: Exfiltration
+  technique.id: T1048.003
+  technique.name: Exfiltration Over Unencrypted Non-C2 Protocol
+references:
+  - https://attack.mitre.org/techniques/T1048/003/
+condition: >
+  spawn_process
+  and (
+    (ps.name = 'curl' and (ps.args in ('-T', '--upload-file') or ps.args imatches ('@*', '*=@*', '*=<*')))
+    or (ps.name = 'wget' and ps.args imatches ('--post-file*', '--body-file*'))
+  )
+  and ps.cmdline icontains ('http://', 'ftp://', 'tftp://')
+  and not ps.cmdline icontains ('http://localhost', 'http://127.0.0.1', 'http://[::1]')
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) uploaded a file over plain text: %ps.cmdline"
+severity: medium
+action: []
+min-engine-version: 0.1.0

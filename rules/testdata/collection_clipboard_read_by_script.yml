@@ -1,0 +1,17 @@
+match:
+  - desc: "sh runs pbpaste in the background (ART T1115 #1)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5401, "ppid": 4000, "exe": "/usr/bin/pbpaste", "name": "pbpaste", "args": ["pbpaste"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.pbpaste", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "python stealer reads the clipboard"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5402, "ppid": 4000, "exe": "/usr/bin/pbpaste", "name": "pbpaste", "args": ["pbpaste"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.pbpaste", "parent": {"pid": 4000, "exe": "/usr/bin/python3", "name": "python3", "is_platform": true, "is_signed": true}}}
+nomatch:
+  - desc: "benign lookalike - pbpaste typed in Terminal (has a tty)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5411, "ppid": 4000, "exe": "/usr/bin/pbpaste", "name": "pbpaste", "args": ["pbpaste"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.pbpaste", "tty": "/dev/ttys004", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "pbcopy writes the clipboard"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5412, "ppid": 4000, "exe": "/usr/bin/pbcopy", "name": "pbcopy", "args": ["pbcopy"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.pbcopy", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "pbpaste from a Developer ID app without a tty"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5413, "ppid": 4000, "exe": "/usr/bin/pbpaste", "name": "pbpaste", "args": ["pbpaste"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.pbpaste", "parent": {"pid": 4000, "exe": "/Applications/Raycast.app/Contents/MacOS/Raycast", "name": "Raycast", "is_platform": false, "is_signed": true, "team_id": "SY64MV22J9", "cs_category": "developer_id"}}}

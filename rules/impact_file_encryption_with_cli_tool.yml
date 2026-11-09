@@ -1,0 +1,30 @@
+name: Files encrypted with openssl, gpg or 7z from the command line
+id: 7a1c5e93-0d4b-4e62-9f18-3b6e2d8c4a75
+version: 1.0.0
+platforms: [macos, linux]
+description: |
+  openssl enc (or an openssl cipher command) without -d, gpg --symmetric in batch mode,
+  or 7z adding to an archive with a password. Ransomware written as scripts encrypts
+  user files with exactly these tools. Developers and admins also encrypt files by
+  hand; a single run is a low-confidence signal, many runs in a row a strong one.
+labels:
+  tactic.id: TA0040
+  tactic.name: Impact
+  technique.id: T1486
+  technique.name: Data Encrypted for Impact
+references:
+  - https://attack.mitre.org/techniques/T1486/
+condition: >
+  spawn_process
+  and (
+    (ps.name = 'openssl' and (ps.args = 'enc' or ps.args imatches ('aes-*', '-aes-*', 'des3', 'chacha20'))
+     and not ps.args in ('-d', '-decrypt'))
+    or (base(ps.exe) iin ('gpg', 'gpg2') and ps.args in ('-c', '--symmetric') and ps.args = '--batch')
+    or (base(ps.exe) iin ('7z', '7zz', '7za') and ps.args = 'a' and ps.args imatches '-p*')
+  )
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) encrypted files: %ps.cmdline"
+severity: medium
+action: []
+tests:
+  atomic: [645f0f5a-ef09-48d8-b9bc-f0e24c642d72, 1a01f6b8-b1e8-418e-bbe3-78a6f822759e]
+min-engine-version: 0.1.0

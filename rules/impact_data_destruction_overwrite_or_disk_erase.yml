@@ -1,0 +1,34 @@
+name: File or disk overwritten with dd, or disk erased with diskutil
+id: 4f2b8d61-9e3a-4c07-b5d1-6a8e0c3f2b19
+version: 1.0.0
+platforms: [macos, linux]
+description: |
+  dd wrote zeros or random data over a file or device (if=/dev/zero, /dev/urandom or
+  /dev/random with an of= target outside temp folders and /dev/null), or diskutil
+  erased a disk or volume (eraseDisk, eraseVolume, secureErase, zeroDisk, randomDisk,
+  reformat). Wipers destroy data this way. Creating an empty disk image with dd in a
+  home folder also matches; those runs are rare.
+labels:
+  tactic.id: TA0040
+  tactic.name: Impact
+  technique.id: T1485, T1561.001
+  technique.name: Data Destruction; Disk Content Wipe
+references:
+  - https://attack.mitre.org/techniques/T1485/
+  - https://attack.mitre.org/techniques/T1561/001/
+condition: >
+  spawn_process
+  and (
+    (ps.name = 'dd'
+     and ps.args imatches ('if=/dev/zero', 'if=/dev/urandom', 'if=/dev/random')
+     and ps.args imatches 'of=*'
+     and not ps.args imatches ('of=/dev/null', 'of=/tmp/*', 'of=/private/tmp/*', 'of=/private/var/folders/*', 'of=/var/tmp/*'))
+    or (ps.name = 'diskutil'
+        and ps.args iin ('eraseDisk', 'eraseVolume', 'secureErase', 'zeroDisk', 'randomDisk', 'reformat'))
+  )
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) destroyed data: %ps.cmdline"
+severity: high
+action: []
+tests:
+  atomic: [38deee99-fd65-4031-bec8-bfa4f9f26146]
+min-engine-version: 0.1.0
