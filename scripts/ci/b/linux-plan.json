@@ -204,8 +204,106 @@
       "note": "Canary: a bash copy named nuclei. It proves the sensor receives and evaluates events at this point of the run, independent of which coreutils the image ships."
     }
   ],
-  "untestable": [],
-  "skipped_atomics": [],
+  "untestable": [
+    {
+      "rule": "Disable Or Stop Services",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. The linked Atomic (42e3a5bd) stops a real service on the runner; not added."
+    },
+    {
+      "rule": "SSH run with a password tool or with host key checking turned off",
+      "reason": "No Atomic test exists for this behaviour. Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. A live test needs sshpass and an SSH target."
+    },
+    {
+      "rule": "Potential Linux Process Code Injection Via DD Utility",
+      "reason": "No Atomic test is linked. Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. A live test would overwrite another process's memory map through /proc."
+    },
+    {
+      "rule": "/etc/shadow read with a file or text tool",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. The linked Atomic (3723ab77) reads /etc/shadow as root and could be added to the plan."
+    },
+    {
+      "rule": "Remove Immutable File Attribute",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. The linked Atomic (e7469fe2) runs chattr -i on a scratch file and could be added to the plan."
+    },
+    {
+      "rule": "Touch Suspicious Service File",
+      "reason": "No Atomic test is linked. Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. A live test would create a unit file under /etc/systemd."
+    },
+    {
+      "rule": "User Has Been Deleted Via Userdel",
+      "reason": "No Atomic test is linked. Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. A live test needs a scratch account created first."
+    }
+  ],
+  "skipped_atomics": [
+    {
+      "guid": "3723ab77-c546-403c-8fb4-bb577033b235",
+      "reason": "Not yet added to the plan; the /etc/shadow reader rule has no live test yet."
+    },
+    {
+      "guid": "e7469fe2-ad41-4382-8965-99b94dd3c13f",
+      "reason": "Not yet added to the plan; the Remove Immutable File Attribute rule has no live test yet."
+    },
+    {
+      "guid": "42e3a5bd-1e45-427f-aa08-2a65fa29a820",
+      "reason": "Stops a real service on the runner. Not run."
+    },
+    {
+      "guid": "0286eb44-e7ce-41a0-b109-3da516e05a5f",
+      "reason": "Declares prerequisites (gpg and zip, installed by a package manager call); prerequisites are never fetched. Not run."
+    },
+    {
+      "guid": "2794f321-55c4-4484-9eef-0557996f715a",
+      "reason": "macOS only (ditto). Linked because the shared rule also applies to macOS; not applicable to a Linux runner."
+    },
+    {
+      "guid": "a4b74723-5cee-4300-91c3-5e34166909b4",
+      "reason": "Needs rclone downloaded and an S3 destination with credentials; prerequisites are never fetched and no cloud account is used. Not run."
+    },
+    {
+      "guid": "38deee99-fd65-4031-bec8-bfa4f9f26146",
+      "reason": "No prerequisites (overwrites a scratch file with dd) and could be added to the plan; not run yet, so the dd rule has no live result."
+    },
+    {
+      "guid": "645f0f5a-ef09-48d8-b9bc-f0e24c642d72",
+      "reason": "macOS only (7z). Linked because the shared rule also applies to macOS; not applicable to a Linux runner."
+    },
+    {
+      "guid": "1a01f6b8-b1e8-418e-bbe3-78a6f822759e",
+      "reason": "macOS only (openssl on macOS). Linked because the shared rule also applies to macOS; not applicable to a Linux runner."
+    },
+    {
+      "guid": "6326dbc4-444b-4c04-88f4-27e94d0327cb",
+      "reason": "Restarts the machine; it would end the job. Not run."
+    },
+    {
+      "guid": "4963a81e-a3ad-4f02-adda-812343b351de",
+      "reason": "Shuts the machine down; it would end the job. Not run."
+    },
+    {
+      "guid": "47d0b042-a918-40ab-8cf9-150ffe919027",
+      "reason": "Restarts the machine with reboot; it would end the job. Not run."
+    },
+    {
+      "guid": "918f70ab-e1ef-49ff-bc57-b27021df84dd",
+      "reason": "Shuts the machine down with halt; it would end the job. Not run."
+    },
+    {
+      "guid": "78f92e14-f1e9-4446-b3e9-f1b921f2459e",
+      "reason": "Reboots the machine with halt; it would end the job. Not run."
+    },
+    {
+      "guid": "73a90cd2-48a2-4ac5-8594-2af35fa909fa",
+      "reason": "Shuts the machine down with poweroff; it would end the job. Not run."
+    },
+    {
+      "guid": "61303105-ff60-427b-999e-efb90b314e41",
+      "reason": "Reboots the machine with poweroff; it would end the job. Not run."
+    },
+    {
+      "guid": "342cc723-127c-4d3a-8292-9c0c6b4ecadc",
+      "reason": "No prerequisites (modifies ~/.ssh/authorized_keys of the runner user) and could be added with a cleanup that restores the file; not run yet, so the authorized_keys rule has no live result."
+    }
+  ],
   "rule_notes": [
     {
       "rule": "Syslog Clearing or Removal Via System Utilities",

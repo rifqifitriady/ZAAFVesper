@@ -1,0 +1,29 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Potential Discovery Activity Using Find - MacOS
+id: 85de3a19-b675-4a51-bfc6-b11a5186c971
+version: 1.0.0
+platforms: [macos]
+description: |-
+  Detects usage of "find" binary in a suspicious manner to perform discovery
+
+  Converted from Sigma rule 85de3a19-b675-4a51-bfc6-b11a5186c971 by zaafvesper sigma convert. Sigma author: Nasreddine Bencherchali (Nextron Systems).
+labels:
+  sigma.author: Nasreddine Bencherchali (Nextron Systems)
+  sigma.id: 85de3a19-b675-4a51-bfc6-b11a5186c971
+  sigma.level: medium
+  sigma.source: rules/macos/process_creation/proc_creation_macos_susp_find_execution.yml
+  sigma.status: test
+  sigma.tags: attack.discovery, attack.t1083
+  sigma.title: Potential Discovery Activity Using Find - MacOS
+  tactic.id: TA0007
+  tactic.name: Discovery
+  technique.id: T1083
+references:
+  - https://github.com/SaiSathvik1/Linux-Privilege-Escalation-Notes
+condition: evt.name in ('CreateProcess') and (ps.exe iendswith '/find' and ps.cmdline icontains ('-perm -4000', '-perm -2000', '-perm 0777', '-perm -222', '-perm -o w', '-perm -o x', '-perm -u=s', '-perm -g=s'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Nasreddine Bencherchali (Nextron Systems))'
+severity: medium
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

@@ -1,0 +1,18 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "ntdsutil ifm dumps the AD database (ART T1003.003 ntdsutil)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8001, "ppid": 4000, "exe": "C:\\Windows\\System32\\ntdsutil.exe", "name": "ntdsutil.exe", "uid": -1, "euid": -1, "username": "CORP\\da_admin", "cmdline": "ntdsutil \"ac i ntds\" \"ifm\" \"create full C:\\Windows\\Temp\\ntds_T1003\" q q", "args": ["ntdsutil", "\"ac", "i", "ntds\"", "\"ifm\"", "\"create", "full", "C:\\Windows\\Temp\\ntds_T1003\"", "q", "q"], "original_name": "ntdsutil.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - dsquery lists users"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8011, "ppid": 4000, "exe": "C:\\Windows\\System32\\dsquery.exe", "name": "dsquery.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "dsquery user -limit 10", "args": ["dsquery", "user", "-limit", "10"], "original_name": "dsquery.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "ntfrsutl is a different tool"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8012, "ppid": 4000, "exe": "C:\\Windows\\System32\\ntfrsutl.exe", "name": "ntfrsutl.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "ntfrsutl ds", "args": ["ntfrsutl", "ds"], "original_name": "ntfrsutl.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "same-name lookalike - notepad opens a file called ntdsutil.exe.txt"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8013, "ppid": 4000, "exe": "C:\\Windows\\System32\\notepad.exe", "name": "notepad.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "notepad.exe C:\\Users\\alice\\notes\\ntdsutil.exe.txt", "args": ["notepad.exe", "C:\\Users\\alice\\notes\\ntdsutil.exe.txt"], "original_name": "NOTEPAD.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "same-name lookalike - ntdsutil.exe.mui style resource name, not the executable"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8014, "ppid": 4000, "exe": "C:\\Windows\\System32\\en-US\\ntdsutil.exe.mui", "name": "ntdsutil.exe.mui", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "ntdsutil.exe.mui", "args": ["ntdsutil.exe.mui"], "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

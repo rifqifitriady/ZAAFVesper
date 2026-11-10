@@ -1,0 +1,34 @@
+name: SSH run with a password tool or with host key checking turned off
+id: 18226756-e9f0-433d-a756-19682725ee82
+version: 1.0.0
+platforms: [linux]
+description: |
+  sshpass fed a password to ssh, scp, sftp or rsync (also when sshpass is renamed: a
+  program whose first option is -p, -e, -f or -d followed by ssh/scp/sftp/rsync), or
+  ssh/scp ran with host key checking turned off (StrictHostKeyChecking no, off or false,
+  with = or a space) together with known hosts thrown away (UserKnownHostsFile or
+  GlobalKnownHostsFile set to /dev/null or none). Worms, brute-force tools and attackers
+  moving between hosts with stolen passwords use both. Configuration management (Ansible
+  with host_key_checking off, CI deploy jobs) does the same; exclude those jobs by parent
+  or user. Not covered: StrictHostKeyChecking=no on its own (left out to keep Ansible and
+  CI quiet), options set in a config file (-F or ~/.ssh/config), interactive ssh with a key.
+labels:
+  tactic.id: TA0008
+  tactic.name: Lateral Movement
+  technique.id: T1021.004
+  technique.name: SSH
+references:
+  - https://attack.mitre.org/techniques/T1021/004/
+condition: >
+  spawn_process
+  and (
+    base(ps.exe) = 'sshpass'
+    or (base(ps.exe) in ('ssh', 'scp')
+        and ps.cmdline regex '(?i)stricthostkeychecking\\s*[=\\s]\\s*(no|off|false)\\b'
+        and ps.cmdline regex '(?i)(user|global)knownhostsfile\\s*[=\\s]\\s*(/dev/null|none)\\b')
+    or ps.cmdline regex '^\\S+\\s+-(p\\s*\\S+|e|f\\s*\\S+|d\\s*[0-9]+)\\s+(\\S*/)?(ssh|scp|sftp|rsync)\\s'
+  )
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe, user %ps.username) ran scripted SSH: %ps.cmdline"
+severity: medium
+action: []
+min-engine-version: 0.1.0

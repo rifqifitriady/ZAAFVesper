@@ -30,20 +30,37 @@ var tactics = map[string][2]string{
 }
 
 // revoked maps technique ids that SigmaHQ still uses but the ATT&CK release
-// of the built-in rules revoked, to their replacements (docs/rules.md).
-// Only these documented ids are rewritten; others are kept as given.
+// of the built-in rules revoked, to their replacements: every revoked-by
+// relationship for T1562.* and T1070.00[12] in that release's
+// enterprise-attack.json (Atomic Red Team a0e3f9bc). Other ids are kept as
+// given; the coverage report's --attack check catches any that are revoked.
 var revoked = map[string]string{
+	"T1070.001": "T1685.005",
+	"T1070.002": "T1685.006",
 	"T1562":     "T1685",
 	"T1562.001": "T1685",
+	"T1562.002": "T1685.001",
 	"T1562.003": "T1690",
 	"T1562.004": "T1686",
-	"T1070.002": "T1685.006",
+	"T1562.006": "T1685",
+	"T1562.007": "T1686.001",
+	"T1562.008": "T1685.002",
+	"T1562.009": "T1688",
+	"T1562.010": "T1689",
+	"T1562.011": "T1685.003",
+	"T1562.012": "T1685.004",
+	"T1562.013": "T1686.002",
 }
 
 // impairment is the Defense Impairment (TA0112) family the revoked ids
 // moved into.
 func impairment(id string) bool {
-	return id == "T1685" || strings.HasPrefix(id, "T1685.") || id == "T1686" || id == "T1690"
+	for _, p := range []string{"T1685", "T1686", "T1688", "T1689", "T1690"} {
+		if id == p || strings.HasPrefix(id, p+".") {
+			return true
+		}
+	}
+	return false
 }
 
 var techTag = regexp.MustCompile(`^t\d{4}(\.\d{3})?$`)

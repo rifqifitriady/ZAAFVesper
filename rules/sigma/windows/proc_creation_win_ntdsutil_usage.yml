@@ -1,0 +1,32 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Invocation of Active Directory Diagnostic Tool (ntdsutil.exe)
+id: 2afafd61-6aae-4df4-baed-139fa1f4c345
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects execution of ntdsutil.exe, which can be used for various attacks against the NTDS database (NTDS.DIT)
+
+  Converted from Sigma rule 2afafd61-6aae-4df4-baed-139fa1f4c345 by zaafvesper sigma convert. Sigma author: Thomas Patzke.
+labels:
+  sigma.author: Thomas Patzke
+  sigma.id: 2afafd61-6aae-4df4-baed-139fa1f4c345
+  sigma.level: medium
+  sigma.source: rules/windows/process_creation/proc_creation_win_ntdsutil_usage.yml
+  sigma.status: test
+  sigma.tags: attack.credential-access, attack.t1003.003
+  sigma.title: Invocation of Active Directory Diagnostic Tool (ntdsutil.exe)
+  tactic.id: TA0006
+  tactic.name: Credential Access
+  technique.id: T1003.003
+references:
+  - https://jpcertcc.github.io/ToolAnalysisResultSheet/details/ntdsutil.htm
+condition: evt.name in ('CreateProcess') and (ps.exe iendswith '\\ntdsutil.exe')
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Thomas Patzke)'
+severity: medium
+action: []
+tests:
+  atomic:
+    - 2364e33d-ceab-4641-8468-bfb1d7cc2723
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: NTDS maintenance'

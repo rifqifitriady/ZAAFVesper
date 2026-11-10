@@ -1,0 +1,15 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "reg add moves RDP to a non-standard port (ART T1021.001 #3)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8121, "ppid": 4000, "exe": "C:\\Windows\\System32\\reg.exe", "name": "reg.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "reg add \"HKLM\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp\" /v PortNumber /t REG_DWORD /d 4489 /f", "args": ["reg", "add", "\"HKLM\\System\\CurrentControlSet\\Control\\Terminal", "Server\\WinStations\\RDP-Tcp\"", "/v", "PortNumber", "/t", "REG_DWORD", "/d", "4489", "/f"], "original_name": "reg.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "reg add enables RDP connections"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8122, "ppid": 4000, "exe": "C:\\Windows\\System32\\reg.exe", "name": "reg.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\" /v fDenyTSConnections /t REG_DWORD /d 0 /f", "args": ["reg", "add", "\"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal", "Server\"", "/v", "fDenyTSConnections", "/t", "REG_DWORD", "/d", "0", "/f"], "original_name": "reg.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - reg add sets TLS for RDP (SecurityLayer 2)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8131, "ppid": 4000, "exe": "C:\\Windows\\System32\\reg.exe", "name": "reg.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp\" /v SecurityLayer /t REG_DWORD /d 2 /f /reg:64 02", "args": ["reg", "add", "\"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal", "Server\\WinStations\\RDP-Tcp\"", "/v", "SecurityLayer", "/t", "REG_DWORD", "/d", "2", "/f", "/reg:64", "02"], "original_name": "reg.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "reg query reads the RDP setting"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8132, "ppid": 4000, "exe": "C:\\Windows\\System32\\reg.exe", "name": "reg.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "reg query \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\" /v fDenyTSConnections", "args": ["reg", "query", "\"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal", "Server\"", "/v", "fDenyTSConnections"], "original_name": "reg.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

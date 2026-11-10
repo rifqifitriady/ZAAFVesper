@@ -1,0 +1,14 @@
+match:
+  - desc: "diskutil secureErase of a disk"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5621, "ppid": 4000, "exe": "/usr/sbin/diskutil", "name": "diskutil", "args": ["diskutil", "secureErase", "0", "/dev/disk4"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.diskutil", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "diskutil eraseVolume of the data volume"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5622, "ppid": 4000, "exe": "/usr/sbin/diskutil", "name": "diskutil", "args": ["diskutil", "eraseVolume", "APFS", "x", "/dev/disk3s5"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.diskutil", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+nomatch:
+  - desc: "benign lookalike - diskutil list"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5631, "ppid": 4000, "exe": "/usr/sbin/diskutil", "name": "diskutil", "args": ["diskutil", "list"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.diskutil", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "diskutil verifyVolume"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5632, "ppid": 4000, "exe": "/usr/sbin/diskutil", "name": "diskutil", "args": ["diskutil", "verifyVolume", "/"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.diskutil", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}

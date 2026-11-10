@@ -219,6 +219,12 @@ func TestAttackLabels(t *testing.T) {
 	if b.labels["technique.id"] != "T1685, T1070.004" || b.labels["tactic.id"] != "TA0005, TA0112" {
 		t.Errorf("mixed: %v", b.labels)
 	}
+	for from, to := range map[string]string{"attack.t1070.001": "T1685.005", "attack.t1562.002": "T1685.001", "attack.t1562.012": "T1685.004", "attack.t1562.007": "T1686.001", "attack.t1562.009": "T1688"} {
+		r := attackLabels([]string{"attack.defense-evasion", from})
+		if r.labels["technique.id"] != to || r.labels["tactic.id"] != "TA0112" {
+			t.Errorf("%s: %v", from, r.labels)
+		}
+	}
 	c := attackLabels([]string{"attack.stealth", "attack.t1564.002"})
 	if c.labels["tactic.name"] != "Stealth" {
 		t.Errorf("stealth: %v", c.labels)

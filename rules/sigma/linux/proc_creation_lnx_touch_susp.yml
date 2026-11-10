@@ -1,0 +1,30 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Touch Suspicious Service File
+id: 31545105-3444-4584-bebf-c466353230d2
+version: 1.0.0
+platforms: [linux]
+description: |-
+  Detects usage of the "touch" process in service file.
+
+  Converted from Sigma rule 31545105-3444-4584-bebf-c466353230d2 by zaafvesper sigma convert. Sigma author: Joseliyo Sanchez, @Joseliyo_Jstnk.
+labels:
+  sigma.author: Joseliyo Sanchez, @Joseliyo_Jstnk
+  sigma.id: 31545105-3444-4584-bebf-c466353230d2
+  sigma.level: medium
+  sigma.source: rules/linux/process_creation/proc_creation_lnx_touch_susp.yml
+  sigma.status: test
+  sigma.tags: attack.stealth, attack.t1070.006
+  sigma.title: Touch Suspicious Service File
+  tactic.id: TA0005
+  tactic.name: Stealth
+  technique.id: T1070.006
+references:
+  - https://blogs.blackberry.com/
+  - https://twitter.com/Joseliyo_Jstnk/status/1620131033474822144
+condition: evt.name in ('CreateProcess') and (ps.exe iendswith '/touch' and ps.cmdline icontains ' -t ' and ps.cmdline iendswith '.service')
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Joseliyo Sanchez, @Joseliyo_Jstnk)'
+severity: medium
+action: []
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Admin changing date of files.'

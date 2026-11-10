@@ -150,8 +150,23 @@ func TestReportRefusesIncompleteRun(t *testing.T) {
 	}
 }
 
-// Every Atomic test a Windows or Linux rule links (tests.atomic) is either
-// run by its plan or listed in skipped_atomics with a reason.
+// appliesTo reports whether a rule with these platforms is loaded on plat:
+// no platforms means every platform, otherwise plat must be listed.
+func appliesTo(platforms []string, plat string) bool {
+	if len(platforms) == 0 {
+		return true
+	}
+	for _, p := range platforms {
+		if p == plat {
+			return true
+		}
+	}
+	return false
+}
+
+// Every Atomic test a rule that applies to Windows or Linux links
+// (tests.atomic), whether the rule is for one platform, several, or all, is
+// either run by its plan or listed in skipped_atomics with a reason.
 func TestLinkedAtomicsAccountedFor(t *testing.T) {
 	rs, err := rules.LoadDir("../../../../rules")
 	if err != nil {
@@ -175,7 +190,7 @@ func TestLinkedAtomicsAccountedFor(t *testing.T) {
 			known[strings.ToLower(s.GUID)] = true
 		}
 		for _, r := range rs.Rules {
-			if len(r.Platforms) != 1 || r.Platforms[0] != plat {
+			if !appliesTo(r.Platforms, plat) {
 				continue
 			}
 			for _, g := range r.Tests.Atomic {

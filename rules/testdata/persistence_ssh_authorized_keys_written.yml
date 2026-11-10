@@ -1,0 +1,26 @@
+match:
+  - desc: "shell rewrites authorized_keys (ART T1098.004 #1)"
+    events:
+      - {"name": "WriteFile", "platform": "macos", "proc": {"pid": 5100, "ppid": 4000, "exe": "/bin/bash", "name": "bash", "uid": 501, "euid": 501, "is_platform": true, "signing_id": "com.apple.bash"}, "file": {"path": "/Users/rifqi/.ssh/authorized_keys"}}
+  - desc: "curl drops a key file on Linux"
+    events:
+      - {"name": "CreateFile", "platform": "linux", "proc": {"pid": 24507, "ppid": 4000, "exe": "/usr/bin/curl", "name": "curl", "uid": -1, "euid": -1}, "file": {"path": "/root/.ssh/authorized_keys"}}
+  - desc: "a payload named vim writes the file"
+    events:
+      - {"name": "WriteFile", "platform": "macos", "proc": {"pid": 5100, "ppid": 4000, "exe": "/private/tmp/x/vim", "name": "vim", "uid": 501, "euid": 501, "is_platform": false}, "file": {"path": "/Users/rifqi/.ssh/authorized_keys"}}
+  - desc: "a staged key file is renamed into place (mv, sed -i)"
+    events:
+      - {"name": "RenameFile", "platform": "macos", "proc": {"pid": 5103, "ppid": 4000, "exe": "/bin/mv", "name": "mv", "uid": 501, "euid": 501, "is_platform": true, "signing_id": "com.apple.mv"}, "file": {"path": "/tmp/k", "dest": "/Users/rifqi/.ssh/authorized_keys"}}
+nomatch:
+  - desc: "benign lookalike - VS Code (verified Developer ID) edits authorized_keys"
+    events:
+      - {"name": "WriteFile", "platform": "macos", "proc": {"pid": 5100, "ppid": 4000, "exe": "/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper.app/Contents/MacOS/Code Helper", "name": "Code Helper", "uid": 501, "euid": 501, "is_platform": false, "team_id": "UBF8T346G9", "signing_id": "com.microsoft.VSCode", "cs_category": "developer_id"}, "file": {"path": "/Users/rifqi/.ssh/authorized_keys"}}
+  - desc: "authorized_keys renamed away to a backup"
+    events:
+      - {"name": "RenameFile", "platform": "macos", "proc": {"pid": 5104, "ppid": 4000, "exe": "/bin/mv", "name": "mv", "uid": 501, "euid": 501, "is_platform": true, "signing_id": "com.apple.mv"}, "file": {"path": "/Users/rifqi/.ssh/authorized_keys", "dest": "/Users/rifqi/.ssh/authorized_keys.old"}}
+  - desc: "ssh updates known_hosts"
+    events:
+      - {"name": "WriteFile", "platform": "macos", "proc": {"pid": 5100, "ppid": 4000, "exe": "/usr/bin/ssh", "name": "ssh", "uid": 501, "euid": 501, "is_platform": true, "signing_id": "com.apple.ssh"}, "file": {"path": "/Users/rifqi/.ssh/known_hosts"}}
+  - desc: "a backup copy named authorized_keys.bak"
+    events:
+      - {"name": "CreateFile", "platform": "linux", "proc": {"pid": 24512, "ppid": 4000, "exe": "/usr/bin/cp", "name": "cp", "uid": -1, "euid": -1}, "file": {"path": "/home/alice/.ssh/authorized_keys.bak"}}

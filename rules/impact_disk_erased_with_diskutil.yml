@@ -1,0 +1,24 @@
+name: Disk or volume erased with diskutil
+id: 5c413bb6-12bf-41f2-951b-63f52ad63007
+version: 1.0.0
+platforms: [macos]
+description: |
+  diskutil erased or rewrote a disk or volume (eraseDisk, eraseVolume, secureErase,
+  zeroDisk, randomDisk, reformat). Wipers and ransomware erase volumes this way.
+  Administrators also erase USB sticks with diskutil from Terminal; the description of an
+  alert says which disk.
+labels:
+  tactic.id: TA0040
+  tactic.name: Impact
+  technique.id: T1561.001
+  technique.name: Disk Content Wipe
+references:
+  - https://attack.mitre.org/techniques/T1561/001/
+condition: >
+  spawn_process
+  and ps.name = 'diskutil'
+  and ps.args iin ('eraseDisk', 'eraseVolume', 'secureErase', 'zeroDisk', 'randomDisk', 'reformat')
+output: "diskutil (pid %ps.pid, parent %ps.parent.exe) erased a disk: %ps.cmdline"
+severity: high
+action: []
+min-engine-version: 0.1.0

@@ -108,3 +108,49 @@ jobs:
           TMPDIR="$RUNNER_TEMP/gotmp" make test-yara BREW_PREFIX="$BREW_PREFIX"
       - name: Package builds (unsigned, pure Go)
         run: make package VERSION=0.0.0-ci
+
+  coverage:
+    name: ATT&CK coverage and rule benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # ATT&CK data bundled with Atomic Red Team, pinned by commit and hash:
+      # the same release the rule IDs were checked against.
+      ATTACK_URL: https://raw.githubusercontent.com/redcanaryco/atomic-red-team/a0e3f9bc69fed2fd711bd1f1aa87a40c33482fe6/atomic_red_team/enterprise-attack.json
+      ATTACK_SHA256: fc783039f17fba646f79448f1322996457c658a9474f6d14c3bc924a2cf1c97d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Fetch the ATT&CK data (pinned, hash checked)
+        run: |
+          set -euo pipefail
+          curl -fsSL --proto '=https' --retry 3 -o "$RUNNER_TEMP/enterprise-attack.json" "$ATTACK_URL"
+          echo "$ATTACK_SHA256  $RUNNER_TEMP/enterprise-attack.json" | sha256sum -c -
+      - name: Coverage report (fails on unknown, revoked or deprecated ATT&CK ids)
+        run: |
+          set -o pipefail
+          go build -trimpath -o "$RUNNER_TEMP/zaafvesper" ./cmd/zaafvesper
+          "$RUNNER_TEMP/zaafvesper" coverage --report --rules rules --attack "$RUNNER_TEMP/enterprise-attack.json" | tee "$RUNNER_TEMP/coverage.txt"
+          {
+            echo '## ATT&CK coverage'
+            echo '```'
+            cat "$RUNNER_TEMP/coverage.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Rule engine benchmarks (engine only, one goroutine)
+        run: |
+          set -o pipefail
+          # BenchmarkEngine: 30 synthetic rules, 10 benign events (the original
+          # throughput test). BenchmarkShippedRules: the shipped rules over
+          # fixture events, per platform; see docs/rules.md "Benchmark".
+          go test -run '^$' -bench 'BenchmarkEngine|BenchmarkShippedRules' -benchtime 2s ./pkg/rules ./cmd/zaafvesper | tee "$RUNNER_TEMP/bench.txt"
+          {
+            echo '## Rule engine benchmarks (GitHub ubuntu-latest runner, engine only, one goroutine)'
+            echo '```'
+            grep -E 'Benchmark|cpu:' "$RUNNER_TEMP/bench.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

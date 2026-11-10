@@ -1,0 +1,20 @@
+match:
+  - desc: "xmrig on macOS from a temp folder"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5801, "ppid": 4000, "exe": "/private/tmp/.cache/xmrig", "name": "xmrig", "args": ["xmrig", "-o", "stratum+tcp://pool.example.invalid:3333", "-u", "wallet", "--donate-level", "1"], "uid": 501, "euid": 501, "is_platform": false, "is_signed": true, "parent": {"pid": 4000, "exe": "/bin/bash", "name": "bash", "is_platform": true, "is_signed": true}}}
+  - desc: "renamed miner on Linux, found by its pool URL"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24506, "ppid": 24000, "exe": "/dev/shm/.k/kworker", "name": "kworker", "uid": -1, "euid": -1, "username": "www-data", "cmdline": "/dev/shm/.k/kworker -o stratum+ssl://198.51.100.20:443 -a rx/0 -k", "args": ["/dev/shm/.k/kworker", "-o", "stratum+ssl://198.51.100.20:443", "-a", "rx/0", "-k"], "parent": {"pid": 24000, "exe": "/usr/bin/sh", "name": "sh"}}}
+  - desc: "xmrig.exe on Windows"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 6801, "ppid": 4000, "exe": "C:\\Users\\Public\\xmrig.exe", "name": "xmrig.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "xmrig.exe -c config.json", "args": ["xmrig.exe", "-c", "config.json"], "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - a crypto wallet app starts"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5811, "ppid": 4000, "exe": "/Applications/Electrum.app/Contents/MacOS/run_electrum", "name": "run_electrum", "args": ["run_electrum"], "uid": 501, "euid": 501, "is_platform": false, "is_signed": true, "parent": {"pid": 4000, "exe": "/sbin/launchd", "name": "launchd", "is_platform": true, "is_signed": true}}}
+  - desc: "curl downloads a page that mentions mining"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24511, "ppid": 24000, "exe": "/usr/bin/curl", "name": "curl", "uid": -1, "euid": -1, "username": "alice", "cmdline": "curl -s https://example.org/what-is-stratum-mining.html", "args": ["curl", "-s", "https://example.org/what-is-stratum-mining.html"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "python runs a benchmark"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5812, "ppid": 4000, "exe": "/usr/bin/python3", "name": "python3", "args": ["python3", "bench.py", "--threads", "8"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.python3", "tty": "/dev/ttys003", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}

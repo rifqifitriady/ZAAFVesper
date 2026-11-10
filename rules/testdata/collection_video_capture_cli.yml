@@ -1,0 +1,17 @@
+match:
+  - desc: "ffmpeg records the camera"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 6102, "ppid": 4000, "exe": "/opt/homebrew/bin/ffmpeg", "name": "ffmpeg", "args": ["ffmpeg", "-f", "avfoundation", "-framerate", "30", "-i", "0", "-t", "10", "/tmp/.v.mp4"], "uid": 501, "euid": 501, "is_platform": false, "is_signed": true, "parent": {"pid": 4000, "exe": "/usr/bin/python3", "name": "python3", "is_platform": true, "is_signed": true}}}
+  - desc: "imagesnap takes a webcam picture"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 6104, "ppid": 4000, "exe": "/opt/homebrew/bin/imagesnap", "name": "imagesnap", "args": ["imagesnap", "-q", "/tmp/.s.jpg"], "uid": 501, "euid": 501, "is_platform": false, "is_signed": true, "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+nomatch:
+  - desc: "benign lookalike - ffmpeg converts a video file"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 6121, "ppid": 4000, "exe": "/opt/homebrew/bin/ffmpeg", "name": "ffmpeg", "args": ["ffmpeg", "-i", "talk.mov", "talk.mp4"], "uid": 501, "euid": 501, "is_platform": false, "is_signed": true, "tty": "/dev/ttys001", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "ffmpeg records the microphone only"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 6122, "ppid": 4000, "exe": "/opt/homebrew/bin/ffmpeg", "name": "ffmpeg", "args": ["ffmpeg", "-f", "avfoundation", "-i", ":0", "/tmp/a.m4a"], "uid": 501, "euid": 501, "is_platform": false, "is_signed": true, "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "screencapture of the screen (different technique)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 6113, "ppid": 4000, "exe": "/usr/sbin/screencapture", "name": "screencapture", "args": ["screencapture", "-i", "/tmp/s.png"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.screencapture", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}

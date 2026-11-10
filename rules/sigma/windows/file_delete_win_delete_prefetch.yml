@@ -1,0 +1,33 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Prefetch File Deleted
+id: 0a1f9d29-6465-4776-b091-7f43b26e4c89
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects the deletion of a prefetch file which may indicate an attempt to destroy forensic evidence
+
+  Converted from Sigma rule 0a1f9d29-6465-4776-b091-7f43b26e4c89 by zaafvesper sigma convert. Sigma author: Cedric MAURUGEON.
+labels:
+  sigma.author: Cedric MAURUGEON
+  sigma.id: 0a1f9d29-6465-4776-b091-7f43b26e4c89
+  sigma.level: high
+  sigma.source: rules/windows/file/file_delete/file_delete_win_delete_prefetch.yml
+  sigma.status: test
+  sigma.tags: attack.stealth, attack.t1070.004
+  sigma.title: Prefetch File Deleted
+  tactic.id: TA0005
+  tactic.name: Stealth
+  technique.id: T1070.004
+references:
+  - Internal Research
+  - https://www.group-ib.com/blog/hunting-for-ttps-with-prefetch-files/
+condition: evt.name in ('DeleteFile') and ((file.path icontains ':\\Windows\\Prefetch\\' and file.path iendswith '.pf') and not (ps.exe iendswith ':\\windows\\system32\\svchost.exe' and ps.username icontains ('AUTHORI', 'AUTORI')))
+output: '%ps.exe (pid %ps.pid) deleted %file.path (Sigma rule by Cedric MAURUGEON)'
+severity: high
+action: []
+tests:
+  atomic:
+    - 36f96049-0ad7-4a5f-8418-460acaeb92fb
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Unknown'

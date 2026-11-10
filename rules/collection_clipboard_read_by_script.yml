@@ -1,0 +1,35 @@
+name: Clipboard read by a script without a terminal
+id: 2e7a9d40-6b1c-4c3f-8e52-7f9a0b4d1c68
+version: 1.0.0
+platforms: [macos]
+description: |
+  pbpaste ran without a controlling terminal from a shell or script interpreter, or
+  from a parent with no verified developer identity. Infostealers and clipboard
+  hijackers read the clipboard in the background (passwords, wallet addresses, MFA
+  codes). People run pbpaste in Terminal all the time: those runs have a tty and do not
+  match. A pty made for the purpose (script -q /dev/null pbpaste, expect, unbuffer) is
+  treated as a script, since a tty alone does not prove a person. Known false positive:
+  automation apps (Shortcuts, Keyboard Maestro, Alfred workflows) that run a shell script
+  calling pbpaste; exclude them by their script path if you use them. Not covered: reading the clipboard through NSPasteboard or osascript
+  "the clipboard" (see the converted SigmaHQ osascript clipboard rule, where shipped).
+labels:
+  tactic.id: TA0009
+  tactic.name: Collection
+  technique.id: T1115
+  technique.name: Clipboard Data
+references:
+  - https://attack.mitre.org/techniques/T1115/
+condition: >
+  spawn_process
+  and ps.name = 'pbpaste'
+  and (
+    (not ps.tty imatches '/dev/*'
+     and (ps.parent.exe in shells or ps.parent.name imatches script_interpreter_name_globs or parent_no_developer_identity))
+    or ps.parent.name in ('script', 'expect', 'unbuffer')
+  )
+output: "pbpaste (pid %ps.pid) read the clipboard for %ps.parent.exe (pid %ps.ppid) without a terminal"
+severity: medium
+action: []
+tests:
+  atomic: [1ac2247f-65f8-4051-b51f-b0ccdfaaa5ff]
+min-engine-version: 0.1.0

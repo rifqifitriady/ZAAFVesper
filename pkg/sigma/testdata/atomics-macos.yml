@@ -1,0 +1,8 @@
+# Atomic Red Team tests (redcanaryco/atomic-red-team at a0e3f9b) that exercise
+# the behaviour of a converted SigmaHQ rule, keyed by Sigma rule id. Read by
+# zaafvesper sigma convert --atomics. Only tests whose command lines match the
+# rule's condition are listed; see docs/rules.md "Sigma import".
+508a9374-ad52-4789-b568-fc358def2c65: [3cfde62b-7c33-4b26-a61e-755d6131c8ce, 8f2765a8-e795-438b-a102-5e25a7adcce1] # proc_creation_macos_susp_histfile_operations
+51719bf5-e4fd-4e44-8ba8-b830e7ac0731: [01993ba5-1da3-4e15-a719-b690d4f0f0b2] # proc_creation_macos_create_account
+7f2bb9d5-6395-4de5-969c-70c11fbe6b12: [ab936c51-10f4-46ce-9144-e02137b2016a] # proc_creation_macos_split_file_into_pieces
+84bae5d4-b518-4ae0-b331-6d4afd34d00f: [515942b0-a09f-4163-a7bb-22fefb6f185f, 0d5a2b03-3a26-45e4-96ae-89485b4d1f97] # proc_creation_macos_network_service_scanning

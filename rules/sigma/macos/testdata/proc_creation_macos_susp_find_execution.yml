@@ -1,0 +1,18 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "find searches for setuid binaries"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7001, "ppid": 4000, "exe": "/usr/bin/find", "name": "find", "args": ["find", "/", "-perm", "-4000", "-type", "f"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.find", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "find searches for world-writable files"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7002, "ppid": 4000, "exe": "/usr/bin/find", "name": "find", "args": ["find", "/Users", "-perm", "-o", "w", "-type", "d"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.find", "parent": {"pid": 4000, "exe": "/usr/bin/python3", "name": "python3", "is_platform": true, "is_signed": true}}}
+nomatch:
+  - desc: "benign lookalike - find by name"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7011, "ppid": 4000, "exe": "/usr/bin/find", "name": "find", "args": ["find", ".", "-name", "*.go"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.find", "tty": "/dev/ttys001", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "find -perm 644 (not a privilege search)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7012, "ppid": 4000, "exe": "/usr/bin/find", "name": "find", "args": ["find", "/Users/rifqi/site", "-perm", "644"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.find", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "chmod -perm-like argument is not find"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7013, "ppid": 4000, "exe": "/bin/ls", "name": "ls", "args": ["ls", "-l", "/usr/bin/sudo"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.ls", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}

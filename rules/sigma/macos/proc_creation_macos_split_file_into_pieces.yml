@@ -1,0 +1,32 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Split A File Into Pieces
+id: 7f2bb9d5-6395-4de5-969c-70c11fbe6b12
+version: 1.0.0
+platforms: [macos]
+description: |-
+  Detection use of the command "split" to split files into parts and possible transfer.
+
+  Converted from Sigma rule 7f2bb9d5-6395-4de5-969c-70c11fbe6b12 by zaafvesper sigma convert. Sigma author: Igor Fits, Mikhail Larin, oscd.community.
+labels:
+  sigma.author: Igor Fits, Mikhail Larin, oscd.community
+  sigma.id: 7f2bb9d5-6395-4de5-969c-70c11fbe6b12
+  sigma.level: low
+  sigma.source: rules/macos/process_creation/proc_creation_macos_split_file_into_pieces.yml
+  sigma.status: test
+  sigma.tags: attack.exfiltration, attack.t1030
+  sigma.title: Split A File Into Pieces
+  tactic.id: TA0010
+  tactic.name: Exfiltration
+  technique.id: T1030
+references:
+  - https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1030/T1030.md
+condition: evt.name in ('CreateProcess') and (ps.exe iendswith '/split')
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Igor Fits, Mikhail Larin, oscd.community)'
+severity: low
+action: []
+tests:
+  atomic:
+    - ab936c51-10f4-46ce-9144-e02137b2016a
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Legitimate administrative activity'

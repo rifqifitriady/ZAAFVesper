@@ -1,0 +1,15 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "wmic /node: process call create on another host"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8141, "ppid": 4000, "exe": "C:\\Windows\\System32\\wbem\\WMIC.exe", "name": "WMIC.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "wmic /user:DOMAIN\\Administrator /password:P@ssw0rd1 /node:\"127.0.0.2\" process call create notepad.exe", "args": ["wmic", "/user:DOMAIN\\Administrator", "/password:P@ssw0rd1", "/node:\"127.0.0.2\"", "process", "call", "create", "notepad.exe"], "original_name": "wmic.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "wmic /node: lists services on a file server"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8142, "ppid": 4000, "exe": "C:\\Windows\\System32\\wbem\\WMIC.exe", "name": "WMIC.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "wmic /node:\"fileserver01\" service where (caption like \"%Spooler%\")", "args": ["wmic", "/node:\"fileserver01\"", "service", "where", "(caption", "like", "\"%Spooler%\")"], "original_name": "wmic.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - wmic /node:localhost (also how the ART T1047 tests run by default, so none is linked)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8151, "ppid": 4000, "exe": "C:\\Windows\\System32\\wbem\\WMIC.exe", "name": "WMIC.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "wmic /node:localhost os get caption", "args": ["wmic", "/node:localhost", "os", "get", "caption"], "original_name": "wmic.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "wmic local query"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8152, "ppid": 4000, "exe": "C:\\Windows\\System32\\wbem\\WMIC.exe", "name": "WMIC.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "wmic qfe get description,installedOn /format:csv", "args": ["wmic", "qfe", "get", "description,installedOn", "/format:csv"], "original_name": "wmic.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

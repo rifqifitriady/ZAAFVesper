@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "touch -t backdates a systemd unit"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 25061, "ppid": 24000, "exe": "/usr/bin/touch", "name": "touch", "uid": -1, "euid": -1, "username": "root", "cmdline": "touch -t 202001010000 /etc/systemd/system/backdoor.service", "args": ["touch", "-t", "202001010000", "/etc/systemd/system/backdoor.service"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}
+nomatch:
+  - desc: "benign lookalike - touch -t on a log file"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 25071, "ppid": 24000, "exe": "/usr/bin/touch", "name": "touch", "uid": -1, "euid": -1, "username": "root", "cmdline": "touch -t 202601010000 /var/log/app.log", "args": ["touch", "-t", "202601010000", "/var/log/app.log"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "touch creates a unit without a timestamp"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 25072, "ppid": 24000, "exe": "/usr/bin/touch", "name": "touch", "uid": -1, "euid": -1, "username": "root", "cmdline": "touch /etc/systemd/system/app.service", "args": ["touch", "/etc/systemd/system/app.service"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}

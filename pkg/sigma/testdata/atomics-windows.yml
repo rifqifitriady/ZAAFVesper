@@ -1,0 +1,15 @@
+# Atomic Red Team tests (redcanaryco/atomic-red-team at a0e3f9b) that exercise
+# the behaviour of a converted SigmaHQ rule, keyed by Sigma rule id. Read by
+# zaafvesper sigma convert --atomics.
+2afafd61-6aae-4df4-baed-139fa1f4c345: [2364e33d-ceab-4641-8468-bfb1d7cc2723] # proc_creation_win_ntdsutil_usage
+7ec2c172-dceb-4c10-92c9-87c1881b7e18: [14625569-6def-4497-99ac-8e7817105b55] # proc_creation_win_hktl_rubeus
+58f50261-c53b-4c88-bd12-1d71f12eda4c: [9c2dd36d-5c8b-4b29-8d72-a11b0d5d7439] # proc_creation_win_vaultcmd_list_creds
+e0b0c2ab-3d52-46d9-8cb7-049dc775fbd1: [b6ec082c-7384-46b3-a111-9a9b8b14e5e7, af197fd7-e868-448e-9bd5-05d1bcd9d9e5] # proc_creation_win_reg_enumeration_for_credentials_in_registry
+91a2c315-9ee6-4052-a853-6f6a8238f90d: [870fe8fb-5e23-4f5f-b89d-dd7fe26f3b5f] # proc_creation_win_findstr_gpp_passwords
+0d5675be-bc88-4172-86d3-1e96a4476536: [74ace21e-a31c-4f7d-b540-53e4eb6d1f73, 01d1c6c0-faf0-408e-b368-752a02285cb2] # proc_creation_win_reg_rdp_keys_tamper
+730fc21b-eaff-474b-ad23-90fd265d4988: [873106b7-cfed-454b-8680-fa9f6400431c, 004a5d68-627b-452d-af3d-43bd1fc75a3b] # proc_creation_win_sysinternals_psexec_execution
+a197e378-d31b-41c0-9635-cfdf1c1bb423: [efe86d95-44c4-4509-ae42-7bfd9d1f5b3d] # proc_creation_win_hktl_evil_winrm
+e593cf51-88db-4ee1-b920-37e89012a3c9: [22cfde89-befe-4e15-9753-47306b37a6e3, f3ad3c5b-1db1-45c1-81bf-d3370ebab6c8, 8a7f56ee-10e7-444c-a139-0109438288eb, e4c04b6f-c492-4782-82c7-3bf75eb8077e, d91cae26-7fc1-457b-a854-34c8aad48c89] # proc_creation_win_rundll32_susp_activity
+d059842b-6b9d-4ed1-b5c3-5b89143c6ede: [3c73d728-75fb-4180-a12f-6712864d7421, 62a06ec5-5754-47d2-bcfc-123d8314c6ae] # proc_creation_win_bitsadmin_download
+9e50a8b3-dd05-4eb8-9153-bdb6b79d50b0: [ca23bfb2-023f-49c5-8802-e66997de462d, a7c3ab07-52fb-49c8-ab6d-e9c6d4a0a985] # proc_creation_win_msxsl_execution
+0a1f9d29-6465-4776-b091-7f43b26e4c89: [36f96049-0ad7-4a5f-8418-460acaeb92fb] # file_delete_win_delete_prefetch

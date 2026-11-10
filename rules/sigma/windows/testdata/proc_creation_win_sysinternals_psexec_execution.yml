@@ -1,0 +1,15 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "PsExec runs a command on a remote host (ART T1569.002 PsExec)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8161, "ppid": 4000, "exe": "C:\\AtomicRedTeam\\ExternalPayloads\\PsExec.exe", "name": "PsExec.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "PsExec.exe \\\\fileserver01 -i -u DOMAIN\\Administrator -p P@ssw0rd1 -accepteula C:\\Windows\\System32\\calc.exe", "args": ["PsExec.exe", "\\\\fileserver01", "-i", "-u", "DOMAIN\\Administrator", "-p", "P@ssw0rd1", "-accepteula", "C:\\Windows\\System32\\calc.exe"], "original_name": "psexec.c", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "renamed PsExec found by its original file name"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8162, "ppid": 4000, "exe": "C:\\Users\\Public\\Temp\\svc.exe", "name": "svc.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "svc.exe -i -s cmd -accepteula", "args": ["svc.exe", "-i", "-s", "cmd", "-accepteula"], "original_name": "psexec.c", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - PsList from the same suite"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8171, "ppid": 4000, "exe": "C:\\Tools\\Sysinternals\\pslist.exe", "name": "pslist.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "pslist.exe -t", "args": ["pslist.exe", "-t"], "original_name": "pslist.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "PsExec's service on the target is a different image"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8172, "ppid": 4000, "exe": "C:\\Windows\\PSEXESVC.exe", "name": "PSEXESVC.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "C:\\Windows\\PSEXESVC.exe", "args": ["C:\\Windows\\PSEXESVC.exe"], "original_name": "psexesvc.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\services.exe", "name": "services.exe"}}}

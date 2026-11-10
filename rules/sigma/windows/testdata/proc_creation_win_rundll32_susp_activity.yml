@@ -1,0 +1,15 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "rundll32 url.dll,OpenURL opens an HTA (ART T1218.011 url.dll)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8201, "ppid": 4000, "exe": "C:\\Windows\\System32\\rundll32.exe", "name": "rundll32.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "rundll32.exe url.dll,OpenURL \"C:\\AtomicRedTeam\\atomics\\T1218.011\\src\\index.hta\"", "args": ["rundll32.exe", "url.dll,OpenURL", "\"C:\\AtomicRedTeam\\atomics\\T1218.011\\src\\index.hta\""], "original_name": "RUNDLL32.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "rundll32 zipfldr.dll,RouteTheCall runs an executable (ART T1218.011 zipfldr)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8202, "ppid": 4000, "exe": "C:\\Windows\\System32\\rundll32.exe", "name": "rundll32.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "rundll32.exe zipfldr.dll,RouteTheCall \"C:\\Windows\\System32\\calc.exe\"", "args": ["rundll32.exe", "zipfldr.dll,RouteTheCall", "\"C:\\Windows\\System32\\calc.exe\""], "original_name": "RUNDLL32.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - rundll32 opens the printer UI"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8211, "ppid": 4000, "exe": "C:\\Windows\\System32\\rundll32.exe", "name": "rundll32.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "rundll32.exe printui.dll,PrintUIEntry /il", "args": ["rundll32.exe", "printui.dll,PrintUIEntry", "/il"], "original_name": "RUNDLL32.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "rundll32 shell32 opens a folder with the normal verb"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8212, "ppid": 4000, "exe": "C:\\Windows\\System32\\rundll32.exe", "name": "rundll32.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "rundll32.exe shell32.dll,SHCreateLocalServerRunDll {9aa46009-3ce0-458a-a354-715610a075e6} -Embedding", "args": ["rundll32.exe", "shell32.dll,SHCreateLocalServerRunDll", "{9aa46009-3ce0-458a-a354-715610a075e6}", "-Embedding"], "original_name": "RUNDLL32.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\svchost.exe", "name": "svchost.exe"}}}

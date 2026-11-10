@@ -93,11 +93,18 @@ func cmdCoverage(args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("coverage")
 	out := fs.String("navigator", "", "write an ATT&CK Navigator layer (v4.5) to this new file, or - for stdout")
 	rulesDir := fs.String("rules", defaultRulesDir, "rules directory")
+	report := fs.Bool("report", false, "print techniques per platform and tactic, and rules without atomic tests")
+	attack := fs.String("attack", "", "with --report: check every technique and tactic id against this ATT&CK STIX bundle (enterprise-attack.json); exit 1 on unknown, revoked or deprecated ids")
+	asJSON := fs.Bool("json", false, "with --report: print JSON")
 	if !parseFlags(fs, args, stderr) {
 		return 2
 	}
-	if *out == "" || fs.NArg() != 0 {
+	if *report && *out == "" && fs.NArg() == 0 {
+		return cmdCoverageReport(*rulesDir, *attack, *asJSON, stdout, stderr)
+	}
+	if *out == "" || fs.NArg() != 0 || *report || *attack != "" || *asJSON {
 		say(stderr, "usage: zaafvesper coverage --navigator layer.json [--rules dir]")
+		say(stderr, "       zaafvesper coverage --report [--attack enterprise-attack.json] [--json] [--rules dir]")
 		return 2
 	}
 	rs, err := rules.LoadDir(*rulesDir)
