@@ -1,0 +1,24 @@
+title: Unix shell with an outbound network connection (macOS)
+id: 9e2d4a71-5b3c-4f60-8d1e-2a7c9b6f0d52
+status: experimental
+description: A Unix shell owns an outbound connection, the shape of a reverse shell. Live-validation rule for ZAAFVesper --elegia-out.
+author: ZAAFVesper live validation
+references:
+  - https://attack.mitre.org/techniques/T1059/004/
+tags:
+  - attack.execution
+  - attack.t1059.004
+logsource:
+  product: macos
+  category: network_connection
+detection:
+  selection:
+    Image|endswith:
+      - /bash
+      - /sh
+      - /zsh
+    Initiated: 'true'
+  condition: selection
+falsepositives:
+  - Unknown
+level: high

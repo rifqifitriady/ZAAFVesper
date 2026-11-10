@@ -1,10 +1,12 @@
 name: Registry Run key value set
 id: e5309615-3ae2-4eb5-a3b4-0ac145538022
-version: 1.0.0
+version: 1.1.0
 platforms: [windows]
 description: |
-  A value was written under a Run or RunOnce key (machine or user hive, including the
-  WOW6432Node view). Windows starts every program named there at boot or logon, which makes
+  A value was written under a Run, RunOnce or RunOnceEx key (machine or user hive,
+  including the WOW6432Node view). RunOnceEx was added after the live validation on a
+  Windows runner (v0.3): Atomic Red Team T1547.001 "Reg Key RunOnce" writes
+  RunOnceEx\0001\Depend and was missed. Windows starts every program named there at boot or logon, which makes
   it the most common Windows persistence mechanism.
   Known benign: installers of desktop applications (updaters, chat clients) set Run values;
   Explorer and msiexec are not excluded on purpose.
@@ -20,7 +22,9 @@ condition: >
   and registry.key imatches ('*\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\*',
                             '*\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce\\*',
                             '*\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run\\*',
-                            '*\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\RunOnce\\*')
+                            '*\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\RunOnce\\*',
+                          '*\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnceEx\\*',
+                          '*\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\RunOnceEx\\*')
 output: "%ps.exe (pid %ps.pid) set %registry.key = %registry.data"
 severity: medium
 action: []

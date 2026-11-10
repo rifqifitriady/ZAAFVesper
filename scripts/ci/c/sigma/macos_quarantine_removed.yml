@@ -1,0 +1,23 @@
+title: Quarantine attribute removed with xattr (macOS)
+id: 3b6f0e5c-8a1d-4c7e-9f2a-6d4b1c0e7a91
+status: experimental
+description: xattr deletes com.apple.quarantine. Live-validation rule for ZAAFVesper --elegia-out.
+author: ZAAFVesper live validation
+references:
+  - https://attack.mitre.org/techniques/T1553/001/
+tags:
+  - attack.defense-evasion
+  - attack.t1553.001
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image: /usr/bin/xattr
+    CommandLine|contains|all:
+      - ' -d '
+      - com.apple.quarantine
+  condition: selection
+falsepositives:
+  - Developers clearing quarantine on their own builds
+level: medium

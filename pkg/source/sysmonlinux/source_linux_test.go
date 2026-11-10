@@ -7,11 +7,13 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
+	"github.com/rifqifitriady/ZAAFVesper/pkg/procfs"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/source/sysmon"
 )
 
@@ -53,5 +55,67 @@ func TestReadLines(t *testing.T) {
 	}
 	if len(out) != 2 || s.untrusted.Load() != 1 || s.oversize.Load() != 1 || s.badLines.Load() != 1 || s.cursor != "s=1;i=4" {
 		t.Fatalf("out %d untrusted %d oversize %d bad %d cursor %q", len(out), s.untrusted.Load(), s.oversize.Load(), s.badLines.Load(), s.cursor)
+	}
+}
+
+// TestTgidOfOwnThreads: every thread of this (multi-threaded Go) process
+// maps to the process id, as FixThreadParent needs.
+func TestTgidOfOwnThreads(t *testing.T) {
+	ents, err := os.ReadDir("/proc/self/task")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid := int32(os.Getpid())
+	threads := 0
+	for _, e := range ents {
+		tid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		g, err := procfs.Default.Tgid(int32(tid))
+		if err != nil {
+			continue // thread ended meanwhile
+		}
+		if g != pid {
+			t.Fatalf("thread %d: tgid %d, want %d", tid, g, pid)
+		}
+		if int32(tid) != pid {
+			threads++
+		}
+	}
+	if threads == 0 {
+		t.Skip("no thread other than the main one")
+	}
+}
+
+// TestNewFeederFixesThreadParent: the feeder Run uses maps a real thread
+// of this (multi-threaded Go) process, reported as a parent, to the process.
+func TestNewFeederFixesThreadParent(t *testing.T) {
+	pid := int32(os.Getpid())
+	ents, err := os.ReadDir("/proc/self/task")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tid int32
+	for _, e := range ents {
+		if n, err := strconv.Atoi(e.Name()); err == nil && int32(n) != pid {
+			tid = int32(n)
+			break
+		}
+	}
+	if tid == 0 {
+		t.Skip("no thread other than the main one")
+	}
+	f := newFeeder(nil)
+	e := &event.Event{Name: event.CreateProcess, Time: time.Now(), Proc: &event.Proc{PID: 1 << 30, PPID: tid, Parent: &event.Proc{PID: tid}}}
+	f.Fix(e)
+	if e.Proc.PPID != pid || e.Args[ArgParentThread] != strconv.Itoa(int(tid)) {
+		t.Fatalf("ppid %d (want %d), args %v", e.Proc.PPID, pid, e.Args)
+	}
+	// An event older than the thread: not attached.
+	old := &event.Event{Name: event.CreateProcess, Time: time.Now().Add(-time.Hour), Proc: &event.Proc{PID: 1 << 30, PPID: tid, Parent: &event.Proc{PID: tid}}}
+	f.Fix(old)
+	if old.Proc.PPID != tid {
+		t.Fatalf("thread newer than the event was attached: %+v", old.Proc)
 	}
 }

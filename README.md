@@ -4,7 +4,7 @@
 
 <br>
 
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-0A0D26?style=for-the-badge&logo=apple&logoColor=white)](#platforms) [![Version](https://img.shields.io/badge/version-v0.2-5EF0D6?style=for-the-badge)](CHANGELOG.md) [![Go](https://img.shields.io/badge/Go-1.27-1FE5C3?style=for-the-badge&logo=go&logoColor=0A0D26)](go.mod) [![License](https://img.shields.io/badge/license-Apache--2.0-9D6BFF?style=for-the-badge)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-0A0D26?style=for-the-badge&logo=apple&logoColor=white)](#platforms) [![Version](https://img.shields.io/badge/version-v0.3-5EF0D6?style=for-the-badge)](CHANGELOG.md) [![Go](https://img.shields.io/badge/Go-1.27-1FE5C3?style=for-the-badge&logo=go&logoColor=0A0D26)](go.mod) [![License](https://img.shields.io/badge/license-Apache--2.0-9D6BFF?style=for-the-badge)](LICENSE)
 
 [![Rules](https://img.shields.io/badge/detection%20rules-94-3B8EFF?style=flat-square)](docs/rules.md) [![Fixtures](https://img.shields.io/badge/rule%20fixtures-467%20passing-1FE5C3?style=flat-square)](rules/testdata) [![ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-63%20techniques-FF3EC8?style=flat-square)](#detection-coverage) [![Status](https://img.shields.io/badge/status-pre--release-FF3EC8?style=flat-square)](#status) [![CI](https://github.com/rifqifitriady/ZAAFVesper/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rifqifitriady/ZAAFVesper/actions/workflows/ci.yml)
 
@@ -24,7 +24,7 @@
 ## Status
 
 > [!WARNING]
-> **Pre-release.** Every rule passes its fixtures, the code has been through several independent security reviews, and v0.3 is now proving it on live GitHub runners. The installer, the LaunchDaemon, Full Disk Access and the response actions have **not yet been validated as root on your own machine**. Treat a first install as a test on a machine you can recover. Open risks: [docs/security/open-findings.md](docs/security/open-findings.md).
+> **Pre-release.** Every rule passes its fixtures, the code has been through several independent security reviews, and v0.3 proved the sensor live, as root, on throw-away GitHub runners for macOS, Windows and Linux: Atomic Red Team tests fired the rules, and the response actions acted. See [docs/validation/](docs/validation/). A GitHub runner is not your machine: the installer, the LaunchDaemon and Full Disk Access **have not been validated on your own Mac**. Treat a first install as a test on a machine you can recover. Open risks: [docs/security/open-findings.md](docs/security/open-findings.md).
 
 ## Highlights
 
@@ -118,9 +118,9 @@ cat testdata/eslogger/*.jsonl > demo.jsonl
 
 | Platform | Event source | Status |
 |---|---|---|
-| macOS 13+ | Endpoint Security via `eslogger` | Main platform. Live install as root still to be validated on your machine. |
-| Windows 10/11, Server 2016+ | Sysmon through the event log, Windows service | **Preview.** Rules fired against Atomic Red Team on a GitHub Windows runner in v0.3 testing. [Install notes](packaging/windows/README.md). |
-| Linux (systemd) | Sysmon for Linux through journald | **Preview.** Rules fired against Atomic Red Team on a GitHub Ubuntu runner in v0.3 testing. [Install notes](packaging/linux/README.md). |
+| macOS 13+ | Endpoint Security via `eslogger` | Main platform. Rules fired and response actions acted as root on a GitHub macOS runner ([macos](docs/validation/macos.md), [response](docs/validation/response.md)); the package install on your own Mac is not validated. |
+| Windows 10/11, Server 2016+ | Sysmon through the event log, Windows service | **Preview.** 16 of 16 tested rules fired against Atomic Red Team on a GitHub Windows runner ([results](docs/validation/windows.md)). [Install notes](packaging/windows/README.md). |
+| Linux (systemd) | Sysmon for Linux through journald | **Preview.** Rules fired against Atomic Red Team on GitHub Ubuntu 24.04 and 26.04 runners ([results](docs/validation/linux.md)). [Install notes](packaging/linux/README.md). |
 
 - **Platform rules:** each rule declares `platforms:`. `run` loads only the host's rules, while `rules test` checks all of them on any machine.
 - **YARA:** macOS only for now.
@@ -213,14 +213,14 @@ Every finding and the tests behind it are tracked in [docs/security/open-finding
 
 ## Roadmap
 
-<p align="center"><img src="docs/assets/roadmap.svg" width="100%" alt="Roadmap: v0.1 Foundation and v0.2 Platform done, v0.3 Prove it live in progress, v0.4 Reach next, v0.5 Trust and v0.6 Prevent planned"></p>
+<p align="center"><img src="docs/assets/roadmap.svg" width="100%" alt="Roadmap: v0.1 Foundation, v0.2 Platform and v0.3 Prove it live done, v0.4 Reach in progress, v0.5 Trust and v0.6 Prevent planned"></p>
 
 | Version | Theme | What it brings |
 |---|---|---|
 | v0.1 · done | Foundation | eslogger, rule engine, 41 macOS rules, YARA, installer and LaunchDaemon |
 | v0.2 · done | Platform | Windows and Linux (Sysmon), Sigma import, network telemetry, SIEM and ZAAFElegia outputs, active response |
-| v0.3 · in progress | Prove it live | CI and releases built on GitHub with signed provenance; live tests on macOS, Windows and Linux runners with Atomic Red Team |
-| v0.4 · next | Reach | Containment on Windows and Linux; a Linux source without Sysmon (eBPF); deeper ZAAFElegia integration; detection coverage from 63 to 90+ ATT&CK techniques |
+| v0.3 · done | Prove it live | CI and releases built on GitHub with signed provenance; live tests on macOS, Windows and Linux runners with Atomic Red Team |
+| v0.4 · in progress | Reach | Containment on Windows and Linux; a Linux source without Sysmon (eBPF); deeper ZAAFElegia integration; detection coverage from 63 to 90+ ATT&CK techniques |
 | v0.5 · planned | Trust | Developer ID signed, notarized package (needs an Apple Developer account) |
 | v0.6 · planned | Prevent | Blocking before execution with Endpoint Security AUTH events, DNS through a NetworkExtension (needs Apple's entitlements) |
 

@@ -1,6 +1,24 @@
 # Changelog
 
-All releases are pre-release: nothing has yet been validated live as root on a real host. Open risks are in [docs/security/open-findings.md](docs/security/open-findings.md).
+All releases are pre-release. Since v0.3 the sensor is validated live as root on throw-away GitHub runners, not on your own machine. Open risks are in [docs/security/open-findings.md](docs/security/open-findings.md).
+
+## v0.3 · 9 Nov 2026 · Prove it live
+
+Four workstreams (#5, #6, #7, #8) used throw-away GitHub Actions runners as a root test lab. These are GitHub runners, not your own Mac.
+
+- **CI and releases ([#5](https://github.com/rifqifitriady/ZAAFVesper/pull/5)).**
+  - Every push and pull request runs vet, race tests, the rule fixtures, cross builds for 3 OS and the static YARA build.
+  - Tagged releases are built on GitHub with an SBOM and signed build provenance (`gh attestation verify`).
+- **Windows and Linux live ([#6](https://github.com/rifqifitriady/ZAAFVesper/pull/6)).** Sysmon and Sysmon for Linux were installed from pinned sources, then Atomic Red Team was run against them:
+  - Windows: 16 of 16 tested rules fired;
+  - Ubuntu 24.04: 16 of 16 fired;
+  - Ubuntu 26.04: 13 of 16 fired. The 3 SigmaHQ rules that did not fire expect `rm`/`cp`, which Ubuntu 26.04 runs as `gnurm`/`gnucp`; ZAAFVesper's own rule for the same behaviour still fires.
+- **Response actions live ([#7](https://github.com/rifqifitriady/ZAAFVesper/pull/7)).** kill, suspend, quarantine, requarantine, remove_persistence and pf isolation ran as root on macOS, and kill ran on Windows and Linux, all with the identity checks. No product bug was found.
+- **macOS live ([#8](https://github.com/rifqifitriady/ZAAFVesper/pull/8)).**
+  - `eslogger` ran as root, and 17 rules fired from safe local actions.
+  - Socket polling, syslog over TLS, the webhook and spool, and the live ZAAFElegia pipe were all verified (50 of 50 checks).
+  - One bug was found and fixed: the last alerts before a clean stop were spooled instead of delivered.
+- **Flaky tests fixed** after CI exposed them on other machines: syslog and forwarder spool timing, pid collisions, a test that read the host's DNS, and a YARA queue race.
 
 ## v0.2 · 9 Nov 2026
 

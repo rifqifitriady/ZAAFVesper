@@ -1,0 +1,275 @@
+{
+  "platform": "windows",
+  "tests": [
+    {
+      "id": "canary-start",
+      "canary": true,
+      "inline": {
+        "executor": "command_prompt",
+        "command": "wevtutil.exe cl ZAAFVesper-Canary-NoSuchLog"
+      },
+      "expect": [
+        "Suspicious Eventlog Clearing or Configuration Change Activity"
+      ],
+      "note": "Canary: proves the sensor receives and evaluates events at this point of the run."
+    },
+    {
+      "id": "art-T1547.001-e55be3fd",
+      "atomic": {
+        "technique": "T1547.001",
+        "guid": "e55be3fd-3521-4610-9d1a-e210e42dcf05"
+      },
+      "expect": [
+        "Registry Run key value set"
+      ]
+    },
+    {
+      "id": "art-T1547.001-554cbd88",
+      "atomic": {
+        "technique": "T1547.001",
+        "guid": "554cbd88-cde1-4b56-8168-0be552eed9eb"
+      },
+      "expect": [
+        "Registry Run key value set"
+      ]
+    },
+    {
+      "id": "inline-vssadmin-delete",
+      "inline": {
+        "executor": "command_prompt",
+        "command": "vssadmin.exe delete shadows /for=Q: /quiet"
+      },
+      "expect": [
+        "Volume shadow copies deleted or recovery disabled",
+        "Shadow Copies Deletion Using Operating Systems Utilities"
+      ],
+      "note": "Safe form of ART T1490 43819286: targets drive Q:, which does not exist, so no shadow copy can be deleted."
+    },
+    {
+      "id": "inline-wmic-shadowcopy-delete",
+      "requires": [
+        "wmic.exe"
+      ],
+      "inline": {
+        "executor": "command_prompt",
+        "command": "wmic.exe shadowcopy where \"ID='{00000000-0000-0000-0000-000000000000}'\" delete"
+      },
+      "expect": [
+        "Volume shadow copies deleted or recovery disabled",
+        "Shadow Copies Deletion Using Operating Systems Utilities"
+      ],
+      "note": "Safe form of ART T1490 6a3ff8dd: selects a shadow copy id that does not exist. Needs wmic.exe, which newer Windows images no longer ship."
+    },
+    {
+      "id": "art-T1546.003-3c64f177",
+      "atomic": {
+        "technique": "T1546.003",
+        "guid": "3c64f177-28e2-49eb-a799-d767b24dd1e0"
+      },
+      "expect": [
+        "WMI event subscription persistence"
+      ],
+      "note": "The test's PowerShell creates the filter, consumer and binding (the rule fires) but does not exit; artrun stops it after 60 s and runs the cleanup."
+    },
+    {
+      "id": "inline-encoded-powershell",
+      "inline": {
+        "executor": "command_prompt",
+        "command": "powershell.exe -NoProfile -EncodedCommand VwByAGkAdABlAC0ATwB1AHQAcAB1AHQAIAB6AGEAYQBmAHYAZQBzAHAAZQByAC0AdgBhAGwAaQBkAGEAdABpAG8AbgA="
+      },
+      "expect": [
+        "PowerShell started with an encoded command"
+      ],
+      "note": "Equivalent of ART T1059.001 86a43bad: that test needs the AtomicTestHarnesses module from the PowerShell Gallery (not pinned)."
+    },
+    {
+      "id": "inline-bcdedit",
+      "inline": {
+        "executor": "command_prompt",
+        "command": "bcdedit.exe /set {00000000-0000-0000-0000-000000000000} recoveryenabled No"
+      },
+      "expect": [
+        "Volume shadow copies deleted or recovery disabled",
+        "Boot Configuration Tampering Via Bcdedit.EXE"
+      ],
+      "note": "Targets a boot entry that does not exist, so the boot configuration is not changed; the command line is what the rules check."
+    },
+    {
+      "id": "inline-wevtutil",
+      "inline": {
+        "executor": "command_prompt",
+        "command": "wevtutil.exe cl ZAAFVesper-Validation-NoSuchLog"
+      },
+      "expect": [
+        "Suspicious Eventlog Clearing or Configuration Change Activity"
+      ],
+      "note": "Clears a log that does not exist; no real log is cleared."
+    },
+    {
+      "id": "inline-certutil",
+      "inline": {
+        "executor": "command_prompt",
+        "command": "certutil.exe -urlcache -split -f http://127.0.0.1:9/zaafvesper-validation.exe %TEMP%\\zaafvesper-validation.exe",
+        "cleanup": "del /f /q %TEMP%\\zaafvesper-validation.exe 2>nul"
+      },
+      "expect": [
+        "Suspicious File Downloaded From Direct IP Via Certutil.EXE"
+      ],
+      "note": "Points at a closed local port: nothing is downloaded."
+    },
+    {
+      "id": "inline-mimikatz-cmdline",
+      "inline": {
+        "executor": "command_prompt",
+        "command": "cmd.exe /c \"echo privilege::debug sekurlsa::logonpasswords\""
+      },
+      "expect": [
+        "HackTool - Mimikatz Execution"
+      ],
+      "note": "Only the command line is mimicked; no credential tool runs."
+    },
+    {
+      "id": "inline-mshta-http",
+      "inline": {
+        "executor": "powershell",
+        "command": "$p = Start-Process -PassThru mshta.exe -ArgumentList 'http://127.0.0.1:9/zaafvesper-validation.hta'; Start-Sleep 3; Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue"
+      },
+      "expect": [
+        "Remotely Hosted HTA File Executed Via Mshta.EXE"
+      ],
+      "note": "Closed local port: nothing is loaded."
+    },
+    {
+      "id": "inline-comsvcs-minidump",
+      "inline": {
+        "executor": "powershell",
+        "command": "$p = Start-Process -PassThru -WindowStyle Hidden ping.exe -ArgumentList '-n 30 127.0.0.1'; Start-Sleep 1; & rundll32.exe C:\\Windows\\System32\\comsvcs.dll, MiniDump $p.Id $env:TEMP\\zaafvesper-ping.dmp full; Start-Sleep 2; Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue; Remove-Item -Force -ErrorAction SilentlyContinue $env:TEMP\\zaafvesper-ping.dmp"
+      },
+      "expect": [
+        "Process Memory Dump Via Comsvcs.DLL"
+      ],
+      "note": "Dumps a ping.exe started for the test, never LSASS."
+    },
+    {
+      "id": "inline-named-pipe",
+      "inline": {
+        "executor": "powershell",
+        "command": "$s = New-Object System.IO.Pipes.NamedPipeServerStream('MSSE-1234-server'); Start-Sleep 2; $s.Dispose()"
+      },
+      "expect": [
+        "CobaltStrike Named Pipe"
+      ]
+    },
+    {
+      "id": "inline-silentprocessexit",
+      "inline": {
+        "executor": "command_prompt",
+        "command": "reg add \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SilentProcessExit\\lsass.exe\" /v ReportingMode /t REG_DWORD /d 1 /f",
+        "cleanup": "reg delete \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SilentProcessExit\\lsass.exe\" /f"
+      },
+      "expect": [
+        "Potential Credential Dumping Via LSASS SilentProcessExit Technique"
+      ],
+      "note": "The key is removed right after; LSASS is not touched."
+    },
+    {
+      "id": "inline-eventviewer-uac",
+      "inline": {
+        "executor": "command_prompt",
+        "command": "reg add HKCU\\Software\\Classes\\mscfile\\shell\\open\\command /ve /d C:\\Windows\\System32\\notepad.exe /f",
+        "cleanup": "reg delete HKCU\\Software\\Classes\\mscfile /f"
+      },
+      "expect": [
+        "Bypass UAC Using Event Viewer"
+      ],
+      "note": "Event Viewer is not started; the key is removed right after."
+    },
+    {
+      "id": "inline-lsass-dump-name",
+      "inline": {
+        "executor": "command_prompt",
+        "command": "cmd.exe /c \"type nul > C:\\Windows\\Temp\\lsass.dmp\"",
+        "cleanup": "del /f /q C:\\Windows\\Temp\\lsass.dmp"
+      },
+      "expect": [
+        "LSASS Process Memory Dump Files"
+      ],
+      "note": "An empty file with a dump's name; no memory is dumped."
+    },
+    {
+      "id": "inline-remote-thread",
+      "inline": {
+        "executor": "powershell",
+        "command": "& $env:ZV_REMOTETHREAD"
+      },
+      "expect": [
+        "Remote thread created in another process from a user-writable location"
+      ],
+      "note": "scripts/ci/b/remotethread, copied to the user's Temp folder, starts a ping.exe and creates one thread in it at kernel32!ExitThread; nothing else is injected."
+    },
+    {
+      "id": "canary-end",
+      "canary": true,
+      "inline": {
+        "executor": "command_prompt",
+        "command": "wevtutil.exe cl ZAAFVesper-Canary-NoSuchLog"
+      },
+      "expect": [
+        "Suspicious Eventlog Clearing or Configuration Change Activity"
+      ],
+      "note": "Canary: proves the sensor receives and evaluates events at this point of the run."
+    }
+  ],
+  "untestable": [
+    {
+      "rule": "LSASS process memory opened for reading",
+      "reason": "Would read the runner's real LSASS memory (credentials). Not run."
+    },
+    {
+      "rule": "Lsass Memory Dump via Comsvcs DLL",
+      "reason": "Would dump the runner's real LSASS memory (credentials). Not run."
+    },
+    {
+      "rule": "Password Dumper Remote Thread in LSASS",
+      "reason": "Would inject a thread into the runner's LSASS. Not run."
+    },
+    {
+      "rule": "Driver Load From A Temporary Directory",
+      "reason": "Needs loading a kernel driver from a Temp folder. Not run."
+    }
+  ],
+  "skipped_atomics": [
+    {
+      "guid": "86a43bad-12e3-4e85-b97c-4d5cf25b95c3",
+      "reason": "Needs the AtomicTestHarnesses module from the PowerShell Gallery (not pinned); replaced by inline-encoded-powershell."
+    },
+    {
+      "guid": "0d181431-ddf3-4826-8055-2dbf63ae848b",
+      "reason": "Needs the AtomicTestHarnesses module from the PowerShell Gallery (not pinned); replaced by inline-encoded-powershell."
+    },
+    {
+      "guid": "0be2230c-9ab3-4ac2-8826-3199b9a0ebf8",
+      "reason": "Dumps the runner's real LSASS with ProcDump (credentials, and a tool download). Not run."
+    },
+    {
+      "guid": "7cede33f-0acd-44ef-9774-15511300b24b",
+      "reason": "Dumps the runner's real LSASS with ProcDump (credentials, and a tool download). Not run."
+    },
+    {
+      "guid": "2536dee2-12fb-459a-8c37-971844fa73be",
+      "reason": "Dumps the runner's real LSASS with comsvcs.dll (credentials). Its command shape is covered by inline-comsvcs-minidump against a ping.exe."
+    },
+    {
+      "guid": "43819286-91a9-4369-90ed-d31fb4da2c01",
+      "reason": "Deletes every shadow copy on the machine; replaced by inline-vssadmin-delete against a drive that does not exist."
+    },
+    {
+      "guid": "6a3ff8dd-f49c-4272-a658-11c2fe58bd88",
+      "reason": "Deletes every shadow copy on the machine; replaced by inline-wmic-shadowcopy-delete against an id that does not exist."
+    },
+    {
+      "guid": "263ba6cb-ea2b-41c9-9d4e-b652dadd002c",
+      "reason": "Deletes the machine's backup catalog (wbadmin delete catalog), which has no harmless target. Not run; the rule's vssadmin branch is tested."
+    }
+  ]
+}

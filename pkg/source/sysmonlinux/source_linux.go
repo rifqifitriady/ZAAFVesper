@@ -80,23 +80,50 @@ func ReadStamp(pid int32) (sysmon.Stamp, error) {
 	if err != nil {
 		return sysmon.Stamp{}, err
 	}
+	precise, err := preciseStart(st.StartTicks)
+	if err != nil {
+		return sysmon.Stamp{}, err
+	}
+	return sysmon.Stamp{ID: st.StartTicks, Start: procfs.StartTime(bt, st.StartTicks), Precise: precise}, nil
+}
+
+// preciseStart turns a start time in ticks since boot into wall time with
+// CLOCK_REALTIME - CLOCK_BOOTTIME read now (exact to the tick).
+func preciseStart(ticks uint64) (time.Time, error) {
 	var rt, bo unix.Timespec
 	if err := unix.ClockGettime(unix.CLOCK_REALTIME, &rt); err != nil {
-		return sysmon.Stamp{}, err
+		return time.Time{}, err
 	}
 	if err := unix.ClockGettime(unix.CLOCK_BOOTTIME, &bo); err != nil {
-		return sysmon.Stamp{}, err
+		return time.Time{}, err
 	}
 	boot := time.Unix(rt.Unix()).Add(-time.Duration(bo.Nano()))
-	precise := boot.Add(time.Duration(st.StartTicks) * (time.Second / procfs.UserHZ)).UTC()
-	return sysmon.Stamp{ID: st.StartTicks, Start: procfs.StartTime(bt, st.StartTicks), Precise: precise}, nil
+	return boot.Add(time.Duration(ticks) * (time.Second / procfs.UserHZ)).UTC(), nil
+}
+
+// threadStartedAt is the start time of thread tid of process tgid
+// (FixThreadParent's guard against a reused thread id).
+func threadStartedAt(tgid, tid int32) (time.Time, error) {
+	st, err := procfs.Default.TaskStat(tgid, tid)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return preciseStart(st.StartTicks)
+}
+
+// newFeeder builds the feeder Run uses: identity binding, and the parent
+// fix for Sysmon for Linux's thread ids.
+func newFeeder(events []string) *sysmon.Feeder {
+	feed := sysmon.NewFeeder(events, sysmon.NewBinder(ReadStamp, IdentityTolerance))
+	feed.Fix = func(e *event.Event) { FixThreadParent(e, procfs.Default.Tgid, threadStartedAt, IdentityTolerance) }
+	return feed
 }
 
 // Run follows the journal until ctx ends. journalctl is restarted (resuming
 // after the last cursor read) when it exits, at most maxRestartsPerMinute
 // times a minute.
 func (s *Source) Run(ctx context.Context, events []string, out chan<- *event.Event) error {
-	feed := sysmon.NewFeeder(events, sysmon.NewBinder(ReadStamp, IdentityTolerance))
+	feed := newFeeder(events)
 	if s.pending != nil {
 		feed.OnDegraded(s.pending)
 	}

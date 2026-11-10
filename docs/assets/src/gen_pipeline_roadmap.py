@@ -103,8 +103,8 @@ open(os.path.join(OUT, "pipeline.svg"), "w").write("".join(p))
 
 # ---------------- roadmap ----------------
 W, H = 840, 360
-css = '''.draw { stroke-dasharray: 360; animation: draw 2.6s ease-out forwards; }
-    @keyframes draw { from { stroke-dashoffset: 360; } to { stroke-dashoffset: 0; } }
+css = '''.draw { stroke-dasharray: 520; animation: draw 2.6s ease-out forwards; }
+    @keyframes draw { from { stroke-dashoffset: 520; } to { stroke-dashoffset: 0; } }
     .ring { transform-box: fill-box; transform-origin: center; animation: ring 2.2s ease-out infinite; }
     @keyframes ring { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(2.4); } }
     .card { opacity: 0; animation: up .7s ease-out forwards; }
@@ -112,12 +112,12 @@ css = '''.draw { stroke-dasharray: 360; animation: draw 2.6s ease-out forwards; 
     .chip { font-size: 11.5px; font-weight: 700; letter-spacing: .6px; }
     .b { font-size: 12.5px; fill: #CFCBEA; }'''
 r = [head(W, H, "ZAAFVesper roadmap",
-          "Roadmap: v0.1 Foundation and v0.2 Platform are done, v0.3 Prove it live is in progress, v0.4 Trust and v0.5 Prevent are planned and need an Apple developer account and entitlement.", css)]
+          "Roadmap: v0.1 Foundation, v0.2 Platform and v0.3 Prove it live are done, v0.4 Reach is in progress, v0.5 Trust and v0.6 Prevent are planned and need an Apple developer account and entitlement.", css)]
 nodes = [
     ("v0.1", "Foundation", "DONE · 7 NOV", TEAL, "done", ["eslogger + rule engine", "41 macOS rules", "Installer + daemon"]),
     ("v0.2", "Platform", "DONE · 9 NOV", TEAL, "done", ["Windows + Linux", "Sigma · network", "SIEM · contain"]),
-    ("v0.3", "Prove it live", "NOW", MAGENTA, "now", ["CI + provenance", "Live tests on runners", "Atomic Red Team"]),
-    ("v0.4", "Reach", "NEXT", BLUE, "plan", ["Contain on Win/Linux", "Linux via eBPF", "ZAAFElegia · 90+ TTPs"]),
+    ("v0.3", "Prove it live", "DONE · 9 NOV", TEAL, "done", ["CI + provenance", "Live tests on runners", "Atomic Red Team"]),
+    ("v0.4", "Reach", "NOW", MAGENTA, "now", ["Contain on Win/Linux", "Linux via eBPF", "ZAAFElegia · 100+ TTPs"]),
     ("v0.5", "Trust", "PLANNED", VIOLET, "plan", ["Developer ID signing", "Notarized package", "Apple account"]),
     ("v0.6", "Prevent", "PLANNED", VIOLET, "plan", ["AUTH blocking", "DNS via NetExt", "Apple entitlement"]),
 ]
@@ -125,8 +125,8 @@ xs = [82, 217, 352, 487, 622, 757]
 LY = 96
 r.append(f'<text x="40" y="44" font-size="13" font-weight="700" letter-spacing="2.4" fill="#5EF0D6">ROADMAP</text>')
 r.append(f'<path d="M{xs[0]} {LY} H{xs[-1]}" stroke="#262B5E" stroke-width="4" stroke-linecap="round"/>')
-r.append(f'<path class="wire dash" d="M{xs[2]} {LY} H{xs[-1]}" stroke="{VIOLET}" stroke-width="3"/>')
-r.append(f'<path class="draw" d="M{xs[0]} {LY} H{xs[2]}" stroke="url(#prog)" stroke-width="4" stroke-linecap="round" fill="none"/>')
+r.append(f'<path class="wire dash" d="M{xs[3]} {LY} H{xs[-1]}" stroke="{VIOLET}" stroke-width="3"/>')
+r.append(f'<path class="draw" d="M{xs[0]} {LY} H{xs[3]}" stroke="url(#prog)" stroke-width="4" stroke-linecap="round" fill="none"/>')
 r.insert(1, '')
 r[0] = r[0].replace('</defs>', f'<linearGradient id="prog" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="{TEAL}"/><stop offset="1" stop-color="{MAGENTA}"/></linearGradient></defs>')
 for i, ((ver, name, chip, col, state, bullets), x) in enumerate(zip(nodes, xs)):

@@ -41,12 +41,17 @@ Run as root. Paths match the macOS layout.
    install -d -m 0755 /usr/local/etc/zaafvesper
    install -m 0644 configs/zaafvesper.yml /usr/local/etc/zaafvesper/zaafvesper.yml
    cp -R rules /usr/local/etc/zaafvesper/rules && chown -R root:root /usr/local/etc/zaafvesper && chmod -R go-w /usr/local/etc/zaafvesper
-   install -d -m 0700 /var/log/zaafvesper
    install -m 0644 packaging/linux/zaafvesper.service /etc/systemd/system/zaafvesper.service
    systemctl daemon-reload && systemctl enable --now zaafvesper
    ```
 5. **Check**: `journalctl -u zaafvesper` shows the start-up lines (rules enabled,
-   events subscribed); alerts are in `/var/log/zaafvesper/alerts-*.jsonl`.
+   events subscribed); alerts are in `/var/lib/zaafvesper/logs/alerts-*.jsonl`. (Not under `/var/log`: on
+   Debian and Ubuntu `/var/log` is group-writable by `syslog`, and ZAAFVesper refuses an output
+   folder whose parents another account can change. The v0.3 live run on an Ubuntu runner found this.)
+
+Upgrading from v0.2: the alert files moved from `/var/log/zaafvesper/` to
+`/var/lib/zaafvesper/logs/`. Point any log shipper at the new folder; old files stay
+where they were until you remove them.
 
 Uninstall: `systemctl disable --now zaafvesper`, then remove the files above.
 
@@ -56,7 +61,7 @@ Uninstall: `systemctl disable --now zaafvesper`, then remove the files above.
 |---|---|
 | `CapabilityBoundingSet=CAP_KILL CAP_SYS_PTRACE CAP_DAC_READ_SEARCH` | kill other users' processes; read `/proc/<pid>/exe` and `cwd` of other users; read the journal. Nothing else (no `CAP_SYS_ADMIN`, no `CAP_NET_*`). |
 | `NoNewPrivileges`, `RestrictSUIDSGID` | journalctl (the only child) cannot gain privileges. |
-| `ProtectSystem=strict`, `ReadWritePaths=/var/log/zaafvesper` | the only writable place is the output directory. |
+| `ProtectSystem=strict`, `StateDirectory=zaafvesper` | the only writable place is `/var/lib/zaafvesper` (created root-only by systemd). |
 | `ProtectHome=read-only`, `PrivateTmp`, `PrivateDevices` | no writes to homes, a private `/tmp`, no device nodes. |
 | `SystemCallFilter=@system-service` | includes `pidfd_open` and `pidfd_send_signal` (systemd 245+). |
 | `RestrictAddressFamilies=AF_UNIX`, `IPAddressDeny=any` | no network at all (alerts go to files). |
@@ -72,7 +77,7 @@ drop-in (`systemctl edit zaafvesper`) that changes three things:
 [Service]
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 IPAddressAllow=192.0.2.10
-ReadWritePaths=/var/log/zaafvesper /var/db/zaafvesper
+ReadWritePaths=/var/db/zaafvesper
 ```
 
 `IPAddressAllow` names only your receiver(s) (keep `IPAddressDeny=any`), and
