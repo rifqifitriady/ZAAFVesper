@@ -9,7 +9,7 @@ import (
 const (
 	DefaultSegmentBytes = 64 << 20
 	DefaultSegmentAge   = 15 * time.Minute
-	DefaultSegmentKeep  = 1 << 30
+	DefaultSegmentKeep  = 8 << 30
 	// DefaultSegmentMinKeep is the retention floor: a closed segment younger
 	// than this is never deleted, whatever the size pressure (the 7-day floor
 	// of the alert files, docs/security/open-findings.md M5).

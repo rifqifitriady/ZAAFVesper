@@ -4,7 +4,7 @@
 
 | Flag | What it writes |
 |---|---|
-| `--elegia-dir DIR` | The same records in rotating segment files for scheduled hunts: `events-<UTC>.ndjson`, closed at `--elegia-segment-bytes` (64 MiB) or `--elegia-segment-age` (15 min), oldest deleted beyond `--elegia-keep-bytes` (1 GiB), but never one younger than `--elegia-min-keep` (7 days): a full directory of young segments stops capture (`SensorDegraded elegia_dir_full`) instead of erasing evidence, so size the cap for your event rate (see docs/operations.md). The open segment is `events-<UTC>.ndjson.part`, so `zaaf hunt DIR/*.ndjson` never reads a half-written file. |
+| `--elegia-dir DIR` | The same records in rotating segment files for scheduled hunts: `events-<UTC>.ndjson`, closed at `--elegia-segment-bytes` (64 MiB) or `--elegia-segment-age` (15 min), oldest deleted beyond `--elegia-keep-bytes` (8 GiB), but never one younger than `--elegia-min-keep` (7 days): a full directory of young segments stops capture (`SensorDegraded elegia_dir_full`) instead of erasing evidence, so size the cap for your event rate (see docs/operations.md). The open segment is `events-<UTC>.ndjson.part`, so `zaaf hunt DIR/*.ndjson` never reads a half-written file. |
 | `--elegia-out PATH` or `--elegia-out -` | Every event (after exclusions), one JSON object per line, with **Sigma field names** (`Image`, `CommandLine`, `ParentImage`, `DestinationIp`, `DestinationPort`, `Initiated`, …) plus `logsource.product`, `logsource.category`, a Sysmon-compatible `EventID` and `UtcTime`. |
 | `--alerts-ocsf PATH` | ZAAFVesper's own alerts as OCSF 1.5.0 Detection Findings (class 2004), in the same shape as `zaaf hunt -o ndjson`. |
 
