@@ -77,6 +77,29 @@ func (e *elegiaOptions) check() error {
 	return e.checkDirPath()
 }
 
+// elegiaPathFlags are the flags of the ZAAFElegia outputs that name a path;
+// an empty value is meaningless for them.
+var elegiaPathFlags = []string{"elegia-dir", "elegia-out", "alerts-ocsf"}
+
+// checkNotEmptyIfGiven rejects a flag that was given on the command line with
+// an empty value. Go's flag package cannot tell `--elegia-dir ""` from the
+// flag not being given, so an empty variable in a service definition would
+// silently switch the output off and capture nothing. Only flags registered
+// on fs are looked at.
+func checkNotEmptyIfGiven(fs *flag.FlagSet, names ...string) error {
+	want := map[string]bool{}
+	for _, n := range names {
+		want[n] = true
+	}
+	var err error
+	fs.Visit(func(f *flag.Flag) {
+		if err == nil && want[f.Name] && strings.TrimSpace(f.Value.String()) == "" {
+			err = fmt.Errorf("--%s was given an empty value; name a path, or leave the flag out to switch the output off", f.Name)
+		}
+	})
+	return err
+}
+
 // flagPath is a path given by another flag that must stay apart from the
 // ZAAFElegia outputs.
 type flagPath struct{ flag, path string }

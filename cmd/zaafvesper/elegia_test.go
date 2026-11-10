@@ -275,3 +275,63 @@ func TestElegiaDirFullReachesDegraded(t *testing.T) {
 		t.Fatalf("elegia_dir_full not reported: %v", conds)
 	}
 }
+
+// ---- explicit empty values, run collisions (judge round 2) ----
+
+// An explicitly empty path (an unset variable in a service definition) is a
+// mistake, not "off": refused with exit 2 by run and by replay, before
+// anything else is checked.
+func TestElegiaPathFlagGivenEmptyIsRefused(t *testing.T) {
+	for _, flagName := range []string{"--elegia-dir", "--elegia-out", "--alerts-ocsf"} {
+		for _, form := range [][]string{{flagName, ""}, {flagName + "="}, {flagName, "  "}} {
+			var out, errb bytes.Buffer
+			rc := cmdRun(form, &out, &errb)
+			if rc != 2 || !strings.Contains(errb.String(), "empty value") || !strings.Contains(errb.String(), flagName) {
+				t.Errorf("run %q: rc %d, %q", form, rc, errb.String())
+			}
+			if flagName == "--alerts-ocsf" {
+				continue // replay has no such flag
+			}
+			errb.Reset()
+			rc = cmdReplay(append(append([]string{"--rules", "../../rules"}, form...), execTree), &out, &errb)
+			if rc != 2 || !strings.Contains(errb.String(), "empty value") || !strings.Contains(errb.String(), flagName) {
+				t.Errorf("replay %q: rc %d, %q", form, rc, errb.String())
+			}
+		}
+	}
+	// A flag that is simply not given is still "off".
+	var out, errb bytes.Buffer
+	if rc := cmdReplay([]string{"--rules", "../../rules", "--platform", "macos", execTree}, &out, &errb); rc != 0 {
+		t.Fatalf("replay without the flags: rc %d, %s", rc, errb.String())
+	}
+}
+
+// run refuses ZAAFElegia paths that collide with --json, --output-dir and
+// --capture (replay already does), before it needs root or creates anything.
+func TestRunElegiaCollidesWithAlertAndCaptureFiles(t *testing.T) {
+	base := t.TempDir()
+	x := filepath.Join(base, "x")
+	for name, args := range map[string][]string{
+		"out = json":            {"--elegia-out", x, "--json", x},
+		"dir = output-dir":      {"--elegia-dir", x, "--output-dir", x},
+		"dir inside output-dir": {"--elegia-dir", filepath.Join(x, "seg"), "--output-dir", x},
+		"output-dir inside dir": {"--elegia-dir", x, "--output-dir", filepath.Join(x, "alerts")},
+		"out = capture":         {"--elegia-out", x, "--capture", x},
+		"dir = json":            {"--elegia-dir", x, "--json", x},
+	} {
+		var out, errb bytes.Buffer
+		if rc := cmdRun(args, &out, &errb); rc != 2 || !strings.Contains(errb.String(), "same path") {
+			t.Errorf("%s: rc %d, %q", name, rc, errb.String())
+		}
+		if _, err := os.Lstat(x); err == nil {
+			t.Errorf("%s: %s was created", name, x)
+			_ = os.RemoveAll(x)
+		}
+	}
+	// Different paths are not a collision (run then stops at the root check).
+	var out, errb bytes.Buffer
+	rc := cmdRun([]string{"--elegia-out", filepath.Join(base, "e.ndjson"), "--json", filepath.Join(base, "a.jsonl"), "--capture", filepath.Join(base, "c.rcap")}, &out, &errb)
+	if strings.Contains(errb.String(), "same path") {
+		t.Fatalf("distinct paths refused: rc %d, %s", rc, errb.String())
+	}
+}

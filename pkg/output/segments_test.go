@@ -3,6 +3,7 @@
 package output
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -757,5 +758,187 @@ func TestSegmentsRestartLeavesClosedSegmentsUntouched(t *testing.T) {
 	}
 	if s2.Stats()["recovered_at_start"] != 0 || s2.Stats()["pruned"] != 0 {
 		t.Fatalf("restart touched segments: %v", s2.Stats())
+	}
+}
+
+// ---- lines straddling chunks (judge round 2) ----
+
+// advanceAfterPartial wraps a Segments like a bufio.Writer's destination and
+// moves the clock forward by 2 h right after the first chunk that ends in the
+// middle of a line while the writer is full: the next chunk (the tail of that
+// line) then finds the retention floor passed and the writer resuming.
+type advanceAfterPartial struct {
+	s    *Segments
+	clk  *fakeClock
+	done bool
+	at   *int // set to the line being written when the clock moves
+	line *int
+}
+
+func (a *advanceAfterPartial) Write(p []byte) (int, error) {
+	n, err := a.s.Write(p)
+	if !a.done && a.s.Stats()["dir_full"] == 1 && len(p) > 0 && p[len(p)-1] != '\n' {
+		a.clk.add(2 * time.Hour)
+		a.done = true
+		*a.at = *a.line
+	}
+	return n, err
+}
+
+// allLinesParse fails if any line of any closed segment is not a JSON object
+// and returns the ids found.
+func allLinesParse(t *testing.T, dir string) []int {
+	t.Helper()
+	closed, open := listDir(t, dir)
+	if len(open) != 0 {
+		t.Fatalf("open segments left: %v", open)
+	}
+	var ids []int
+	for _, f := range closed {
+		b, _ := os.ReadFile(filepath.Join(dir, f))
+		if len(b) == 0 || b[len(b)-1] != '\n' {
+			t.Fatalf("%s does not end with a newline", f)
+		}
+		for _, l := range bytes.Split(bytes.TrimSuffix(b, []byte("\n")), []byte("\n")) {
+			var m struct{ I int }
+			if err := json.Unmarshal(l, &m); err != nil {
+				t.Fatalf("BROKEN line in %s: %q", f, l)
+			}
+			ids = append(ids, m.I)
+		}
+	}
+	return ids
+}
+
+func jsonLine(i, pad int) []byte {
+	return []byte(fmt.Sprintf(`{"i":%d,"pad":"%s"}`+"\n", i, strings.Repeat("x", pad)))
+}
+
+// A resume from the full state in the middle of a line: the chunk that
+// starts the new segment holds the tail of a line whose head was dropped. It
+// is dropped too (and counted); every line in every segment parses.
+func TestSegmentsResumeFromFullNeverStartsWithPartialLine(t *testing.T) {
+	// Buffers of one to three lines: a line is then split into
+	// chunks by the buffer, as the LineWriter's 64 KiB bufio.Writer does.
+	for _, bufSize := range []int{100, 150, 230} {
+		t.Run(fmt.Sprint(bufSize), func(t *testing.T) {
+			dir := newSegDir(t)
+			clk := &fakeClock{t: time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)}
+			s, err := OpenSegments(dir, SegmentConfig{MaxBytes: 150, KeepBytes: 400, MinKeep: time.Hour, Now: clk.now}, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var line, at int
+			hook := &advanceAfterPartial{s: s, clk: clk, line: &line, at: &at}
+			bw := bufio.NewWriterSize(hook, bufSize)
+			for i := 0; i < 120; i++ {
+				line = i
+				_, _ = bw.Write(jsonLine(i, 50+i%40))
+				if s.Due() { // as the LineWriter does: flush, then rotate
+					_ = bw.Flush()
+					_ = s.Rotate()
+				}
+				clk.add(2 * time.Second)
+			}
+			_ = bw.Flush()
+			if !hook.done {
+				t.Fatalf("the writer never became full, the test did not reach the transition: %v", s.Stats())
+			}
+			if err := s.Close(); err != nil {
+				t.Fatal(err)
+			}
+			st := s.Stats()
+			ids := allLinesParse(t, dir)
+			if st["full_episodes"] < 2 {
+				t.Fatalf("no resume after the first full episode: %v", st)
+			}
+			if st["dropped_partial_lines"] == 0 {
+				t.Fatalf("the partial head at the resume was not counted: %v", st)
+			}
+			resumed := false
+			for _, id := range ids {
+				resumed = resumed || id > at
+			}
+			if !resumed {
+				t.Fatalf("no line after the resume at line %d: %v", at, ids)
+			}
+		})
+	}
+}
+
+// After a write error the caller resets its buffer and calls Recover (as the
+// LineWriter does): the next chunk starts a line, nothing is skipped wrongly,
+// and no line in any segment is broken.
+func TestSegmentsErrorRecoveryNeverStartsWithPartialLine(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	dir := newSegDir(t)
+	clk := &fakeClock{t: time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC), step: time.Millisecond}
+	s, err := OpenSegments(dir, SegmentConfig{MaxBytes: 1 << 20, KeepBytes: 1 << 30, Now: clk.now}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bw := bufio.NewWriterSize(s, 24)
+	write := func(from, to int) {
+		for i := from; i < to; i++ {
+			_, _ = bw.Write(jsonLine(i, 20+i%30))
+		}
+		_ = bw.Flush()
+	}
+	write(0, 10)
+	_ = s.Rotate()
+	// The directory becomes unwritable: no segment can be opened.
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	for i := 10; i < 20; i++ {
+		if _, err := bw.Write(jsonLine(i, 20+i%30)); err != nil {
+			bw.Reset(s) // what LineWriter.failed does
+			s.Recover()
+		}
+	}
+	if err := bw.Flush(); err != nil {
+		bw.Reset(s)
+		s.Recover()
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	write(100, 130)
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	ids := allLinesParse(t, dir)
+	if ids[len(ids)-1] != 129 || len(ids) < 30 {
+		t.Fatalf("writing did not resume after the error: %v", ids)
+	}
+}
+
+// A chunk that is only the middle of a dropped line is dropped whole; the
+// first newline ends the dropped line and whole lines follow.
+func TestSegmentsSkipHeadAcrossSeveralChunks(t *testing.T) {
+	dir := newSegDir(t)
+	clk := &fakeClock{t: time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC), step: time.Millisecond}
+	s, err := OpenSegments(dir, SegmentConfig{KeepBytes: 1 << 30, Now: clk.now}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	s.midLine = true // as after a dropped chunk that ended inside a line
+	s.mu.Unlock()
+	for _, chunk := range []string{`"pad":"xx`, `xx"}`, "\n{\"i\":7}\n{\"i\":8}\n"} {
+		if n, err := s.Write([]byte(chunk)); err != nil || n != len(chunk) {
+			t.Fatalf("write %q: %d %v", chunk, n, err)
+		}
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if ids := allLinesParse(t, dir); len(ids) != 2 || ids[0] != 7 || ids[1] != 8 {
+		t.Fatalf("ids %v", ids)
+	}
+	if got := s.Stats()["dropped_partial_lines"]; got != 1 {
+		t.Fatalf("dropped_partial_lines %d, want 1 (one line, three chunks)", got)
 	}
 }

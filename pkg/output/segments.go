@@ -41,7 +41,15 @@ import (
 // elegia_dir_full, until space is free again. Capture stops rather than
 // erase young evidence.
 //
-// Write must be called with whole lines (the LineWriter does): rotation
+// Write takes chunks, not lines: the LineWriter puts a bufio.Writer in front,
+// which hands over chunks that may end in the middle of a line. A segment
+// still never starts with the tail of a line whose head went elsewhere: the
+// writer remembers whether the last chunk ended mid-line, and when a chunk
+// starts a new segment (after a full state, or any other point where data was
+// dropped) the partial head up to and including the first newline is dropped
+// and counted (dropped_partial_lines). Only whole lines are written after
+// that. A caller that resets its buffer after an error (the LineWriter does)
+// calls Recover, which marks the next chunk as starting a line. Rotation
 // happens only between writes. It implements io.Writer, io.Closer and the
 // LineWriter's rotator.
 type Segments struct {
@@ -57,6 +65,10 @@ type Segments struct {
 	closed  []segment // oldest first
 	total   int64     // bytes in closed segments
 
+	midLine      bool // the last chunk ended in the middle of a line
+	skipping     bool // dropping the head of a line up to its newline
+	stuckPartial bool // a partial line could not be cut off the open segment
+
 	full      bool
 	fullSince time.Time
 	lastRetry time.Time
@@ -66,6 +78,7 @@ type Segments struct {
 	pruned, prunedBytes, rotated, recovered uint64
 	unsafeSkipped, ioErrors, nameCollisions uint64
 	droppedFull, fullEpisodes               uint64
+	droppedPartial                          uint64
 }
 
 type segment struct {
@@ -361,15 +374,25 @@ func (s *Segments) collision(name string) {
 	s.report(CondDirError, "elegia dir %s: the next segment name %s is already taken by a file or link that is not ours; it is left untouched and the next name is used", s.path, name)
 }
 
-// Write appends whole lines to the open segment (opening one if needed).
-// While the writer is full (see the type comment) the lines are dropped and
-// counted, and Write reports success so the caller does not treat it as a
-// write error.
+// Write appends data to the open segment (opening one if needed); see the
+// type comment for lines that straddle chunks. While the writer is full the
+// data is dropped and counted, and Write reports success so the caller does
+// not treat it as a write error.
 func (s *Segments) Write(p []byte) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.fd < 0 {
 		return 0, errors.New("elegia dir: closed")
+	}
+	total := len(p)
+	if total == 0 {
+		return 0, nil
+	}
+	if s.cur != nil && s.curSize != s.lineEnd && s.stuckPartial {
+		// A partial line could not be cut off (truncate failed): close this
+		// segment and start a clean one rather than append behind it.
+		_ = s.finish()
+		s.stuckPartial = false
 	}
 	if s.cur == nil {
 		if s.full {
@@ -377,10 +400,33 @@ func (s *Segments) Write(p []byte) (int, error) {
 		}
 		if s.full {
 			s.dropFull(p)
-			return len(p), nil
+			s.noteEnd(p)
+			return total, nil
 		}
-		if err := s.open(); err != nil {
-			return 0, err
+		skip := 0
+		if s.midLine { // the head of p finishes a line whose start went elsewhere
+			if skip = bytes.IndexByte(p, '\n') + 1; skip == 0 {
+				skip = len(p)
+			}
+			if !s.skipping {
+				s.skipping = true
+				s.droppedPartial++
+			}
+			if skip == len(p) && p[len(p)-1] != '\n' {
+				return total, nil // no newline yet: still inside the dropped line
+			}
+		}
+		if skip < len(p) {
+			if err := s.open(); err != nil {
+				return 0, err
+			}
+		}
+		if skip > 0 {
+			s.midLine, s.skipping = false, false
+			p = p[skip:]
+			if len(p) == 0 {
+				return total, nil
+			}
 		}
 	}
 	n, err := s.cur.Write(p)
@@ -390,8 +436,17 @@ func (s *Segments) Write(p []byte) (int, error) {
 	s.curSize += int64(n)
 	if err != nil {
 		s.dropPartial()
+		return total - len(p) + n, err
 	}
-	return n, err
+	s.noteEnd(p)
+	return total, nil
+}
+
+// noteEnd records whether the data ended mid-line. Caller holds mu.
+func (s *Segments) noteEnd(p []byte) {
+	if len(p) > 0 {
+		s.midLine = p[len(p)-1] != '\n'
+	}
 }
 
 // dropFull counts the lines of p as dropped. Caller holds mu.
@@ -427,6 +482,7 @@ func (s *Segments) Recover() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.dropPartial()
+	s.midLine, s.skipping = false, false // the caller restarts at a line boundary
 }
 
 // dropPartial truncates the open segment to its last complete line. Caller
@@ -437,6 +493,7 @@ func (s *Segments) dropPartial() {
 	}
 	if err := s.cur.Truncate(s.lineEnd); err != nil {
 		s.ioErr("cutting the partial line of", s.curName+partExt, err)
+		s.stuckPartial = true
 		return
 	}
 	s.curSize = s.lineEnd
@@ -545,7 +602,7 @@ func (s *Segments) Stats() map[string]uint64 {
 	return map[string]uint64{"segments_closed": uint64(len(s.closed)), "segments_bytes": uint64(s.total),
 		"open_segment_bytes": uint64(s.curSize), "rotations": s.rotated, "pruned": s.pruned, "pruned_bytes": s.prunedBytes,
 		"recovered_at_start": s.recovered, "unsafe_skipped": s.unsafeSkipped, "io_errors": s.ioErrors,
-		"name_collisions": s.nameCollisions, "dir_full": full, "full_episodes": s.fullEpisodes, "dropped_dir_full": s.droppedFull}
+		"name_collisions": s.nameCollisions, "dropped_partial_lines": s.droppedPartial, "dir_full": full, "full_episodes": s.fullEpisodes, "dropped_dir_full": s.droppedFull}
 }
 
 var _ io.WriteCloser = (*Segments)(nil)

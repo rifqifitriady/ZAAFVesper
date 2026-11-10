@@ -73,8 +73,10 @@ func (n *netOutOptions) register(fs *flag.FlagSet) {
 	fs.Int64Var(&n.ocsfMaxBytes, "ocsf-max-bytes", alert.DefaultMaxFileBytes, "cap of the --alerts-ocsf file in bytes")
 }
 
-// check rejects incomplete or contradictory W2 flags.
-func (n *netOutOptions) check() error {
+// check rejects incomplete or contradictory W2 flags. extra are the paths of
+// other outputs (--json, --output-dir, --capture) the ZAAFElegia outputs must
+// not share.
+func (n *netOutOptions) check(extra ...flagPath) error {
 	if err := platformOutputCheck(n); err != nil {
 		return err
 	}
@@ -114,7 +116,7 @@ func (n *netOutOptions) check() error {
 	// The ZAAFElegia outputs must not share a path with the alert file or
 	// the spool, in either direction, whatever outputs are switched on
 	// (the default --spool-dir counts: it is created on demand).
-	return n.elegia.checkCollisions(flagPath{"--alerts-ocsf", n.alertsOCSF}, flagPath{"--spool-dir", n.spoolDir})
+	return n.elegia.checkCollisions(append([]flagPath{{"--alerts-ocsf", n.alertsOCSF}, {"--spool-dir", n.spoolDir}}, extra...)...)
 }
 
 // consoleWriter is where console alerts go: stderr when --elegia-out - owns

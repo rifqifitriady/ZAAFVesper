@@ -35,6 +35,10 @@ func cmdReplay(args []string, stdout, stderr io.Writer) int {
 		say(stderr, "zaafvesper replay: expected exactly one capture file")
 		return 2
 	}
+	if err := checkNotEmptyIfGiven(fs, "elegia-dir", "elegia-out"); err != nil {
+		say(stderr, "zaafvesper replay: %v", err)
+		return 2
+	}
 	if err := ex.check(); err != nil {
 		say(stderr, "zaafvesper replay: %v", err)
 		return 2

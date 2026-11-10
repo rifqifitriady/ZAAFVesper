@@ -117,6 +117,10 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	o.rulesGiven, o.configGiven = flagSet(fs, "rules"), flagSet(fs, "config")
+	if err := checkNotEmptyIfGiven(fs, elegiaPathFlags...); err != nil {
+		say(stderr, "zaafvesper run: %v", err)
+		return 2
+	}
 	if err := o.checkOutputFlags(); err != nil {
 		say(stderr, "zaafvesper run: %v", err)
 		return 2
@@ -157,7 +161,9 @@ func (o *runOptions) checkOutputFlags() error {
 	case o.jsonKeep < 1 || o.captureKeep < 1 || o.jsonHighKeep < 1:
 		return errors.New("--json-keep, --json-high-keep and --capture-keep must be at least 1")
 	}
-	return o.netout.check()
+	// The ZAAFElegia outputs must not share a path with the alert and capture
+	// files either.
+	return o.netout.check(flagPath{"--json", o.jsonPath}, flagPath{"--output-dir", o.outputDir}, flagPath{"--capture", o.capturePath})
 }
 
 // subscription computes the canonical events to subscribe at the source.
