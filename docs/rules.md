@@ -1,7 +1,7 @@
 # ZAAFVesper built-in rules
 
-135 rules: 61 hand-written rules in `rules/` (macOS, some of them also Linux or every
-platform), 13 hand-written Windows and Linux rules in `rules/windows/` and `rules/linux/`,
+136 rules: 61 hand-written rules in `rules/` (macOS, some of them also Linux or every
+platform), 14 hand-written Windows and Linux rules in `rules/windows/` and `rules/linux/`,
 and 61 rules converted from SigmaHQ (17 macOS, 28 Windows, 16 Linux; see
 [Sigma import](#sigma-import)). Also 5 YARA signatures and two shared macro files
 (`macros.yml`, `network.yml`). Together they cover **107 ATT&CK techniques** (see
@@ -242,7 +242,7 @@ they list only tests whose command lines match the rule's condition.
 
 ## Coverage and benchmark
 
-**Coverage (v0.4, 9 Nov 2026).** 135 enabled rules cover **107 ATT&CK techniques**, up
+**Coverage (v0.4, 9 Nov 2026).** 136 enabled rules cover **107 ATT&CK techniques**, up
 from 63 before v0.4: 61 on macOS, 41 on Windows and 27 on Linux (a rule without
 `platforms:` counts for every platform). Techniques per tactic, thinnest first:
 
@@ -256,7 +256,7 @@ from 63 before v0.4: 61 on macOS, 41 on Windows and 27 on Linux (a rule without
 | Command and Control | 6 | | Stealth | 23 |
 | Defense Impairment | 10 | | Persistence | 28 |
 
-65 of the 135 rules link at least one Atomic Red Team test. The other 70 are listed by the
+65 of the 136 rules link at least one Atomic Red Team test. The other 71 are listed by the
 report; most are converted SigmaHQ rules for tools that have no atomic (hacktools, malware
 families) or hand-written rules for behaviour no atomic exercises.
 
@@ -314,7 +314,8 @@ full-pipeline figure, and neither replaces a measurement on a live host.
   the like-for-like production case; `benign` and `fixtures-all` load every platform's
   rules at once and are upper bounds on cost.
 
-Apple M4, macOS, Go 1.27.3, branch `feat/detection-expansion` (135 rules) and the same
+Apple M4, macOS, Go 1.27.3, branch `feat/detection-expansion` (135 rules; measured before workstream E's one Windows
+registry rule was merged in, so the shipped set of 136 was not re-measured) and the same
 benchmark run on the v0.3 rule set (commit `7112b12`, 94 rules):
 
 | Benchmark | Rules loaded | Rules evaluated per event | Alerts per event | Events per second | µs per event |
@@ -768,14 +769,14 @@ process snapshot), `yara.meta[attack]` and `yara.meta[description]` (output only
 ## How the fixtures were checked
 
 **v0.4 detection expansion (final tree of branch `feat/detection-expansion`, 10 Nov 2026).**
-Every number in this file about the v0.4 rule set comes from these commands on that tree:
+Every number in this file about the v0.4 rule set comes from these commands on that tree after merging main (workstreams E and F), except the benchmark table:
 
-- `zaafvesper rules validate rules`: 135 rules (135 enabled, 4 sequences), 76 macros,
+- `zaafvesper rules validate rules`: 136 rules (136 enabled, 4 sequences), 76 macros,
   3 warnings (the three Linux reverse-shell rules without a technique).
-- `zaafvesper rules test rules`: 699 scenarios passed, 0 failed.
+- `zaafvesper rules test rules`: 704 scenarios passed, 0 failed.
 - `zaafvesper coverage --report --rules rules --attack enterprise-attack.json` (the pinned
-  bundle of the CI job, SHA-256 `fc783039...`): 135 enabled rules, 107 techniques (macOS 61,
-  Windows 41, Linux 27), 65 rules with an atomic test and 70 without, 0 problems, 2 warnings.
+  bundle of the CI job, SHA-256 `fc783039...`): 136 enabled rules, 107 techniques (macOS 61,
+  Windows 41, Linux 27), 65 rules with an atomic test and 71 without, 0 problems, 2 warnings.
 - `go test -run '^$' -bench 'BenchmarkEngine|BenchmarkShippedRules' -benchtime 3s ./pkg/rules ./cmd/zaafvesper`:
   the benchmark table.
 - `go test ./scripts/...`: the Windows and Linux live-validation plans name every shipped
