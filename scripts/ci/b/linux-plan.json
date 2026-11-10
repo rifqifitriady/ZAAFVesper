@@ -246,6 +246,62 @@
     {
       "guid": "42e3a5bd-1e45-427f-aa08-2a65fa29a820",
       "reason": "Stops a real service on the runner. Not run."
+    },
+    {
+      "guid": "0286eb44-e7ce-41a0-b109-3da516e05a5f",
+      "reason": "Declares prerequisites (gpg and zip, installed by a package manager call); prerequisites are never fetched. Not run."
+    },
+    {
+      "guid": "2794f321-55c4-4484-9eef-0557996f715a",
+      "reason": "macOS only (ditto). Linked because the shared rule also applies to macOS; not applicable to a Linux runner."
+    },
+    {
+      "guid": "a4b74723-5cee-4300-91c3-5e34166909b4",
+      "reason": "Needs rclone downloaded and an S3 destination with credentials; prerequisites are never fetched and no cloud account is used. Not run."
+    },
+    {
+      "guid": "38deee99-fd65-4031-bec8-bfa4f9f26146",
+      "reason": "No prerequisites (overwrites a scratch file with dd) and could be added to the plan; not run yet, so the dd rule has no live result."
+    },
+    {
+      "guid": "645f0f5a-ef09-48d8-b9bc-f0e24c642d72",
+      "reason": "macOS only (7z). Linked because the shared rule also applies to macOS; not applicable to a Linux runner."
+    },
+    {
+      "guid": "1a01f6b8-b1e8-418e-bbe3-78a6f822759e",
+      "reason": "macOS only (openssl on macOS). Linked because the shared rule also applies to macOS; not applicable to a Linux runner."
+    },
+    {
+      "guid": "6326dbc4-444b-4c04-88f4-27e94d0327cb",
+      "reason": "Restarts the machine; it would end the job. Not run."
+    },
+    {
+      "guid": "4963a81e-a3ad-4f02-adda-812343b351de",
+      "reason": "Shuts the machine down; it would end the job. Not run."
+    },
+    {
+      "guid": "47d0b042-a918-40ab-8cf9-150ffe919027",
+      "reason": "Restarts the machine with reboot; it would end the job. Not run."
+    },
+    {
+      "guid": "918f70ab-e1ef-49ff-bc57-b27021df84dd",
+      "reason": "Shuts the machine down with halt; it would end the job. Not run."
+    },
+    {
+      "guid": "78f92e14-f1e9-4446-b3e9-f1b921f2459e",
+      "reason": "Reboots the machine with halt; it would end the job. Not run."
+    },
+    {
+      "guid": "73a90cd2-48a2-4ac5-8594-2af35fa909fa",
+      "reason": "Shuts the machine down with poweroff; it would end the job. Not run."
+    },
+    {
+      "guid": "61303105-ff60-427b-999e-efb90b314e41",
+      "reason": "Reboots the machine with poweroff; it would end the job. Not run."
+    },
+    {
+      "guid": "342cc723-127c-4d3a-8292-9c0c6b4ecadc",
+      "reason": "No prerequisites (modifies ~/.ssh/authorized_keys of the runner user) and could be added with a cleanup that restores the file; not run yet, so the authorized_keys rule has no live result."
     }
   ],
   "rule_notes": [

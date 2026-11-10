@@ -410,6 +410,10 @@
     {
       "guid": "9c2dd36d-5c8b-4b29-8d72-a11b0d5d7439",
       "reason": "Not yet added to the plan; the VaultCmd rule has no live test yet."
+    },
+    {
+      "guid": "a4b74723-5cee-4300-91c3-5e34166909b4",
+      "reason": "The Atomic supports only Linux and macOS (it is linked because the rclone rule applies to every platform). There is no Windows Atomic for this rule; nothing is run."
     }
   ]
 }

@@ -145,25 +145,25 @@ exclusions: [`rules/sigma/NOTICE.md`](../rules/sigma/NOTICE.md).
 
 **macOS (17 rules, `rules/sigma/macos/`).**
 
-| Rule (file) | Tactic | Technique | Severity | Sigma author |
-|---|---|---|---|---|
-| Creation Of A Local User Account<br>`proc_creation_macos_create_account.yml` | Persistence | T1136.001 | low | Alejandro Ortuno, oscd.community |
-| System Integrity Protection (SIP) Disabled<br>`proc_creation_macos_csrutil_disable.yml` | Discovery | T1518.001 | medium | Joseliyo Sanchez, @Joseliyo_Jstnk |
-| User Added To Admin Group Via Dscl<br>`proc_creation_macos_dscl_add_user_to_admin_group.yml` | Initial Access, Persistence, Privilege Escalation, Stealth | T1078.003 | medium | Sohan G (D4rkCiph3r) |
-| User Added To Admin Group Via DseditGroup<br>`proc_creation_macos_dseditgroup_add_to_admin_group.yml` | Initial Access, Persistence, Privilege Escalation, Stealth | T1078.003 | medium | Sohan G (D4rkCiph3r) |
-| Root Account Enable Via Dsenableroot<br>`proc_creation_macos_dsenableroot_enable_root_account.yml` | Initial Access, Persistence, Privilege Escalation, Stealth | T1078, T1078.001, T1078.003 | medium | Sohan G (D4rkCiph3r) |
-| JXA In-memory Execution Via OSAScript<br>`proc_creation_macos_jxa_in_memory_execution.yml` | Execution | T1059.002, T1059.007 | high | Sohan G (D4rkCiph3r) |
-| MacOS Network Service Scanning<br>`proc_creation_macos_network_service_scanning.yml` | Discovery | T1046 | low | Alejandro Ortuno, oscd.community |
-| Suspicious Microsoft Office Child Process - MacOS<br>`proc_creation_macos_office_susp_child_processes.yml` | Execution, Persistence | T1059.002, T1137.002, T1204.002 | high | Sohan G (D4rkCiph3r) |
-| OSACompile Run-Only Execution<br>`proc_creation_macos_osacompile_runonly_execution.yml` | Execution | T1059.002 | high | Sohan G (D4rkCiph3r) |
-| Potential Persistence Via PlistBuddy<br>`proc_creation_macos_persistence_via_plistbuddy.yml` | Persistence, Privilege Escalation | T1543.001, T1543.004 | high | Sohan G (D4rkCiph3r) |
-| Split A File Into Pieces<br>`proc_creation_macos_split_file_into_pieces.yml` | Exfiltration | T1030 | low | Igor Fits, Mikhail Larin, oscd.community |
-| Potential Discovery Activity Using Find - MacOS<br>`proc_creation_macos_susp_find_execution.yml` | Discovery | T1083 | medium | Nasreddine Bencherchali (Nextron Systems) |
-| Suspicious History File Operations<br>`proc_creation_macos_susp_histfile_operations.yml` | Credential Access | T1552.003 | medium | Mikhail Larin, oscd.community |
-| Guest Account Enabled Via Sysadminctl<br>`proc_creation_macos_sysadminctl_enable_guest_account.yml` | Initial Access, Persistence, Privilege Escalation, Stealth | T1078, T1078.001 | low | Sohan G (D4rkCiph3r) |
-| Potential Base64 Decoded From Images<br>`proc_creation_macos_tail_base64_decode_from_image.yml` | Stealth | T1140 | high | Joseliyo Sanchez, @Joseliyo_Jstnk |
-| Time Machine Backup Deletion Attempt Via Tmutil - MacOS<br>`proc_creation_macos_tmutil_delete_backup.yml` | Impact | T1490 | medium | Pratinav Chandra |
-| Time Machine Backup Disabled Via Tmutil - MacOS<br>`proc_creation_macos_tmutil_disable_backup.yml` | Impact | T1490 | medium | Pratinav Chandra |
+| Rule (file) | Tactic | Technique | Severity | Sigma author | Atomic tests |
+|---|---|---|---|---|---|
+| Creation Of A Local User Account<br>`proc_creation_macos_create_account.yml` | Persistence | T1136.001 | low | Alejandro Ortuno, oscd.community | `01993ba5-1da3-4e15-a719-b690d4f0f0b2` |
+| System Integrity Protection (SIP) Disabled<br>`proc_creation_macos_csrutil_disable.yml` | Discovery | T1518.001 | medium | Joseliyo Sanchez, @Joseliyo_Jstnk | none |
+| User Added To Admin Group Via Dscl<br>`proc_creation_macos_dscl_add_user_to_admin_group.yml` | Initial Access, Persistence, Privilege Escalation, Stealth | T1078.003 | medium | Sohan G (D4rkCiph3r) | none |
+| User Added To Admin Group Via DseditGroup<br>`proc_creation_macos_dseditgroup_add_to_admin_group.yml` | Initial Access, Persistence, Privilege Escalation, Stealth | T1078.003 | medium | Sohan G (D4rkCiph3r) | none |
+| Root Account Enable Via Dsenableroot<br>`proc_creation_macos_dsenableroot_enable_root_account.yml` | Initial Access, Persistence, Privilege Escalation, Stealth | T1078, T1078.001, T1078.003 | medium | Sohan G (D4rkCiph3r) | none |
+| JXA In-memory Execution Via OSAScript<br>`proc_creation_macos_jxa_in_memory_execution.yml` | Execution | T1059.002, T1059.007 | high | Sohan G (D4rkCiph3r) | none |
+| MacOS Network Service Scanning<br>`proc_creation_macos_network_service_scanning.yml` | Discovery | T1046 | low | Alejandro Ortuno, oscd.community | `515942b0-a09f-4163-a7bb-22fefb6f185f`<br>`0d5a2b03-3a26-45e4-96ae-89485b4d1f97` |
+| Suspicious Microsoft Office Child Process - MacOS<br>`proc_creation_macos_office_susp_child_processes.yml` | Execution, Persistence | T1059.002, T1137.002, T1204.002 | high | Sohan G (D4rkCiph3r) | none |
+| OSACompile Run-Only Execution<br>`proc_creation_macos_osacompile_runonly_execution.yml` | Execution | T1059.002 | high | Sohan G (D4rkCiph3r) | none |
+| Potential Persistence Via PlistBuddy<br>`proc_creation_macos_persistence_via_plistbuddy.yml` | Persistence, Privilege Escalation | T1543.001, T1543.004 | high | Sohan G (D4rkCiph3r) | none |
+| Split A File Into Pieces<br>`proc_creation_macos_split_file_into_pieces.yml` | Exfiltration | T1030 | low | Igor Fits, Mikhail Larin, oscd.community | `ab936c51-10f4-46ce-9144-e02137b2016a` |
+| Potential Discovery Activity Using Find - MacOS<br>`proc_creation_macos_susp_find_execution.yml` | Discovery | T1083 | medium | Nasreddine Bencherchali (Nextron Systems) | none |
+| Suspicious History File Operations<br>`proc_creation_macos_susp_histfile_operations.yml` | Credential Access | T1552.003 | medium | Mikhail Larin, oscd.community | `3cfde62b-7c33-4b26-a61e-755d6131c8ce`<br>`8f2765a8-e795-438b-a102-5e25a7adcce1` |
+| Guest Account Enabled Via Sysadminctl<br>`proc_creation_macos_sysadminctl_enable_guest_account.yml` | Initial Access, Persistence, Privilege Escalation, Stealth | T1078, T1078.001 | low | Sohan G (D4rkCiph3r) | none |
+| Potential Base64 Decoded From Images<br>`proc_creation_macos_tail_base64_decode_from_image.yml` | Stealth | T1140 | high | Joseliyo Sanchez, @Joseliyo_Jstnk | none |
+| Time Machine Backup Deletion Attempt Via Tmutil - MacOS<br>`proc_creation_macos_tmutil_delete_backup.yml` | Impact | T1490 | medium | Pratinav Chandra | none |
+| Time Machine Backup Disabled Via Tmutil - MacOS<br>`proc_creation_macos_tmutil_disable_backup.yml` | Impact | T1490 | medium | Pratinav Chandra | none |
 
 These rules keep SigmaHQ's ATT&CK tags (only the revoked IDs listed above are rewritten).
 Since v0.4 the CI coverage job checks every rule's technique and tactic IDs against the
@@ -171,62 +171,62 @@ same `enterprise-attack.json` and fails on an unknown, revoked or deprecated ID;
 converted rules ("Linux HackTool Execution", "Remotely Hosted HTA File Executed Via
 Mshta.EXE") carry an Execution tag that ATT&CK does not list for their technique
 (T1587, T1218.005), reported as warnings. Atomic
-tests are linked where one exercises the rule (`--atomics`, below), but none has been run
-against the sensor.
+tests are linked where one exercises the rule (`--atomics`, below); none of those links has
+been run against a sensor (see "Mapped is not validated").
 
 **Windows (28 rules, `rules/sigma/windows/`).**
 
-| Rule (file) | Tactic | Technique | Severity | Sigma author |
-|---|---|---|---|---|
-| Boot Configuration Tampering Via Bcdedit.EXE<br>`proc_creation_win_bcdedit_boot_conf_tamper.yml` | Impact | T1490 | high | E.M. Anhaus (originally from Atomic Blue Detections, Endgame), oscd.community |
-| Bypass UAC Using Event Viewer<br>`registry_set_bypass_uac_using_eventviewer.yml` | Persistence, Privilege Escalation | T1547.010 | high | frack113 |
-| CobaltStrike Named Pipe<br>`pipe_created_hktl_cobaltstrike.yml` | Privilege Escalation, Stealth | T1055 | critical | Florian Roth (Nextron Systems), Wojciech Lesicki |
-| Driver Load From A Temporary Directory<br>`driver_load_win_susp_temp_use.yml` | Persistence, Privilege Escalation | T1543.003 | high | Florian Roth (Nextron Systems) |
-| Enumeration for Credentials in Registry<br>`proc_creation_win_reg_enumeration_for_credentials_in_registry.yml` | Credential Access | T1552.002 | medium | frack113 |
-| File Download Via Bitsadmin<br>`proc_creation_win_bitsadmin_download.yml` | Execution, Persistence, Stealth, Command and Control | T1197, T1036.003, T1105 | medium | Michael Haag, FPT.EagleEye |
-| Findstr GPP Passwords<br>`proc_creation_win_findstr_gpp_passwords.yml` | Credential Access | T1552.006 | high | frack113 |
-| HackTool - Mimikatz Execution<br>`proc_creation_win_hktl_mimikatz_command_line.yml` | Credential Access | T1003.001, T1003.002, T1003.004, T1003.005, T1003.006 | high | Teymur Kheirkhabarov, oscd.community, David ANDRE (additional keywords), Tim Shelton |
-| HackTool - Rubeus Execution<br>`proc_creation_win_hktl_rubeus.yml` | Credential Access, Lateral Movement | T1003, T1558.003, T1550.003 | critical | Florian Roth (Nextron Systems) |
-| HackTool - WinRM Access Via Evil-WinRM<br>`proc_creation_win_hktl_evil_winrm.yml` | Lateral Movement | T1021.006 | medium | frack113 |
-| Invocation of Active Directory Diagnostic Tool (ntdsutil.exe)<br>`proc_creation_win_ntdsutil_usage.yml` | Credential Access | T1003.003 | medium | Thomas Patzke |
-| Lsass Memory Dump via Comsvcs DLL<br>`proc_access_win_lsass_dump_comsvcs_dll.yml` | Credential Access | T1003.001 | high | Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research) |
-| LSASS Process Memory Dump Files<br>`file_event_win_lsass_default_dump_file_names.yml` | Credential Access | T1003.001 | high | Florian Roth (Nextron Systems) |
-| Msxsl.EXE Execution<br>`proc_creation_win_msxsl_execution.yml` | Stealth | T1220 | medium | Timur Zinniatullin, oscd.community |
-| Password Dumper Remote Thread in LSASS<br>`create_remote_thread_win_susp_password_dumper_lsass.yml` | Credential Access | T1003.001 | high | Thomas Patzke |
-| Potential Credential Dumping Via LSASS SilentProcessExit Technique<br>`registry_event_silentprocessexit_lsass.yml` | Credential Access | T1003.001 | critical | Florian Roth (Nextron Systems) |
-| Potential Tampering With RDP Related Registry Keys Via Reg.EXE<br>`proc_creation_win_reg_rdp_keys_tamper.yml` | Persistence, Lateral Movement, Defense Impairment | T1021.001, T1112 | high | pH-T (Nextron Systems), @Kostastsale, TheDFIRReport |
-| Potentially Suspicious Rundll32 Activity<br>`proc_creation_win_rundll32_susp_activity.yml` | Stealth | T1218.011 | medium | juju4, Jonhnathan Ribeiro, oscd.community, Nasreddine Bencherchali (Nextron Systems) |
-| Prefetch File Deleted<br>`file_delete_win_delete_prefetch.yml` | Stealth | T1070.004 | high | Cedric MAURUGEON |
-| Process Memory Dump Via Comsvcs.DLL<br>`proc_creation_win_rundll32_process_dump_via_comsvcs.yml` | Stealth, Credential Access | T1036, T1003.001 | high | Florian Roth (Nextron Systems), Modexp, Nasreddine Bencherchali (Nextron Systems), Swachchhanda Shrawan Poudel (Nextron Systems) |
-| Psexec Execution<br>`proc_creation_win_sysinternals_psexec_execution.yml` | Execution, Lateral Movement | T1569, T1021 | medium | omkar72 |
-| Remotely Hosted HTA File Executed Via Mshta.EXE<br>`proc_creation_win_mshta_http.yml` | Execution, Stealth | T1218.005 | high | Nasreddine Bencherchali (Nextron Systems) |
-| Shadow Copies Deletion Using Operating Systems Utilities<br>`proc_creation_win_susp_shadow_copies_deletion.yml` | Stealth, Impact | T1070, T1490 | high | Florian Roth (Nextron Systems), Michael Haag, Teymur Kheirkhabarov, Daniil Yugoslavskiy, oscd.community, Andreas Hunkeler (@Karneades) |
-| Suspicious Eventlog Clearing or Configuration Change Activity<br>`proc_creation_win_susp_eventlog_clear.yml` | Defense Impairment | T1685.005, T1685.001 | high | Ecco, Daniil Yugoslavskiy, oscd.community, D3F7A5105, Swachchhanda Shrawan Poudel (Nextron Systems) |
-| Suspicious File Downloaded From Direct IP Via Certutil.EXE<br>`proc_creation_win_certutil_download_direct_ip.yml` | Stealth, Command and Control | T1027, T1105 | high | Nasreddine Bencherchali (Nextron Systems) |
-| Suspicious Regsvr32 Execution From Remote Share<br>`proc_creation_win_regsvr32_remote_share.yml` | Stealth | T1218.010 | high | Nasreddine Bencherchali (Nextron Systems) |
-| Windows Credential Manager Access via VaultCmd<br>`proc_creation_win_vaultcmd_list_creds.yml` | Credential Access | T1555.004 | medium | frack113 |
-| WMIC Remote Command Execution<br>`proc_creation_win_wmic_remote_execution.yml` | Execution | T1047 | medium | frack113, Nasreddine Bencherchali (Nextron Systems) |
+| Rule (file) | Tactic | Technique | Severity | Sigma author | Atomic tests |
+|---|---|---|---|---|---|
+| Boot Configuration Tampering Via Bcdedit.EXE<br>`proc_creation_win_bcdedit_boot_conf_tamper.yml` | Impact | T1490 | high | E.M. Anhaus (originally from Atomic Blue Detections, Endgame), oscd.community | none |
+| Bypass UAC Using Event Viewer<br>`registry_set_bypass_uac_using_eventviewer.yml` | Persistence, Privilege Escalation | T1547.010 | high | frack113 | none |
+| CobaltStrike Named Pipe<br>`pipe_created_hktl_cobaltstrike.yml` | Privilege Escalation, Stealth | T1055 | critical | Florian Roth (Nextron Systems), Wojciech Lesicki | none |
+| Driver Load From A Temporary Directory<br>`driver_load_win_susp_temp_use.yml` | Persistence, Privilege Escalation | T1543.003 | high | Florian Roth (Nextron Systems) | none |
+| Enumeration for Credentials in Registry<br>`proc_creation_win_reg_enumeration_for_credentials_in_registry.yml` | Credential Access | T1552.002 | medium | frack113 | `b6ec082c-7384-46b3-a111-9a9b8b14e5e7`<br>`af197fd7-e868-448e-9bd5-05d1bcd9d9e5` |
+| File Download Via Bitsadmin<br>`proc_creation_win_bitsadmin_download.yml` | Execution, Persistence, Stealth, Command and Control | T1197, T1036.003, T1105 | medium | Michael Haag, FPT.EagleEye | `3c73d728-75fb-4180-a12f-6712864d7421`<br>`62a06ec5-5754-47d2-bcfc-123d8314c6ae` |
+| Findstr GPP Passwords<br>`proc_creation_win_findstr_gpp_passwords.yml` | Credential Access | T1552.006 | high | frack113 | `870fe8fb-5e23-4f5f-b89d-dd7fe26f3b5f` |
+| HackTool - Mimikatz Execution<br>`proc_creation_win_hktl_mimikatz_command_line.yml` | Credential Access | T1003.001, T1003.002, T1003.004, T1003.005, T1003.006 | high | Teymur Kheirkhabarov, oscd.community, David ANDRE (additional keywords), Tim Shelton | none |
+| HackTool - Rubeus Execution<br>`proc_creation_win_hktl_rubeus.yml` | Credential Access, Lateral Movement | T1003, T1558.003, T1550.003 | critical | Florian Roth (Nextron Systems) | `14625569-6def-4497-99ac-8e7817105b55` |
+| HackTool - WinRM Access Via Evil-WinRM<br>`proc_creation_win_hktl_evil_winrm.yml` | Lateral Movement | T1021.006 | medium | frack113 | `efe86d95-44c4-4509-ae42-7bfd9d1f5b3d` |
+| Invocation of Active Directory Diagnostic Tool (ntdsutil.exe)<br>`proc_creation_win_ntdsutil_usage.yml` | Credential Access | T1003.003 | medium | Thomas Patzke | `2364e33d-ceab-4641-8468-bfb1d7cc2723` |
+| Lsass Memory Dump via Comsvcs DLL<br>`proc_access_win_lsass_dump_comsvcs_dll.yml` | Credential Access | T1003.001 | high | Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research) | none |
+| LSASS Process Memory Dump Files<br>`file_event_win_lsass_default_dump_file_names.yml` | Credential Access | T1003.001 | high | Florian Roth (Nextron Systems) | none |
+| Msxsl.EXE Execution<br>`proc_creation_win_msxsl_execution.yml` | Stealth | T1220 | medium | Timur Zinniatullin, oscd.community | `ca23bfb2-023f-49c5-8802-e66997de462d`<br>`a7c3ab07-52fb-49c8-ab6d-e9c6d4a0a985` |
+| Password Dumper Remote Thread in LSASS<br>`create_remote_thread_win_susp_password_dumper_lsass.yml` | Credential Access | T1003.001 | high | Thomas Patzke | none |
+| Potential Credential Dumping Via LSASS SilentProcessExit Technique<br>`registry_event_silentprocessexit_lsass.yml` | Credential Access | T1003.001 | critical | Florian Roth (Nextron Systems) | none |
+| Potential Tampering With RDP Related Registry Keys Via Reg.EXE<br>`proc_creation_win_reg_rdp_keys_tamper.yml` | Persistence, Lateral Movement, Defense Impairment | T1021.001, T1112 | high | pH-T (Nextron Systems), @Kostastsale, TheDFIRReport | `74ace21e-a31c-4f7d-b540-53e4eb6d1f73`<br>`01d1c6c0-faf0-408e-b368-752a02285cb2` |
+| Potentially Suspicious Rundll32 Activity<br>`proc_creation_win_rundll32_susp_activity.yml` | Stealth | T1218.011 | medium | juju4, Jonhnathan Ribeiro, oscd.community, Nasreddine Bencherchali (Nextron Systems) | `22cfde89-befe-4e15-9753-47306b37a6e3`<br>`f3ad3c5b-1db1-45c1-81bf-d3370ebab6c8`<br>`8a7f56ee-10e7-444c-a139-0109438288eb`<br>`e4c04b6f-c492-4782-82c7-3bf75eb8077e`<br>`d91cae26-7fc1-457b-a854-34c8aad48c89` |
+| Prefetch File Deleted<br>`file_delete_win_delete_prefetch.yml` | Stealth | T1070.004 | high | Cedric MAURUGEON | `36f96049-0ad7-4a5f-8418-460acaeb92fb` |
+| Process Memory Dump Via Comsvcs.DLL<br>`proc_creation_win_rundll32_process_dump_via_comsvcs.yml` | Stealth, Credential Access | T1036, T1003.001 | high | Florian Roth (Nextron Systems), Modexp, Nasreddine Bencherchali (Nextron Systems), Swachchhanda Shrawan Poudel (Nextron Systems) | none |
+| Psexec Execution<br>`proc_creation_win_sysinternals_psexec_execution.yml` | Execution, Lateral Movement | T1569, T1021 | medium | omkar72 | `873106b7-cfed-454b-8680-fa9f6400431c`<br>`004a5d68-627b-452d-af3d-43bd1fc75a3b` |
+| Remotely Hosted HTA File Executed Via Mshta.EXE<br>`proc_creation_win_mshta_http.yml` | Execution, Stealth | T1218.005 | high | Nasreddine Bencherchali (Nextron Systems) | none |
+| Shadow Copies Deletion Using Operating Systems Utilities<br>`proc_creation_win_susp_shadow_copies_deletion.yml` | Stealth, Impact | T1070, T1490 | high | Florian Roth (Nextron Systems), Michael Haag, Teymur Kheirkhabarov, Daniil Yugoslavskiy, oscd.community, Andreas Hunkeler (@Karneades) | none |
+| Suspicious Eventlog Clearing or Configuration Change Activity<br>`proc_creation_win_susp_eventlog_clear.yml` | Defense Impairment | T1685.005, T1685.001 | high | Ecco, Daniil Yugoslavskiy, oscd.community, D3F7A5105, Swachchhanda Shrawan Poudel (Nextron Systems) | none |
+| Suspicious File Downloaded From Direct IP Via Certutil.EXE<br>`proc_creation_win_certutil_download_direct_ip.yml` | Stealth, Command and Control | T1027, T1105 | high | Nasreddine Bencherchali (Nextron Systems) | none |
+| Suspicious Regsvr32 Execution From Remote Share<br>`proc_creation_win_regsvr32_remote_share.yml` | Stealth | T1218.010 | high | Nasreddine Bencherchali (Nextron Systems) | none |
+| Windows Credential Manager Access via VaultCmd<br>`proc_creation_win_vaultcmd_list_creds.yml` | Credential Access | T1555.004 | medium | frack113 | `9c2dd36d-5c8b-4b29-8d72-a11b0d5d7439` |
+| WMIC Remote Command Execution<br>`proc_creation_win_wmic_remote_execution.yml` | Execution | T1047 | medium | frack113, Nasreddine Bencherchali (Nextron Systems) | none |
 
 **Linux (16 rules, `rules/sigma/linux/`).**
 
-| Rule (file) | Tactic | Technique | Severity | Sigma author |
-|---|---|---|---|---|
-| Copy Passwd Or Shadow From TMP Path<br>`proc_creation_lnx_cp_passwd_or_shadow_tmp.yml` | Credential Access | T1552.001 | high | Joseliyo Sanchez, @Joseliyo_Jstnk |
-| Disable Or Stop Services<br>`proc_creation_lnx_services_stop_and_disable.yml` | Impact, Defense Impairment | T1685, T1489 | medium | Nasreddine Bencherchali (Nextron Systems) |
-| History File Deletion<br>`proc_creation_lnx_susp_history_delete.yml` | Impact | T1565.001 | high | Florian Roth (Nextron Systems) |
-| Linux HackTool Execution<br>`proc_creation_lnx_susp_hktl_execution.yml` | Execution, Resource Development | T1587 | high | Nasreddine Bencherchali (Nextron Systems), Georg Lauenstein (sure[secure]) |
-| Linux Reverse Shell Indicator<br>`net_connection_lnx_back_connect_shell_dev.yml` | Execution | T1059.004 | critical | Florian Roth (Nextron Systems) |
-| Linux Webshell Indicators<br>`proc_creation_lnx_webshell_detection.yml` | Persistence | T1505.003 | high | Florian Roth (Nextron Systems), Nasreddine Bencherchali (Nextron Systems) |
-| Potential Linux Process Code Injection Via DD Utility<br>`proc_creation_lnx_dd_process_injection.yml` | Privilege Escalation, Stealth | T1055.009 | medium | Joseph Kamau |
-| Potential Netcat Reverse Shell Execution<br>`proc_creation_lnx_netcat_reverse_shell.yml` | Execution | T1059 | high | @d4ns4n_, Nasreddine Bencherchali (Nextron Systems) |
-| Potential Perl Reverse Shell Execution<br>`proc_creation_lnx_perl_reverse_shell.yml` | Execution | (none) | high | @d4ns4n_, Nasreddine Bencherchali (Nextron Systems) |
-| Potential PHP Reverse Shell<br>`proc_creation_lnx_php_reverse_shell.yml` | Execution | (none) | high | @d4ns4n_ |
-| Python Reverse Shell Execution Via PTY And Socket Modules<br>`proc_creation_lnx_python_reverse_shell.yml` | Execution | (none) | high | @d4ns4n_, Nasreddine Bencherchali (Nextron Systems) |
-| Remove Immutable File Attribute<br>`proc_creation_lnx_chattr_immutable_removal.yml` | Defense Impairment | T1222.002 | medium | Nasreddine Bencherchali (Nextron Systems) |
-| Suspicious Java Children Processes<br>`proc_creation_lnx_susp_java_children.yml` | Execution | T1059 | high | Nasreddine Bencherchali (Nextron Systems) |
-| Syslog Clearing or Removal Via System Utilities<br>`proc_creation_lnx_clear_syslog.yml` | Defense Impairment | T1685.006 | high | Max Altgelt (Nextron Systems), Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC |
-| Touch Suspicious Service File<br>`proc_creation_lnx_touch_susp.yml` | Stealth | T1070.006 | medium | Joseliyo Sanchez, @Joseliyo_Jstnk |
-| User Has Been Deleted Via Userdel<br>`proc_creation_lnx_userdel.yml` | Impact | T1531 | medium | Tuan Le (NCSGroup) |
+| Rule (file) | Tactic | Technique | Severity | Sigma author | Atomic tests |
+|---|---|---|---|---|---|
+| Copy Passwd Or Shadow From TMP Path<br>`proc_creation_lnx_cp_passwd_or_shadow_tmp.yml` | Credential Access | T1552.001 | high | Joseliyo Sanchez, @Joseliyo_Jstnk | none |
+| Disable Or Stop Services<br>`proc_creation_lnx_services_stop_and_disable.yml` | Impact, Defense Impairment | T1685, T1489 | medium | Nasreddine Bencherchali (Nextron Systems) | `42e3a5bd-1e45-427f-aa08-2a65fa29a820` |
+| History File Deletion<br>`proc_creation_lnx_susp_history_delete.yml` | Impact | T1565.001 | high | Florian Roth (Nextron Systems) | none |
+| Linux HackTool Execution<br>`proc_creation_lnx_susp_hktl_execution.yml` | Execution, Resource Development | T1587 | high | Nasreddine Bencherchali (Nextron Systems), Georg Lauenstein (sure[secure]) | none |
+| Linux Reverse Shell Indicator<br>`net_connection_lnx_back_connect_shell_dev.yml` | Execution | T1059.004 | critical | Florian Roth (Nextron Systems) | none |
+| Linux Webshell Indicators<br>`proc_creation_lnx_webshell_detection.yml` | Persistence | T1505.003 | high | Florian Roth (Nextron Systems), Nasreddine Bencherchali (Nextron Systems) | none |
+| Potential Linux Process Code Injection Via DD Utility<br>`proc_creation_lnx_dd_process_injection.yml` | Privilege Escalation, Stealth | T1055.009 | medium | Joseph Kamau | none |
+| Potential Netcat Reverse Shell Execution<br>`proc_creation_lnx_netcat_reverse_shell.yml` | Execution | T1059 | high | @d4ns4n_, Nasreddine Bencherchali (Nextron Systems) | none |
+| Potential Perl Reverse Shell Execution<br>`proc_creation_lnx_perl_reverse_shell.yml` | Execution | (none) | high | @d4ns4n_, Nasreddine Bencherchali (Nextron Systems) | none |
+| Potential PHP Reverse Shell<br>`proc_creation_lnx_php_reverse_shell.yml` | Execution | (none) | high | @d4ns4n_ | none |
+| Python Reverse Shell Execution Via PTY And Socket Modules<br>`proc_creation_lnx_python_reverse_shell.yml` | Execution | (none) | high | @d4ns4n_, Nasreddine Bencherchali (Nextron Systems) | none |
+| Remove Immutable File Attribute<br>`proc_creation_lnx_chattr_immutable_removal.yml` | Defense Impairment | T1222.002 | medium | Nasreddine Bencherchali (Nextron Systems) | `e7469fe2-ad41-4382-8965-99b94dd3c13f` |
+| Suspicious Java Children Processes<br>`proc_creation_lnx_susp_java_children.yml` | Execution | T1059 | high | Nasreddine Bencherchali (Nextron Systems) | none |
+| Syslog Clearing or Removal Via System Utilities<br>`proc_creation_lnx_clear_syslog.yml` | Defense Impairment | T1685.006 | high | Max Altgelt (Nextron Systems), Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC | none |
+| Touch Suspicious Service File<br>`proc_creation_lnx_touch_susp.yml` | Stealth | T1070.006 | medium | Joseliyo Sanchez, @Joseliyo_Jstnk | none |
+| User Has Been Deleted Via Userdel<br>`proc_creation_lnx_userdel.yml` | Impact | T1531 | medium | Tuan Le (NCSGroup) | none |
 
 The Windows and Linux tables list every tactic and technique the rule carries from SigmaHQ.
 Three Linux reverse-shell rules (Perl, PHP, Python) have no technique (the Sigma rules carry
@@ -435,9 +435,40 @@ pipe-to-shell rule; `b16ef901`/`4d46e16b` (T1027.002, UPX) on the dropped-binary
 `11979f23` (T1543.001) on the emond rule; `10cf5bec`/`fc369906` (T1037.005) on the
 launchctl rule.
 
-**"Mapped" is not "validated".** No atomic has been executed against a live sensor yet.
-Spec section 5 step 4 (run `sudo zaafvesper run --capture`, execute the listed atomics with
-Rifqi's approval, keep the capture as a regression fixture) is still to do.
+**"Mapped" is not "validated".** Seven Atomic Red Team tests have been executed against a live
+sensor: three on Windows (two Run-key tests, one WMI event subscription) and four on Linux (two
+cron tests, one systemd unit, one bash-history test). They ran in the v0.3 runs on GitHub runners
+and each fired its rule (`docs/validation/windows.md`, `docs/validation/linux.md`; the plans are
+`scripts/ci/b/windows-plan.json` and `linux-plan.json`). No Atomic test has been run on macOS: the
+v0.3 macOS run (`docs/validation/macos.md`, 50 checks) used the harness's own local triggers
+(`scripts/ci/c/triggers.sh`), not the Atomic YAML, and no macOS plan exists. Every other
+`tests.atomic` GUID is a mapping checked against the Atomic YAML text only. For Windows and Linux
+the plans name, GUID by GUID, why a linked test is not run (`skipped_atomics`), and a CI test
+(`TestLinkedAtomicsAccountedFor`) fails when a rule that applies to the platform, whether it
+lists one platform, several or none, links a GUID the plan neither runs nor skips. The spec's step 4
+for macOS (run `sudo zaafvesper run --capture`, execute the listed atomics with Rifqi's approval,
+keep the capture as a regression fixture) is still to do.
+
+**macOS rules added in v0.4 that link Atomic tests, and why none is run live yet.** Only the
+GUIDs the pinned Atomic Red Team data lists for macOS are shown (checked against commit
+`a0e3f9bc`). Rules from earlier versions are covered by the paragraph above.
+
+| Rule (file) | macOS Atomic tests | Why not run live yet |
+|---|---|---|
+| Sensitive folder archived or archive encrypted with a password<br>`rules/collection_archive_sensitive_or_encrypted.yml` | `0286eb44-e7ce-41a0-b109-3da516e05a5f`<br>`2794f321-55c4-4484-9eef-0557996f715a` | 0286eb44 needs gpg and zip installed (a prerequisite the plans never fetch); 2794f321 needs its source directory to exist. |
+| Microphone recorded from the command line<br>`rules/collection_audio_capture_cli.yml` | `c7a0bb71-70ce-4a53-b115-881f241b795b` | Records through QuickTime Player, a GUI application; a hosted runner is not expected to have a microphone. |
+| Clipboard read by a script without a terminal<br>`rules/collection_clipboard_read_by_script.yml` | `1ac2247f-65f8-4051-b51f-b0ccdfaaa5ff` | No prerequisites; could be run, not yet added. |
+| rclone copies data to a remote<br>`rules/exfiltration_rclone_copy_to_remote.yml` | `a4b74723-5cee-4300-91c3-5e34166909b4` | Needs rclone downloaded and an S3 destination with credentials; no cloud account is used. |
+| User account deleted or its password reset with dscl or sysadminctl<br>`rules/impact_account_deleted_or_password_reset.yml` | `4d938c43-2fe8-4d70-a5b3-5bf239aa7846`<br>`d3812c4e-30ee-466a-a0aa-07e355b561d6` | Deletes a local account; no macOS run sets up a scratch account for it. |
+| File or disk overwritten with zeros or random data by dd<br>`rules/impact_data_destruction_dd_overwrite.yml` | `38deee99-fd65-4031-bec8-bfa4f9f26146` | No prerequisites; could be run, not yet added. |
+| Files encrypted with openssl, gpg or 7z from the command line<br>`rules/impact_file_encryption_with_cli_tool.yml` | `645f0f5a-ef09-48d8-b9bc-f0e24c642d72`<br>`1a01f6b8-b1e8-418e-bbe3-78a6f822759e` | 645f0f5a needs 7z installed (a prerequisite never fetched); 1a01f6b8 has none and could be run, not yet added. |
+| Shutdown or reboot run without a terminal<br>`rules/impact_shutdown_or_reboot_without_terminal.yml` | `6326dbc4-444b-4c04-88f4-27e94d0327cb`<br>`4963a81e-a3ad-4f02-adda-812343b351de`<br>`47d0b042-a918-40ab-8cf9-150ffe919027` | Each test restarts or shuts the machine down and would end the job. |
+| Apple Remote Desktop or Screen Sharing enabled from the command line<br>`rules/lateral_movement_ard_or_screen_sharing_enabled.yml` | `8a930abe-841c-4d4f-a877-72e9fe90b9ea` | Turns on the Apple Remote Desktop agent of the runner; no macOS run does this. |
+| SSH authorized_keys written or replaced<br>`rules/persistence_ssh_authorized_keys_written.yml` | `342cc723-127c-4d3a-8292-9c0c6b4ecadc` | Modifies the runner user's authorized_keys; no cleanup has been proven. |
+| Creation Of A Local User Account<br>`rules/sigma/macos/proc_creation_macos_create_account.yml` | `01993ba5-1da3-4e15-a719-b690d4f0f0b2` | Creates a local user account; no macOS run does this. |
+| MacOS Network Service Scanning<br>`rules/sigma/macos/proc_creation_macos_network_service_scanning.yml` | `515942b0-a09f-4163-a7bb-22fefb6f185f`<br>`0d5a2b03-3a26-45e4-96ae-89485b4d1f97` | 515942b0 and 0d5a2b03 need nmap (and nc, telnet) installed, a prerequisite never fetched. |
+| Split A File Into Pieces<br>`rules/sigma/macos/proc_creation_macos_split_file_into_pieces.yml` | `ab936c51-10f4-46ce-9144-e02137b2016a` | Needs its input file to exist (a prerequisite). |
+| Suspicious History File Operations<br>`rules/sigma/macos/proc_creation_macos_susp_histfile_operations.yml` | `3cfde62b-7c33-4b26-a61e-755d6131c8ce`<br>`8f2765a8-e795-438b-a102-5e25a7adcce1` | No prerequisites; could be run, not yet added. |
 
 ## YARA signatures (`rules/yara/`)
 
