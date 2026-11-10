@@ -1,0 +1,33 @@
+title: One shell connecting to several remote ports (macOS)
+id: c0e5d5bb-e9fd-4b87-aaa3-05a4cf663cf4
+name: zv_corr_macos_shell_many_ports
+status: experimental
+description: |
+  The same shell process holds outbound connections to three or more different destination
+  ports within 10 minutes: a reverse shell that reconnects or probes. On macOS the zaafvesper
+  pipeline maps ProcessGuid to the kernel unique id of the process.
+  Needs ZAAFElegia M2 (correlation rules). ZAAFElegia 0.0.1 parses and skips it.
+author: ZAAFVesper project
+references:
+  - https://attack.mitre.org/techniques/T1059/004/
+  - https://attack.mitre.org/techniques/T1571/
+tags:
+  - attack.execution
+  - attack.t1059.004
+  - attack.command-and-control
+  - attack.t1571
+correlation:
+  type: value_count
+  rules:
+    - zv_macos_shell_outbound
+  group-by:
+    - Computer
+    - ProcessGuid
+  generate: false
+  timespan: 10m
+  condition:
+    field: DestinationPort
+    gte: 3
+falsepositives:
+  - Rare
+level: high

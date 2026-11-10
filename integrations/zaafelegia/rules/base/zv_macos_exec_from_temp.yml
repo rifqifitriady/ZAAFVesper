@@ -1,0 +1,26 @@
+title: Process executed from a temp folder (macOS)
+id: d2270b89-62f1-483d-a8e1-8b0210fa1ab8
+name: zv_macos_exec_from_temp
+status: experimental
+description: Matches only process_creation records (EventID 1), since ZAAFElegia does not yet filter by logsource. A process image runs from /tmp, /private/tmp or /var/tmp. Base rule for the ZAAFVesper download-to-execution correlation.
+author: ZAAFVesper project
+references:
+  - https://attack.mitre.org/techniques/T1204/002/
+tags:
+  - attack.execution
+  - attack.t1204.002
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    EventID: 1
+    Image|startswith:
+      - /tmp/
+      - /private/tmp/
+      - /var/tmp/
+      - /private/var/tmp/
+  condition: selection
+falsepositives:
+  - Developer builds and installer helpers run from temp folders
+level: low

@@ -138,14 +138,33 @@ func clean(s string, n int) string {
 }
 
 // caps bound attacker-sized strings and lists in an exported event.
-type caps struct{ str, list int }
+// caps bounds strings and lists; cut, when set, records that anything was
+// shortened (the record then carries "truncated": true).
+type caps struct {
+	str, list int
+	cut       *bool
+}
 
 var firstCaps = caps{str: 2 << 10, list: 64}
+
+// tracked returns c with a fresh cut flag.
+func (c caps) tracked() (caps, *bool) {
+	f := false
+	c.cut = &f
+	return c, &f
+}
+
+func (c caps) mark() {
+	if c.cut != nil {
+		*c.cut = true
+	}
+}
 
 func (c caps) s(v string) string {
 	if len(v) <= c.str {
 		return v
 	}
+	c.mark()
 	n := c.str
 	for n > 0 && !utf8.RuneStart(v[n]) {
 		n--
@@ -159,6 +178,7 @@ func (c caps) strs(in []string) []string {
 	}
 	if len(in) > c.list {
 		in = in[:c.list]
+		c.mark()
 	}
 	out := make([]string, len(in))
 	for i, v := range in {
@@ -174,6 +194,7 @@ func (c caps) m(in map[string]string) map[string]string {
 	out := make(map[string]string, len(in))
 	for k, v := range in {
 		if len(out) >= c.list {
+			c.mark()
 			break
 		}
 		out[c.s(k)] = c.s(v)

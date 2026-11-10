@@ -26,13 +26,11 @@ import (
 // Defaults of the W2 outputs.
 const (
 	defaultSpoolDir        = "/var/db/zaafvesper/spool"
-	defaultElegiaMaxBytes  = 1 << 30
 	syslogMaxRecordBytes   = 8 << 10 // RFC 5425 receivers commonly accept 8 KiB
 	webhookMaxRecordBytes  = alert.DefaultMaxAlertBytes
 	outputCloseTimeout     = 5 * time.Second
-	condElegiaDropped      = "elegia_out_dropped"
-	condElegiaCapped       = "elegia_out_capped"
 	condOCSFCapped         = "alerts_ocsf_capped"
+	condOCSFError          = "alerts_ocsf_error"
 	defaultSyslogFacility  = "local4"
 	defaultWebhookFormat   = output.FormatJSON
 	netpollChannelCapacity = 1024
@@ -50,10 +48,9 @@ type netOutOptions struct {
 	spoolDir                                               string
 	spoolMaxBytes                                          int64
 
-	elegiaOut      string
-	elegiaMaxBytes int64
-	alertsOCSF     string
-	ocsfMaxBytes   int64
+	elegia       elegiaOptions
+	alertsOCSF   string
+	ocsfMaxBytes int64
 }
 
 func (n *netOutOptions) register(fs *flag.FlagSet) {
@@ -71,14 +68,15 @@ func (n *netOutOptions) register(fs *flag.FlagSet) {
 	fs.BoolVar(&n.siemEvents, "siem-events", false, "also send every event to the SIEM outputs (alerts are always sent)")
 	fs.StringVar(&n.spoolDir, "spool-dir", defaultSpoolDir, "directory (0700, root-owned) holding SIEM records while an endpoint is down")
 	fs.Int64Var(&n.spoolMaxBytes, "spool-max-bytes", output.DefaultSpoolMaxBytes, "cap of each SIEM output's spool in bytes (events stop at half)")
-	fs.StringVar(&n.elegiaOut, "elegia-out", "", "stream every event as NDJSON with Sigma field names to this file (0600, appended across restarts), or - for stdout (console alerts then go to stderr)")
-	fs.Int64Var(&n.elegiaMaxBytes, "elegia-max-bytes", defaultElegiaMaxBytes, "cap of the --elegia-out file in bytes (not applied to stdout)")
+	n.elegia.register(fs)
 	fs.StringVar(&n.alertsOCSF, "alerts-ocsf", "", "write alerts as OCSF Detection Findings (class 2004) to this NDJSON file (0600, appended across restarts)")
 	fs.Int64Var(&n.ocsfMaxBytes, "ocsf-max-bytes", alert.DefaultMaxFileBytes, "cap of the --alerts-ocsf file in bytes")
 }
 
-// check rejects incomplete or contradictory W2 flags.
-func (n *netOutOptions) check() error {
+// check rejects incomplete or contradictory W2 flags. extra are the paths of
+// other outputs (--json, --output-dir, --capture) the ZAAFElegia outputs must
+// not share.
+func (n *netOutOptions) check(extra ...flagPath) error {
 	if err := platformOutputCheck(n); err != nil {
 		return err
 	}
@@ -97,12 +95,10 @@ func (n *netOutOptions) check() error {
 		return fmt.Errorf("--webhook-format %q: use json or hec", n.webhookFormat)
 	case n.siemEvents && n.syslogAddr == "" && n.webhookURL == "":
 		return errors.New("--siem-events needs --syslog or --webhook")
-	case n.spoolMaxBytes <= 0 || n.elegiaMaxBytes <= 0 || n.ocsfMaxBytes <= 0:
-		return errors.New("--spool-max-bytes, --elegia-max-bytes and --ocsf-max-bytes must be positive")
+	case n.spoolMaxBytes <= 0 || n.ocsfMaxBytes <= 0:
+		return errors.New("--spool-max-bytes and --ocsf-max-bytes must be positive")
 	case n.alertsOCSF == "-":
 		return errors.New("--alerts-ocsf takes a file path")
-	case n.alertsOCSF != "" && n.elegiaOut != "" && filepath.Clean(n.alertsOCSF) == filepath.Clean(n.elegiaOut):
-		return errors.New("--alerts-ocsf and --elegia-out must be different files")
 	}
 	if n.webhookURL != "" {
 		if _, err := output.ValidateURL(n.webhookURL); err != nil {
@@ -114,16 +110,19 @@ func (n *netOutOptions) check() error {
 			return fmt.Errorf("--syslog-facility: %w", err)
 		}
 	}
-	return nil
+	if err := n.elegia.check(); err != nil {
+		return err
+	}
+	// The ZAAFElegia outputs must not share a path with the alert file or
+	// the spool, in either direction, whatever outputs are switched on
+	// (the default --spool-dir counts: it is created on demand).
+	return n.elegia.checkCollisions(append([]flagPath{{"--alerts-ocsf", n.alertsOCSF}, {"--spool-dir", n.spoolDir}}, extra...)...)
 }
 
 // consoleWriter is where console alerts go: stderr when --elegia-out - owns
 // stdout.
 func (n *netOutOptions) consoleWriter(stdout, stderr io.Writer) io.Writer {
-	if n.elegiaOut == "-" {
-		return stderr
-	}
-	return stdout
+	return n.elegia.consoleWriter(stdout, stderr)
 }
 
 // handleNetwork runs a netpoll event through the pipeline WITHOUT the
@@ -214,27 +213,14 @@ func (s *sensor) wireNetOut(o runOptions, engine *rules.Engine, snap *ps.Snapsho
 		}
 	}
 
-	if n.elegiaOut != "" {
-		var w io.Writer = stdout
-		maxBytes, written := int64(0), int64(0)
-		where := "stdout"
-		if n.elegiaOut != "-" {
-			// Appended across restarts (a LaunchDaemon restart must not
-			// fail because the file exists); the cap covers the whole file.
-			f, size, err := output.OpenAppendPrivate(n.elegiaOut, o.asRoot)
-			if err != nil {
-				return fmt.Errorf("--elegia-out: %w", err)
-			}
-			w, maxBytes, written, where = f, n.elegiaMaxBytes, size, f.Name()
-		}
-		lw := output.NewLineWriter(w, output.LineWriterConfig{Name: "elegia-out", MaxBytes: maxBytes, Written: written,
-			OnDrop:   func(d string) { p.degraded(condElegiaDropped, d) },
-			OnCapped: func(d string) { p.degraded(condElegiaCapped, d) }})
-		es := &output.ElegiaSink{W: lw, DefaultProduct: hostPlatform()}
-		p.taps = append(p.taps, es.Event)
-		s.closers = append(s.closers, func() error { return lw.Close(outputCloseTimeout) })
-		s.extra["elegia out"] = lw.Stats
-		say(stderr, "output: every event as Sigma-named NDJSON to %s", where)
+	ew, err := n.elegia.wire(o.asRoot, output.SigmaOptions{DefaultProduct: hostPlatform(), Host: host}, outputCloseTimeout, stdout, stderr, p.degraded)
+	if err != nil {
+		return err
+	}
+	p.taps = append(p.taps, ew.taps...)
+	s.closers = append(s.closers, ew.closers...)
+	for k, v := range ew.stats {
+		s.extra[k] = v
 	}
 	if n.alertsOCSF != "" {
 		f, size, err := output.OpenAppendPrivate(n.alertsOCSF, o.asRoot)
@@ -243,14 +229,15 @@ func (s *sensor) wireNetOut(o runOptions, engine *rules.Engine, snap *ps.Snapsho
 		}
 		lw := output.NewLineWriter(f, output.LineWriterConfig{Name: "alerts-ocsf", MaxBytes: n.ocsfMaxBytes, Written: size,
 			OnDrop:   func(d string) { p.degraded(condOCSFCapped, d) },
-			OnCapped: func(d string) { p.degraded(condOCSFCapped, d) }})
-		p.sinks = append(p.sinks, &output.OCSFSink{W: lw, Version: version, DefaultProduct: hostPlatform()})
+			OnCapped: func(d string) { p.degraded(condOCSFCapped, d) },
+			OnError:  func(d string) { p.degraded(condOCSFError, d) }})
+		p.sinks = append(p.sinks, &output.OCSFSink{W: lw, Version: version, Options: output.SigmaOptions{DefaultProduct: hostPlatform(), Host: host}})
 		s.closers = append(s.closers, func() error { return lw.Close(outputCloseTimeout) })
 		s.extra["alerts ocsf"] = lw.Stats
 		say(stderr, "output: alerts as OCSF Detection Findings to %s (cap %d bytes)", f.Name(), n.ocsfMaxBytes)
 	}
 
-	exporting := n.elegiaOut != "" || n.siemEvents
+	exporting := n.elegia.active() || n.siemEvents
 	switch {
 	case n.noNet:
 		say(stderr, "network: socket polling disabled by --no-net")

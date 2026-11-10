@@ -1,0 +1,28 @@
+title: Unix shell with an outbound network connection (macOS)
+id: 1e01a948-e5c0-4356-921c-97337f5db62b
+name: zv_macos_shell_outbound
+status: experimental
+description: Matches only network_connection records (EventID 3), since ZAAFElegia does not yet filter by logsource. A Unix shell owns an outbound connection, the shape of a reverse shell. Reported by ZAAFVesper's socket polling.
+author: ZAAFVesper project
+references:
+  - https://attack.mitre.org/techniques/T1059/004/
+tags:
+  - attack.execution
+  - attack.t1059.004
+logsource:
+  product: macos
+  category: network_connection
+detection:
+  selection:
+    EventID: 3
+    Image|endswith:
+      - /bash
+      - /sh
+      - /zsh
+      - /dash
+      - /ksh
+    Initiated: 'true'
+  condition: selection
+falsepositives:
+  - Rare; scripts that open /dev/tcp themselves
+level: medium

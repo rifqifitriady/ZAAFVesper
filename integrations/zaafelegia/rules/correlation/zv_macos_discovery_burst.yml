@@ -1,0 +1,30 @@
+title: Burst of system discovery commands from one parent process (macOS)
+id: c12753d7-d23a-4b26-b11e-988782403694
+name: zv_corr_macos_discovery_burst
+status: experimental
+description: |
+  Three or more different discovery commands started by the same parent process on the same
+  host within one minute, as profiling scripts of macOS stealers do. On macOS the zaafvesper
+  pipeline maps ParentProcessGuid to the kernel unique id of the parent.
+  Needs ZAAFElegia M2 (correlation rules). ZAAFElegia 0.0.1 parses and skips it.
+author: ZAAFVesper project
+references:
+  - https://attack.mitre.org/techniques/T1082/
+tags:
+  - attack.discovery
+  - attack.t1082
+correlation:
+  type: value_count
+  rules:
+    - zv_macos_system_discovery
+  group-by:
+    - Computer
+    - ParentProcessGuid
+  generate: false
+  timespan: 1m
+  condition:
+    field: Image
+    gte: 3
+falsepositives:
+  - Inventory and support tools that collect system information
+level: medium

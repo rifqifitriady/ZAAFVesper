@@ -134,6 +134,9 @@ func parseFlags(fs *flag.FlagSet, args []string, stderr io.Writer) bool {
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			sayLines(stderr, "", usage)
+			if fs.Name() == "run" || fs.Name() == "replay" {
+				elegiaFlagHelp(fs, stderr) // elegia.go: lists the --elegia-* flags
+			}
 			return false
 		}
 		say(stderr, "zaafvesper %s: %v", fs.Name(), err)

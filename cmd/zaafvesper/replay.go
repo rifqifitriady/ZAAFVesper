@@ -11,6 +11,7 @@ import (
 	"github.com/rifqifitriady/ZAAFVesper/pkg/capture"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/config"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
+	"github.com/rifqifitriady/ZAAFVesper/pkg/output"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/ps"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/rules"
 )
@@ -25,6 +26,8 @@ func cmdReplay(args []string, stdout, stderr io.Writer) int {
 	noColor := fs.Bool("no-color", false, "disable coloured severities")
 	keepEnv := fs.Bool("keep-env", false, "store full environment values in JSONL alerts")
 	platform := fs.String("platform", hostPlatform(), "run only rules for this platform: macos, windows, linux, or all")
+	var ex elegiaOptions // --elegia-out / --elegia-dir (elegia.go)
+	ex.register(fs)
 	if !parseFlags(fs, args, stderr) {
 		return 2
 	}
@@ -32,6 +35,22 @@ func cmdReplay(args []string, stdout, stderr io.Writer) int {
 		say(stderr, "zaafvesper replay: expected exactly one capture file")
 		return 2
 	}
+	if err := checkNotEmptyIfGiven(fs, "elegia-dir", "elegia-out"); err != nil {
+		say(stderr, "zaafvesper replay: %v", err)
+		return 2
+	}
+	if err := ex.check(); err != nil {
+		say(stderr, "zaafvesper replay: %v", err)
+		return 2
+	}
+	// Before anything is created: the ZAAFElegia outputs must not share a
+	// path with the alert file or with the capture being read.
+	if err := ex.checkCollisions(flagPath{"--json", *jsonPath}, flagPath{"the capture file", fs.Arg(0)}); err != nil {
+		say(stderr, "zaafvesper replay: %v", err)
+		return 2
+	}
+	replayElegia = ex
+	defer func() { replayElegia = elegiaOptions{} }()
 	switch *platform {
 	case "all":
 		*platform = ""
@@ -46,6 +65,10 @@ func cmdReplay(args []string, stdout, stderr io.Writer) int {
 	}
 	return 0
 }
+
+// replayElegia holds replay's --elegia-out/--elegia-dir options (set by
+// cmdReplay; the zero value writes nothing).
+var replayElegia elegiaOptions
 
 // replay runs a capture through the pipeline. platform limits it to one
 // platform's rules ("" = every platform; --platform defaults to the host).
@@ -83,7 +106,7 @@ func replay(file, rulesFlag string, rulesGiven bool, configPath string, configGi
 	p := &pipeline{
 		engine: rules.NewEngine(rs, rules.Options{}),
 		excl:   excl,
-		sinks:  []alert.Sink{alert.NewConsole(stdout, colorFor(stdout, noColor))},
+		sinks:  []alert.Sink{alert.NewConsole(replayElegia.consoleWriter(stdout, stderr), colorFor(replayElegia.consoleWriter(stdout, stderr), noColor))},
 		dedup:  alert.NewDeduper(alert.DefaultDedupWindow),
 		// Event time, so a replay aggregates as the live run would have.
 		agg:  alert.NewAggregator(alert.DefaultAggregateLimit, alert.DefaultAggregateWindow, nil),
@@ -108,6 +131,25 @@ func replay(file, rulesFlag string, rulesGiven bool, configPath string, configGi
 			m["process table"] = snap.Stats()
 		}
 		return m
+	}
+	// ZAAFElegia outputs: the capture's events as Sigma-named NDJSON.
+	// Computer is left out (the capture does not record the host).
+	var closeElegia []func() error
+	if replayElegia.active() {
+		ew, err := replayElegia.wire(asRoot, output.SigmaOptions{DefaultProduct: platform}, 30*time.Second, stdout, stderr, p.degraded)
+		if err != nil {
+			return err
+		}
+		p.taps = append(p.taps, ew.taps...)
+		closeElegia = ew.closers
+		prev := extraStats
+		extraStats = func() map[string]map[string]uint64 {
+			m := prev()
+			for k, f := range ew.stats {
+				m[k] = f()
+			}
+			return m
+		}
 	}
 	var closeJSON func() error
 	if jsonPath != "" {
@@ -140,6 +182,9 @@ func replay(file, rulesFlag string, rulesGiven bool, configPath string, configGi
 	p.flushAggregates(last, true)
 	if closeJSON != nil {
 		readErr = errors.Join(readErr, closeJSON())
+	}
+	for _, c := range closeElegia {
+		readErr = errors.Join(readErr, c())
 	}
 	if last := r.LastError(); last != nil {
 		say(stderr, "replay: some lines could not be decoded, last: %v", last)

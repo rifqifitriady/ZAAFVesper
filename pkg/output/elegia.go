@@ -36,21 +36,34 @@ var genericFields = func() map[string]string {
 	return out
 }()
 
+// ElegiaSchema names the record layout written by --elegia-out and
+// --elegia-dir (integrations/zaafelegia/schema). Additive changes keep the
+// version; a renamed, removed or retyped field makes a new one.
+const ElegiaSchema = "zaafvesper.elegia/1"
+
+// SigmaOptions completes a record with what the event does not carry.
+type SigmaOptions struct {
+	// DefaultProduct is logsource.product for events without a platform.
+	DefaultProduct string
+	// Host is written as Computer (the Sysmon field name); empty: omitted.
+	Host string
+}
+
 // SigmaRecord converts e into a flat record with Sigma field names
 // (pkg/sigmamap.ExportFields of the event's category), plus logsource.product
 // and logsource.category (nested), a Sysmon-compatible EventID, UtcTime and
 // a small "zaafvesper" object (event name, sequence number, source). Strings
 // and lists are capped; values are strings, integers (pids, ports) or
 // string lists; booleans become "true"/"false" as in Sysmon.
-func SigmaRecord(e *event.Event, defaultProduct string) map[string]any {
-	return sigmaRecord(e, defaultProduct, firstCaps)
+func SigmaRecord(e *event.Event, o SigmaOptions) map[string]any {
+	return sigmaRecord(e, o, firstCaps)
 }
 
-func sigmaRecord(e *event.Event, defaultProduct string, c caps) map[string]any {
+func sigmaRecord(e *event.Event, o SigmaOptions, c caps) map[string]any {
 	rec := map[string]any{}
 	product := e.Platform
 	if product == "" {
-		product = defaultProduct
+		product = o.DefaultProduct
 	}
 	ls := map[string]any{}
 	if product != "" {
@@ -95,15 +108,64 @@ func sigmaRecord(e *event.Event, defaultProduct string, c caps) map[string]any {
 	if !e.Time.IsZero() {
 		rec["UtcTime"] = e.Time.UTC().Format(SysmonTime)
 	}
-	zv := map[string]any{"name": e.Name}
+	if o.Host != "" {
+		rec["Computer"] = c.s(o.Host)
+	}
+	zv := map[string]any{"schema": ElegiaSchema, "name": e.Name}
 	if e.Seq != 0 {
 		zv["seq"] = e.Seq
 	}
 	if e.Source != "" {
 		zv["source"] = c.s(e.Source)
 	}
+	if e.Platform != "" {
+		zv["platform"] = e.Platform
+	}
+	if e.Args["identity"] == "unverified" {
+		zv["identity"] = "unverified"
+	}
+	if p := e.Proc; p != nil {
+		zv["proc"] = procIdentity(p, c, true)
+		if p.Parent != nil {
+			zv["parent"] = procIdentity(p.Parent, c, false)
+		}
+	}
 	rec["zaafvesper"] = zv
 	return rec
+}
+
+// procIdentity is the signing and kernel identity of a process that Sigma's
+// field names do not cover (schema zaafvesper.elegia/1, zaafvesper.proc and
+// zaafvesper.parent). The kernel unique id is what the zaafvesper pipeline
+// preset maps ProcessGuid to on macOS, so correlations can group by process.
+func procIdentity(p *event.Proc, c caps, full bool) map[string]any {
+	m := map[string]any{"is_platform": p.IsPlatform}
+	if p.UniqueID != 0 {
+		m["unique_id"] = p.UniqueID
+	}
+	if p.PID != 0 {
+		m["pid"] = p.PID
+	}
+	if p.SigningID != "" {
+		m["signing_id"] = c.s(p.SigningID)
+	}
+	if p.TeamID != "" {
+		m["team_id"] = c.s(p.TeamID)
+	}
+	if !full {
+		return m
+	}
+	m["is_signed"] = p.IsSigned
+	if p.PIDVersion != 0 {
+		m["pidversion"] = p.PIDVersion
+	}
+	if p.CSCategory != "" {
+		m["cs_category"] = p.CSCategory
+	}
+	if p.Seeded {
+		m["seeded"] = true
+	}
+	return m
 }
 
 // resolve reads a static field or an indexed one ("evt.arg[key]").
@@ -143,12 +205,17 @@ func exportValue(v event.Value, c caps) any {
 
 // EncodeSigma returns e as one sanitised NDJSON line (without the newline),
 // at most max bytes unless even the tightly capped form is larger.
-func EncodeSigma(e *event.Event, defaultProduct string, max int) ([]byte, error) {
+func EncodeSigma(e *event.Event, o SigmaOptions, max int) ([]byte, error) {
 	if max <= 0 {
 		max = DefaultMaxRecordBytes
 	}
-	b, err := encodeCapped(sigmaRecord(e, defaultProduct, firstCaps), max, func() any {
-		r := sigmaRecord(e, defaultProduct, caps{str: 256, list: 8})
+	c, cut := firstCaps.tracked()
+	rec := sigmaRecord(e, o, c)
+	if *cut {
+		rec["truncated"] = true
+	}
+	b, err := encodeCapped(rec, max, func() any {
+		r := sigmaRecord(e, o, caps{str: 256, list: 8})
 		r["truncated"] = true
 		return r
 	})
@@ -170,11 +237,11 @@ var ocsfSeverity = map[string]struct {
 // ATT&CK tags as types, metadata.product, one evidence per event (its
 // Sigma-named record) and the ZAAFVesper rule details under
 // unmapped.zaafvesper.
-func OCSFFinding(a *rules.Alert, version, defaultProduct string, seq uint64) map[string]any {
-	return ocsfFinding(a, version, defaultProduct, seq, firstCaps, true)
+func OCSFFinding(a *rules.Alert, version string, o SigmaOptions, seq uint64) map[string]any {
+	return ocsfFinding(a, version, o, seq, firstCaps, true)
 }
 
-func ocsfFinding(a *rules.Alert, version, defaultProduct string, seq uint64, c caps, withEvidence bool) map[string]any {
+func ocsfFinding(a *rules.Alert, version string, o SigmaOptions, seq uint64, c caps, withEvidence bool) map[string]any {
 	sev, ok := ocsfSeverity[a.Severity]
 	if !ok {
 		sev = ocsfSeverity["info"]
@@ -189,7 +256,7 @@ func ocsfFinding(a *rules.Alert, version, defaultProduct string, seq uint64, c c
 	if withEvidence {
 		for _, e := range a.Events {
 			if e != nil {
-				evidences = append(evidences, map[string]any{"data": sigmaRecord(e, defaultProduct, c)})
+				evidences = append(evidences, map[string]any{"data": sigmaRecord(e, o, c)})
 			}
 		}
 	}
@@ -231,19 +298,19 @@ func ocsfFinding(a *rules.Alert, version, defaultProduct string, seq uint64, c c
 
 // EncodeOCSF returns the alert as one sanitised OCSF line (without newline):
 // first with the normal caps, then with tight caps, then without evidences.
-func EncodeOCSF(a *rules.Alert, version, defaultProduct string, seq uint64, max int) ([]byte, error) {
+func EncodeOCSF(a *rules.Alert, version string, o SigmaOptions, seq uint64, max int) ([]byte, error) {
 	if max <= 0 {
 		max = DefaultMaxRecordBytes
 	}
-	b, err := marshal(ocsfFinding(a, version, defaultProduct, seq, firstCaps, true))
+	b, err := marshal(ocsfFinding(a, version, o, seq, firstCaps, true))
 	if err != nil {
 		return nil, err
 	}
 	if len(b) <= max {
 		return sanitizeJSON(b), nil
 	}
-	return encodeCapped(ocsfFinding(a, version, defaultProduct, seq, caps{str: 256, list: 16}, true), max, func() any {
-		return ocsfFinding(a, version, defaultProduct, seq, caps{str: 256, list: 16}, false)
+	return encodeCapped(ocsfFinding(a, version, o, seq, caps{str: 256, list: 16}, true), max, func() any {
+		return ocsfFinding(a, version, o, seq, caps{str: 256, list: 16}, false)
 	})
 }
 
@@ -261,6 +328,7 @@ type LineWriter struct {
 	max      int64
 	onCapped func(detail string)
 	onDrop   func(detail string)
+	onError  func(detail string)
 
 	mu      sync.Mutex
 	written int64
@@ -287,6 +355,10 @@ type LineWriterConfig struct {
 	// OnCapped is called once when the cap is reached; OnDrop for drops
 	// (both rate-limited by the pipeline).
 	OnCapped, OnDrop func(detail string)
+	// OnError is called for each write or flush error (the pipeline
+	// rate-limits the resulting SensorDegraded). The writer recovers: the
+	// lines buffered at the error are lost, later lines are written.
+	OnError func(detail string)
 }
 
 // NewLineWriter starts the writer.
@@ -298,7 +370,7 @@ func NewLineWriter(w io.Writer, cfg LineWriterConfig) *LineWriter {
 		cfg.QueueBytes = 32 << 20
 	}
 	lw := &LineWriter{name: cfg.Name, w: w, ch: make(chan []byte, cfg.Queue), done: make(chan struct{}),
-		max: cfg.MaxBytes, onCapped: cfg.OnCapped, onDrop: cfg.OnDrop, maxQueued: cfg.QueueBytes, written: cfg.Written}
+		max: cfg.MaxBytes, onCapped: cfg.OnCapped, onDrop: cfg.OnDrop, onError: cfg.OnError, maxQueued: cfg.QueueBytes, written: cfg.Written}
 	go lw.loop()
 	return lw
 }
@@ -329,19 +401,56 @@ func (lw *LineWriter) WriteLine(b []byte) {
 	}
 }
 
+// rotator is a destination that starts a new file between lines
+// (Segments): Due says when, Rotate does it.
+type rotator interface {
+	Due() bool
+	Rotate() error
+}
+
+// rotateCheck is how often an idle LineWriter asks its rotator.
+const rotateCheck = time.Second
+
 func (lw *LineWriter) loop() {
 	defer close(lw.done)
 	bw := bufio.NewWriterSize(lw.w, 64<<10)
-	for line := range lw.ch {
-		atomic.AddInt64(&lw.queued, -int64(len(line)))
-		lw.write(bw, line)
-		if len(lw.ch) == 0 {
-			if err := bw.Flush(); err != nil {
-				lw.errs.Add(1)
-			}
+	rot, _ := lw.w.(rotator)
+	rotate := func() {
+		if rot == nil || !rot.Due() {
+			return
+		}
+		if err := bw.Flush(); err != nil {
+			lw.failed(bw, err)
+		}
+		if err := rot.Rotate(); err != nil {
+			lw.failed(bw, err)
 		}
 	}
-	_ = bw.Flush()
+	var tick <-chan time.Time
+	if rot != nil {
+		t := time.NewTicker(rotateCheck)
+		defer t.Stop()
+		tick = t.C
+	}
+	for {
+		select {
+		case line, ok := <-lw.ch:
+			if !ok {
+				_ = bw.Flush()
+				return
+			}
+			atomic.AddInt64(&lw.queued, -int64(len(line)))
+			lw.write(bw, line)
+			if len(lw.ch) == 0 {
+				if err := bw.Flush(); err != nil {
+					lw.failed(bw, err)
+				}
+			}
+			rotate()
+		case <-tick:
+			rotate() // an idle segment still closes at its age limit
+		}
+	}
 }
 
 func (lw *LineWriter) write(bw *bufio.Writer, line []byte) {
@@ -362,10 +471,26 @@ func (lw *LineWriter) write(bw *bufio.Writer, line []byte) {
 	n, err := bw.Write(line)
 	lw.written += int64(n)
 	if err != nil {
-		lw.errs.Add(1)
+		lw.failed(bw, err)
 		return
 	}
 	lw.lines.Add(1)
+}
+
+// failed recovers from a write or flush error. bufio.Writer keeps its first
+// error and refuses every later write, so one moment of a full disk would
+// silence the output until a restart: the buffer is reset (the lines in it
+// are lost), a Segments destination drops any partial line, and the error is
+// counted and reported.
+func (lw *LineWriter) failed(bw *bufio.Writer, err error) {
+	lw.errs.Add(1)
+	bw.Reset(lw.w)
+	if r, ok := lw.w.(interface{ Recover() }); ok {
+		r.Recover()
+	}
+	if lw.onError != nil {
+		lw.onError(fmt.Sprintf("%s: write failed (%v); the lines buffered at that moment are lost, writing continues", lw.name, err))
+	}
 }
 
 // Close drains the queue (within timeout), flushes and closes w when it is
@@ -401,10 +526,10 @@ func (lw *LineWriter) Stats() map[string]uint64 {
 
 // ElegiaSink streams every event as a Sigma-named NDJSON line.
 type ElegiaSink struct {
-	W              *LineWriter
-	DefaultProduct string
-	MaxBytes       int
-	errs           atomic.Uint64
+	W        *LineWriter
+	Options  SigmaOptions
+	MaxBytes int
+	errs     atomic.Uint64
 }
 
 // Event writes one event.
@@ -412,7 +537,7 @@ func (s *ElegiaSink) Event(e *event.Event) {
 	if e == nil {
 		return
 	}
-	line, err := EncodeSigma(e, s.DefaultProduct, s.MaxBytes)
+	line, err := EncodeSigma(e, s.Options, s.MaxBytes)
 	if err != nil {
 		s.errs.Add(1)
 		return
@@ -422,16 +547,16 @@ func (s *ElegiaSink) Event(e *event.Event) {
 
 // OCSFSink writes alerts as OCSF Detection Findings (alert.Sink).
 type OCSFSink struct {
-	W              *LineWriter
-	Version        string
-	DefaultProduct string
-	MaxBytes       int
-	seq            atomic.Uint64
+	W        *LineWriter
+	Version  string
+	Options  SigmaOptions
+	MaxBytes int
+	seq      atomic.Uint64
 }
 
 // Send writes one finding.
 func (s *OCSFSink) Send(a *rules.Alert) error {
-	line, err := EncodeOCSF(a, s.Version, s.DefaultProduct, s.seq.Add(1), s.MaxBytes)
+	line, err := EncodeOCSF(a, s.Version, s.Options, s.seq.Add(1), s.MaxBytes)
 	if err != nil {
 		return err
 	}

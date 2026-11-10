@@ -1,0 +1,25 @@
+title: curl or wget downloads over plain HTTP (macOS)
+id: 9ba2f571-4f42-4c6b-b524-1c055924783e
+name: zv_macos_curl_http_download
+status: experimental
+description: Matches only process_creation records (EventID 1), since ZAAFElegia does not yet filter by logsource. curl or wget fetches a plain-HTTP URL. Base rule for the ZAAFVesper download-to-execution correlation.
+author: ZAAFVesper project
+references:
+  - https://attack.mitre.org/techniques/T1105/
+tags:
+  - attack.command-and-control
+  - attack.t1105
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    EventID: 1
+    Image|endswith:
+      - /curl
+      - /wget
+    CommandLine|contains: 'http://'
+  condition: selection
+falsepositives:
+  - Scripts that fetch from local or lab HTTP servers
+level: low

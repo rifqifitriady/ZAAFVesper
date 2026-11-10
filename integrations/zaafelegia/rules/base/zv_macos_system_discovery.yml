@@ -1,0 +1,27 @@
+title: System information discovery command (macOS)
+id: f98a180a-ccbf-45bc-8c1a-439a44d1f51e
+name: zv_macos_system_discovery
+status: experimental
+description: Matches only process_creation records (EventID 1), since ZAAFElegia does not yet filter by logsource. One of the commands malware runs to profile a Mac. Alone it is routine; the ZAAFVesper discovery-burst correlation counts several from one parent.
+author: ZAAFVesper project
+references:
+  - https://attack.mitre.org/techniques/T1082/
+tags:
+  - attack.discovery
+  - attack.t1082
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    EventID: 1
+    Image|endswith:
+      - /system_profiler
+      - /sw_vers
+      - /ioreg
+      - /csrutil
+      - /sysctl
+  condition: selection
+falsepositives:
+  - Admin and inventory tools
+level: informational

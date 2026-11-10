@@ -23,7 +23,8 @@ import (
 
 func TestNetOutFlagChecks(t *testing.T) {
 	ok := netOutOptions{netInterval: time.Second, syslogFacility: "local4", webhookFormat: "json",
-		spoolMaxBytes: 1, elegiaMaxBytes: 1, ocsfMaxBytes: 1}
+		spoolMaxBytes: 1, ocsfMaxBytes: 1,
+		elegia: elegiaOptions{outMax: 1, segBytes: 4096, segAge: time.Second, keepBytes: 8192}}
 	if err := ok.check(); err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +38,7 @@ func TestNetOutFlagChecks(t *testing.T) {
 		"format":          func(n *netOutOptions) { n.webhookFormat = "xml" },
 		"events no siem":  func(n *netOutOptions) { n.siemEvents = true },
 		"ocsf stdout":     func(n *netOutOptions) { n.alertsOCSF = "-" },
-		"same file":       func(n *netOutOptions) { n.alertsOCSF, n.elegiaOut = "/tmp/a", "/tmp/a" },
+		"same file":       func(n *netOutOptions) { n.alertsOCSF, n.elegia.out = "/tmp/a", "/tmp/a" },
 		"bad facility":    func(n *netOutOptions) { n.syslogAddr, n.syslogCA, n.syslogFacility = "h:1", "/c", "mail2" },
 		"zero spool size": func(n *netOutOptions) { n.spoolMaxBytes = 0 },
 	} {
@@ -48,7 +49,7 @@ func TestNetOutFlagChecks(t *testing.T) {
 		}
 	}
 	var out, errb bytes.Buffer
-	if (&netOutOptions{elegiaOut: "-"}).consoleWriter(&out, &errb) != &errb {
+	if (&netOutOptions{elegia: elegiaOptions{out: "-"}}).consoleWriter(&out, &errb) != &errb {
 		t.Fatal("console still on stdout with --elegia-out -")
 	}
 }
@@ -113,8 +114,8 @@ func TestRunWiresNetworkAndOutputs(t *testing.T) {
 		noYara: true, noConsole: true, jsonKeep: 8, captureKeep: 2}
 	o.netout = netOutOptions{netInterval: time.Second, syslogAddr: ln.Addr().String(), syslogCA: webCA, syslogFacility: "local4",
 		webhookURL: web.URL + "/hook", webhookTokenFile: tok, webhookCA: webCA, webhookFormat: "json",
-		spoolDir: filepath.Join(dir, "spool"), spoolMaxBytes: 1 << 20, elegiaOut: filepath.Join(dir, "events.ndjson"),
-		elegiaMaxBytes: 1 << 20, alertsOCSF: filepath.Join(dir, "alerts.ocsf.ndjson"), ocsfMaxBytes: 1 << 20}
+		spoolDir: filepath.Join(dir, "spool"), spoolMaxBytes: 1 << 20, elegia: elegiaOptions{out: filepath.Join(dir, "events.ndjson"), outMax: 1 << 20, dir: filepath.Join(dir, "segments"), segBytes: 1 << 20, segAge: time.Hour, keepBytes: 1 << 30},
+		alertsOCSF: filepath.Join(dir, "alerts.ocsf.ndjson"), ocsfMaxBytes: 1 << 20}
 	var out, errb bytes.Buffer
 	s, err := buildSensor(o, &out, &errb)
 	if err != nil {
@@ -170,7 +171,7 @@ func TestRunWiresNetworkAndOutputs(t *testing.T) {
 	if strings.Contains(errb.String(), "s3cret") {
 		t.Fatal("token in the log")
 	}
-	ev := readJSONLines(t, o.netout.elegiaOut)
+	ev := readJSONLines(t, o.netout.elegia.out)
 	if len(ev) != 1 || ev[0]["Image"] != "/bin/bash" || ev[0]["DestinationPort"] != float64(4444) || ev[0]["Initiated"] != "true" ||
 		ev[0]["EventID"] != float64(3) {
 		t.Fatalf("elegia events %v", ev)
@@ -179,7 +180,7 @@ func TestRunWiresNetworkAndOutputs(t *testing.T) {
 	if len(fs) != 1 || fs[0]["class_uid"] != float64(2004) || fs[0]["severity"] != "High" {
 		t.Fatalf("ocsf %v", fs)
 	}
-	for _, p := range []string{o.netout.elegiaOut, o.netout.alertsOCSF} {
+	for _, p := range []string{o.netout.elegia.out, o.netout.alertsOCSF} {
 		if fi, _ := os.Stat(p); fi.Mode().Perm() != 0o600 {
 			t.Fatalf("%s mode %o", p, fi.Mode().Perm())
 		}
