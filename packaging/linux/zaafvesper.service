@@ -1,21 +1,26 @@
-# ZAAFVesper on Linux: reads Sysmon for Linux from journald (systemd unit).
+# ZAAFVesper on Linux (systemd unit). It watches the system with its own
+# eBPF kernel programs (--source ebpf); Sysmon for Linux is not needed. To
+# read Sysmon for Linux instead, use the drop-in in packaging/linux/README.md
+# ("Using Sysmon for Linux instead").
 # Install steps and what each setting is for: packaging/linux/README.md.
-# Untested on a real host: written against systemd 249+ documentation.
+# Tested on GitHub's Ubuntu runners (docs/validation/linux-ebpf.md).
 [Unit]
-Description=ZAAFVesper behaviour-detection sensor (Sysmon for Linux)
+Description=ZAAFVesper behaviour-detection sensor
 Documentation=https://github.com/rifqifitriady/ZAAFVesper/blob/main/packaging/linux/README.md
-After=systemd-journald.service sysmon.service
-Wants=sysmon.service
+After=systemd-journald.service
 
 [Service]
 Type=simple
-ExecStart=/usr/local/sbin/zaafvesper run --config /usr/local/etc/zaafvesper/zaafvesper.yml --rules /usr/local/etc/zaafvesper/rules --output-dir /var/lib/zaafvesper/logs --no-console
+ExecStart=/usr/local/sbin/zaafvesper run --source ebpf --config /usr/local/etc/zaafvesper/zaafvesper.yml --rules /usr/local/etc/zaafvesper/rules --output-dir /var/lib/zaafvesper/logs --no-console
 Restart=on-failure
 RestartSec=5s
-# root is needed to read the system journal, other users' /proc entries and
-# to kill; the capability bounding set below keeps only what that needs.
+# root is needed to load the eBPF programs, read other users' /proc entries
+# and kill; the capability bounding set keeps only what that needs:
+# CAP_BPF and CAP_PERFMON load and attach the tracing programs (Linux 5.8+;
+# no CAP_SYS_ADMIN), CAP_KILL kills, CAP_SYS_PTRACE and CAP_DAC_READ_SEARCH
+# read /proc/<pid>/exe and the like of every process.
 User=root
-CapabilityBoundingSet=CAP_KILL CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_KILL CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
 NoNewPrivileges=yes
 UMask=0077
 # Filesystem: everything read-only except the output directory. It is under
@@ -43,6 +48,9 @@ LockPersonality=yes
 MemoryDenyWriteExecute=yes
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
+# bpf() loads the programs, perf_event_open() attaches the tracepoints;
+# neither is in @system-service.
+SystemCallFilter=bpf perf_event_open
 SystemCallErrorNumber=EPERM
 # No network: alerts go to files. To use --syslog or --webhook, change all
 # three (see packaging/linux/README.md, "Network outputs"):

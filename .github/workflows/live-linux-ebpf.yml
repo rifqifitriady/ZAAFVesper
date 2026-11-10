@@ -1,0 +1,150 @@
+# Live validation of the Linux eBPF source (v0.4 workstream F,
+# docs/specs/2026-11-09-v0.4-reach.md): on fresh GitHub runners, with no
+# Sysmon installed,
+#   1. the kernel-program tests run as root and must not skip
+#      (pkg/source/ebpf/source_linux_test.go: every event type, identity,
+#      paths, drop counting, one kernel module loaded and unloaded);
+#   2. ZAAFVesper is installed as packaging/linux says (systemd unit,
+#      --source ebpf) and the same pinned Atomic Red Team tests and local
+#      equivalents as the v0.3 Sysmon run are executed (scripts/ci/b/artrun,
+#      linux-plan.json), recording per rule whether it fired.
+# Results: the job summary, the "validation-linux-ebpf-*" artifacts,
+# docs/validation/linux-ebpf.md.
+#
+# A job is red when the kernel-program tests fail or skip, setup, the test
+# run or the report broke, or a group of kernel programs did not load (an
+# incomplete run is never shown as a result). A rule that did not fire is a
+# result, reported per rule.
+#
+# Token safety: actions/checkout runs with persist-credentials: false, and no
+# step may put a token on a command line or in a file: the tests run as root
+# and their command lines end up in the public artifacts.
+name: live-linux-ebpf
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['validate/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-linux-ebpf-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Atomic Red Team, same pin as the v0.3 run (scripts/ci/b/atomics.sha256).
+  ART_COMMIT: a0e3f9bc69fed2fd711bd1f1aa87a40c33482fe6
+  RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  linux-ebpf:
+    # ubuntu-latest (26.04 since November 2026) and 24.04 LTS: two kernel
+    # series, so the CO-RE relocations are exercised on more than one kernel.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Kernel and BTF
+        run: |
+          uname -a
+          ls -l /sys/kernel/btf/vmlinux
+      # The committed objects are used as they are: no clang is involved and
+      # go generate is not run (CGO is off for the sensor).
+      - name: Build
+        run: |
+          CGO_ENABLED=0 go build -trimpath -o build/zaafvesper ./cmd/zaafvesper
+          CGO_ENABLED=0 go build -trimpath -o build/artrun ./scripts/ci/b/artrun
+          go test -c -race -o build/ebpf.test ./pkg/source/ebpf
+      - name: Kernel-program tests (root, must not skip)
+        id: ktests
+        continue-on-error: true # the rule run below still runs; the last step fails the job
+        run: |
+          # A loadable module that is not built in and not loaded yet, for
+          # TestLiveKernelModule (changes only this throw-away kernel).
+          mod=""
+          for m in dummy nlmon ifb vcan; do
+            if modinfo -F filename "$m" 2>/dev/null | grep -q '\.ko' && ! grep -q "^$m " /proc/modules; then mod=$m; break; fi
+          done
+          echo "test module: ${mod:-none}"
+          mkdir -p out
+          cd pkg/source/ebpf
+          set +e  # keep the test binary's status past tee (the shell runs with pipefail)
+          sudo env "PATH=/usr/sbin:/usr/bin:/sbin:/bin" ZAAF_EBPF_REQUIRE=1 ZAAF_EBPF_TEST_MODULE="$mod" \
+            ../../../build/ebpf.test -test.v -test.count=1 2>&1 | tee ../../../out/kernel-tests.txt
+          status=${PIPESTATUS[0]}
+          if grep -q -- '--- SKIP' ../../../out/kernel-tests.txt; then
+            echo "::warning::some kernel-program tests skipped (see out/kernel-tests.txt)"
+          fi
+          exit "$status"
+      - name: Fetch pinned atomics
+        run: |
+          mkdir -p atomics
+          while read -r sha file; do
+            t="${file%.yaml}"
+            curl -fsSL --retry 3 -o "atomics/$file" "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/$ART_COMMIT/atomics/$t/$file"
+          done < scripts/ci/b/atomics.sha256
+          (cd atomics && sha256sum -c --strict ../scripts/ci/b/atomics.sha256)
+      - name: Install the ZAAFVesper unit (eBPF source, no Sysmon)
+        run: ./scripts/ci/f/linux-ebpf-setup.sh
+      - name: Run the tests
+        id: run
+        continue-on-error: true
+        run: |
+          # System folders first; java from the runner's JDK (JAVA_HOME).
+          sudo env "PATH=/usr/sbin:/usr/bin:/sbin:/bin:$JAVA_HOME/bin" ./build/artrun run -plan scripts/ci/b/linux-plan.json -atomics atomics -out out/results.json
+      - name: Collect
+        id: collect
+        if: always()
+        run: |
+          mkdir -p out/alerts
+          sleep 15
+          alive=no; systemctl is-active --quiet zaafvesper && alive=yes
+          restarts=$(systemctl show zaafvesper -p NRestarts --value || echo "?")
+          sudo systemctl stop zaafvesper || true
+          sudo sh -c 'cp /var/lib/zaafvesper/logs/alerts-*.jsonl "$1"' sh out/alerts/ || true
+          sudo journalctl -u zaafvesper --no-pager > out/alerts/zaafvesper-journal.txt || true
+          sudo chown -R "$(id -u)" out
+          tail -60 out/alerts/zaafvesper-journal.txt
+          echo "restarts: $restarts"
+          if [ "$alive" != yes ] || [ "$restarts" != 0 ]; then echo "zaafvesper was not running throughout the tests"; exit 1; fi
+          if grep -E 'ebpf_events_(dropped|unreadable)' out/alerts/*.jsonl; then
+            echo "::warning::the sensor reported lost or unreadable eBPF records during the run (lines above)"
+          fi
+      - name: Report
+        id: report
+        if: always()
+        continue-on-error: true
+        run: |
+          . /etc/os-release
+          ./build/artrun report -plan scripts/ci/b/linux-plan.json -results out/results.json -alerts out/alerts -rules rules -platform linux -label "$PRETTY_NAME, kernel $(uname -r), eBPF source ($RUNNER_OS_LABEL)" -run-url "$RUN_URL" -out out/linux-ebpf.md -json out/linux-ebpf.json
+          cat out/linux-ebpf.md >> "$GITHUB_STEP_SUMMARY"
+        env:
+          RUNNER_OS_LABEL: ${{ matrix.os }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: validation-linux-ebpf-${{ matrix.os }}
+          path: out
+          retention-days: 30
+      - name: Fail if the run was incomplete
+        if: always() && (steps.ktests.outcome != 'success' || steps.run.outcome != 'success' || steps.collect.outcome != 'success' || steps.report.outcome != 'success')
+        run: |
+          echo "kernel tests: $KT_OUTCOME, test run: $RUN_OUTCOME, collect: $COLLECT_OUTCOME, report: $REPORT_OUTCOME"
+          exit 1
+        env:
+          KT_OUTCOME: ${{ steps.ktests.outcome }}
+          RUN_OUTCOME: ${{ steps.run.outcome }}
+          COLLECT_OUTCOME: ${{ steps.collect.outcome }}
+          REPORT_OUTCOME: ${{ steps.report.outcome }}

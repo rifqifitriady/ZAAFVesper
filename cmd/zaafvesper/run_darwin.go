@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -80,3 +81,6 @@ var ownServicePaths []string
 
 // unsupportedAction: every response action is implemented on macOS.
 func unsupportedAction(string) string { return "" }
+
+// registerSourceFlag: only one event source here, so there is no --source.
+func registerSourceFlag(*flag.FlagSet) {}

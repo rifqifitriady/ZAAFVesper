@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -185,3 +186,6 @@ func unsupportedAction(name string) string {
 	}
 	return "action " + name + " is not supported on Windows (macOS only)"
 }
+
+// registerSourceFlag: only one event source here, so there is no --source.
+func registerSourceFlag(*flag.FlagSet) {}
