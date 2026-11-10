@@ -9,7 +9,7 @@ Wants=sysmon.service
 
 [Service]
 Type=simple
-ExecStart=/usr/local/sbin/zaafvesper run --config /usr/local/etc/zaafvesper/zaafvesper.yml --rules /usr/local/etc/zaafvesper/rules --output-dir /var/log/zaafvesper --no-console
+ExecStart=/usr/local/sbin/zaafvesper run --config /usr/local/etc/zaafvesper/zaafvesper.yml --rules /usr/local/etc/zaafvesper/rules --output-dir /var/lib/zaafvesper/logs --no-console
 Restart=on-failure
 RestartSec=5s
 # root is needed to read the system journal, other users' /proc entries and
@@ -18,9 +18,14 @@ User=root
 CapabilityBoundingSet=CAP_KILL CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
 NoNewPrivileges=yes
 UMask=0077
-# Filesystem: everything read-only except the output directory.
+# Filesystem: everything read-only except the output directory. It is under
+# /var/lib, not /var/log: on Debian and Ubuntu /var/log is group-writable
+# (root:syslog 0775), which the sensor's ownership check refuses, rightly,
+# for a folder that holds its alerts. systemd creates /var/lib/zaafvesper
+# root-owned 0700 (StateDirectory).
 ProtectSystem=strict
-ReadWritePaths=/var/log/zaafvesper
+StateDirectory=zaafvesper
+StateDirectoryMode=0700
 ProtectHome=read-only
 PrivateTmp=yes
 PrivateDevices=yes
@@ -43,7 +48,7 @@ SystemCallErrorNumber=EPERM
 # three (see packaging/linux/README.md, "Network outputs"):
 #   RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 #   IPAddressAllow=<the receiver's address>   (keep IPAddressDeny=any)
-#   ReadWritePaths=/var/log/zaafvesper /var/db/zaafvesper   (the outputs' spool)
+#   ReadWritePaths=/var/db/zaafvesper   (the outputs' spool)
 RestrictAddressFamilies=AF_UNIX
 IPAddressDeny=any
 # Do not set ProtectProc=invisible or PrivatePIDs: the sensor must see every

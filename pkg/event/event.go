@@ -59,6 +59,12 @@ const (
 	WMIEvent          = "WMIEvent"
 	ProcessTamper     = "ProcessTamper"
 	FileStreamCreate  = "FileStreamCreate"
+
+	// SetUID: a process's real or effective uid changed (setuid(2) family,
+	// or a set-uid exec such as sudo). The old and new ids are in
+	// evt.arg[old_uid], [old_euid], [new_uid], [new_euid]. Mirrors
+	// Endpoint Security NOTIFY_SETUID; first raised by the Linux eBPF source.
+	SetUID = "SetUID"
 )
 
 // Platforms (evt.platform).
@@ -111,7 +117,7 @@ func Category(name string) string {
 		return "pipe"
 	case WMIEvent:
 		return "wmi"
-	case ProcessTamper:
+	case ProcessTamper, SetUID:
 		return "process"
 	case FileStreamCreate:
 		return "file"
@@ -517,7 +523,7 @@ var names = []string{
 	AddLaunchItem, Mount, LoadKext, Authenticate, Sudo, ModifyTCC, XProtectDetect, YaraMatch,
 	SensorDegraded, NetworkConnect, NetworkAccept, DNSQuery, ImageLoad, DriverLoad,
 	RegistryCreateKey, RegistryDeleteKey, RegistrySetValue, RegistryRename,
-	PipeCreate, PipeConnect, WMIEvent, ProcessTamper, FileStreamCreate,
+	PipeCreate, PipeConnect, WMIEvent, ProcessTamper, FileStreamCreate, SetUID,
 }
 
 // nonEmpty maps "" to nil (absent), so comparisons on an unreported
