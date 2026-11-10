@@ -204,8 +204,50 @@
       "note": "Canary: a bash copy named nuclei. It proves the sensor receives and evaluates events at this point of the run, independent of which coreutils the image ships."
     }
   ],
-  "untestable": [],
-  "skipped_atomics": [],
+  "untestable": [
+    {
+      "rule": "Disable Or Stop Services",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. The linked Atomic (42e3a5bd) stops a real service on the runner; not added."
+    },
+    {
+      "rule": "SSH run with a password tool or with host key checking turned off",
+      "reason": "No Atomic test exists for this behaviour. Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. A live test needs sshpass and an SSH target."
+    },
+    {
+      "rule": "Potential Linux Process Code Injection Via DD Utility",
+      "reason": "No Atomic test is linked. Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. A live test would overwrite another process's memory map through /proc."
+    },
+    {
+      "rule": "/etc/shadow read with a file or text tool",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. The linked Atomic (3723ab77) reads /etc/shadow as root and could be added to the plan."
+    },
+    {
+      "rule": "Remove Immutable File Attribute",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. The linked Atomic (e7469fe2) runs chattr -i on a scratch file and could be added to the plan."
+    },
+    {
+      "rule": "Touch Suspicious Service File",
+      "reason": "No Atomic test is linked. Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. A live test would create a unit file under /etc/systemd."
+    },
+    {
+      "rule": "User Has Been Deleted Via Userdel",
+      "reason": "No Atomic test is linked. Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. A live test needs a scratch account created first."
+    }
+  ],
+  "skipped_atomics": [
+    {
+      "guid": "3723ab77-c546-403c-8fb4-bb577033b235",
+      "reason": "Not yet added to the plan; the /etc/shadow reader rule has no live test yet."
+    },
+    {
+      "guid": "e7469fe2-ad41-4382-8965-99b94dd3c13f",
+      "reason": "Not yet added to the plan; the Remove Immutable File Attribute rule has no live test yet."
+    },
+    {
+      "guid": "42e3a5bd-1e45-427f-aa08-2a65fa29a820",
+      "reason": "Stops a real service on the runner. Not run."
+    }
+  ],
   "rule_notes": [
     {
       "rule": "Syslog Clearing or Removal Via System Utilities",

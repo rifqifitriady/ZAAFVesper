@@ -13,3 +13,9 @@ nomatch:
   - desc: "setspn lists SPNs (different tool)"
     events:
       - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8032, "ppid": 4000, "exe": "C:\\Windows\\System32\\setspn.exe", "name": "setspn.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "setspn -L web01", "args": ["setspn", "-L", "web01"], "original_name": "setspn.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "same-name lookalike - explorer opens a folder called Rubeus-notes"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8033, "ppid": 4000, "exe": "C:\\Windows\\explorer.exe", "name": "explorer.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "explorer.exe C:\\Users\\alice\\Documents\\Rubeus-notes", "args": ["explorer.exe", "C:\\Users\\alice\\Documents\\Rubeus-notes"], "original_name": "EXPLORER.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "same-name lookalike - a Rubeus.exe.config reader, not Rubeus.exe"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8034, "ppid": 4000, "exe": "C:\\Windows\\System32\\notepad.exe", "name": "notepad.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "notepad.exe C:\\Tools\\Rubeus.exe.config", "args": ["notepad.exe", "C:\\Tools\\Rubeus.exe.config"], "original_name": "NOTEPAD.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

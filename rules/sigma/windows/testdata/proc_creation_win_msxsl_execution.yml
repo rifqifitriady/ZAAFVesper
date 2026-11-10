@@ -10,3 +10,6 @@ nomatch:
   - desc: "xcopy (unrelated tool)"
     events:
       - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8292, "ppid": 4000, "exe": "C:\\Windows\\System32\\xcopy.exe", "name": "xcopy.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "xcopy C:\\a C:\\b /e", "args": ["xcopy", "C:\\a", "C:\\b", "/e"], "original_name": "XCOPY.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "same-name lookalike - notepad opens msxsl.exe.txt"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8293, "ppid": 4000, "exe": "C:\\Windows\\System32\\notepad.exe", "name": "notepad.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "notepad.exe C:\\Users\\alice\\msxsl.exe.txt", "args": ["notepad.exe", "C:\\Users\\alice\\msxsl.exe.txt"], "original_name": "NOTEPAD.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

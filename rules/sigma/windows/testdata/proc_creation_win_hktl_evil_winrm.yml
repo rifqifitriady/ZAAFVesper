@@ -10,3 +10,6 @@ nomatch:
   - desc: "winrs runs a remote command (different tool)"
     events:
       - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8192, "ppid": 4000, "exe": "C:\\Windows\\System32\\winrs.exe", "name": "winrs.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "winrs -r:web01 -u:alice ipconfig", "args": ["winrs", "-r:web01", "-u:alice", "ipconfig"], "original_name": "winrs.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "same-binary lookalike - ruby runs gem with -i and -u but no -p"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8193, "ppid": 4000, "exe": "C:\\Ruby32-x64\\bin\\ruby.exe", "name": "ruby.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "ruby.exe C:\\Ruby32-x64\\bin\\gem install -i C:\\gems -u rake", "args": ["ruby.exe", "C:\\Ruby32-x64\\bin\\gem", "install", "-i", "C:\\gems", "-u", "rake"], "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

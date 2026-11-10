@@ -138,10 +138,12 @@ Enable Via Dsenableroot" excludes ` -d ` with surrounding spaces, so a bare
 `dsenableroot -d` (which disables root) still fires; its fixture shows this.
 
 **Shipped converted rules for Windows and Linux (`rules/sigma/windows/`, `rules/sigma/linux/`).**
-30 Windows and 16 Linux SigmaHQ rules for the Sysmon sources, chosen because they use
-only fields the Sysmon decoder fills on that platform. Hand-written fixtures; originals in
+28 Windows and 16 Linux SigmaHQ rules for the Sysmon sources, chosen because they use
+only fields the Sysmon decoder fills on that platform (tables below). Hand-written fixtures; originals in
 `pkg/sigma/testdata/sigmahq-windows/` and `-linux/`, checked the same way. Selection and
 exclusions: [`rules/sigma/NOTICE.md`](../rules/sigma/NOTICE.md).
+
+**macOS (17 rules, `rules/sigma/macos/`).**
 
 | Rule (file) | Tactic | Technique | Severity | Sigma author |
 |---|---|---|---|---|
@@ -165,11 +167,72 @@ exclusions: [`rules/sigma/NOTICE.md`](../rules/sigma/NOTICE.md).
 
 These rules keep SigmaHQ's ATT&CK tags (only the revoked IDs listed above are rewritten).
 Since v0.4 the CI coverage job checks every rule's technique and tactic IDs against the
-same `enterprise-attack.json` and fails on an unknown, revoked or deprecated ID; four
-converted rules carry a tactic tag that ATT&CK does not list for their techniques (an
-Execution tag on a Stealth or Lateral Movement technique), reported as warnings. Atomic
+same `enterprise-attack.json` and fails on an unknown, revoked or deprecated ID; two
+converted rules ("Linux HackTool Execution", "Remotely Hosted HTA File Executed Via
+Mshta.EXE") carry an Execution tag that ATT&CK does not list for their technique
+(T1587, T1218.005), reported as warnings. Atomic
 tests are linked where one exercises the rule (`--atomics`, below), but none has been run
 against the sensor.
+
+**Windows (28 rules, `rules/sigma/windows/`).**
+
+| Rule (file) | Tactic | Technique | Severity | Sigma author |
+|---|---|---|---|---|
+| Boot Configuration Tampering Via Bcdedit.EXE<br>`proc_creation_win_bcdedit_boot_conf_tamper.yml` | Impact | T1490 | high | E.M. Anhaus (originally from Atomic Blue Detections, Endgame), oscd.community |
+| Bypass UAC Using Event Viewer<br>`registry_set_bypass_uac_using_eventviewer.yml` | Persistence, Privilege Escalation | T1547.010 | high | frack113 |
+| CobaltStrike Named Pipe<br>`pipe_created_hktl_cobaltstrike.yml` | Privilege Escalation, Stealth | T1055 | critical | Florian Roth (Nextron Systems), Wojciech Lesicki |
+| Driver Load From A Temporary Directory<br>`driver_load_win_susp_temp_use.yml` | Persistence, Privilege Escalation | T1543.003 | high | Florian Roth (Nextron Systems) |
+| Enumeration for Credentials in Registry<br>`proc_creation_win_reg_enumeration_for_credentials_in_registry.yml` | Credential Access | T1552.002 | medium | frack113 |
+| File Download Via Bitsadmin<br>`proc_creation_win_bitsadmin_download.yml` | Execution, Persistence, Stealth, Command and Control | T1197, T1036.003, T1105 | medium | Michael Haag, FPT.EagleEye |
+| Findstr GPP Passwords<br>`proc_creation_win_findstr_gpp_passwords.yml` | Credential Access | T1552.006 | high | frack113 |
+| HackTool - Mimikatz Execution<br>`proc_creation_win_hktl_mimikatz_command_line.yml` | Credential Access | T1003.001, T1003.002, T1003.004, T1003.005, T1003.006 | high | Teymur Kheirkhabarov, oscd.community, David ANDRE (additional keywords), Tim Shelton |
+| HackTool - Rubeus Execution<br>`proc_creation_win_hktl_rubeus.yml` | Credential Access, Lateral Movement | T1003, T1558.003, T1550.003 | critical | Florian Roth (Nextron Systems) |
+| HackTool - WinRM Access Via Evil-WinRM<br>`proc_creation_win_hktl_evil_winrm.yml` | Lateral Movement | T1021.006 | medium | frack113 |
+| Invocation of Active Directory Diagnostic Tool (ntdsutil.exe)<br>`proc_creation_win_ntdsutil_usage.yml` | Credential Access | T1003.003 | medium | Thomas Patzke |
+| Lsass Memory Dump via Comsvcs DLL<br>`proc_access_win_lsass_dump_comsvcs_dll.yml` | Credential Access | T1003.001 | high | Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research) |
+| LSASS Process Memory Dump Files<br>`file_event_win_lsass_default_dump_file_names.yml` | Credential Access | T1003.001 | high | Florian Roth (Nextron Systems) |
+| Msxsl.EXE Execution<br>`proc_creation_win_msxsl_execution.yml` | Stealth | T1220 | medium | Timur Zinniatullin, oscd.community |
+| Password Dumper Remote Thread in LSASS<br>`create_remote_thread_win_susp_password_dumper_lsass.yml` | Credential Access | T1003.001 | high | Thomas Patzke |
+| Potential Credential Dumping Via LSASS SilentProcessExit Technique<br>`registry_event_silentprocessexit_lsass.yml` | Credential Access | T1003.001 | critical | Florian Roth (Nextron Systems) |
+| Potential Tampering With RDP Related Registry Keys Via Reg.EXE<br>`proc_creation_win_reg_rdp_keys_tamper.yml` | Persistence, Lateral Movement, Defense Impairment | T1021.001, T1112 | high | pH-T (Nextron Systems), @Kostastsale, TheDFIRReport |
+| Potentially Suspicious Rundll32 Activity<br>`proc_creation_win_rundll32_susp_activity.yml` | Stealth | T1218.011 | medium | juju4, Jonhnathan Ribeiro, oscd.community, Nasreddine Bencherchali (Nextron Systems) |
+| Prefetch File Deleted<br>`file_delete_win_delete_prefetch.yml` | Stealth | T1070.004 | high | Cedric MAURUGEON |
+| Process Memory Dump Via Comsvcs.DLL<br>`proc_creation_win_rundll32_process_dump_via_comsvcs.yml` | Stealth, Credential Access | T1036, T1003.001 | high | Florian Roth (Nextron Systems), Modexp, Nasreddine Bencherchali (Nextron Systems), Swachchhanda Shrawan Poudel (Nextron Systems) |
+| Psexec Execution<br>`proc_creation_win_sysinternals_psexec_execution.yml` | Execution, Lateral Movement | T1569, T1021 | medium | omkar72 |
+| Remotely Hosted HTA File Executed Via Mshta.EXE<br>`proc_creation_win_mshta_http.yml` | Execution, Stealth | T1218.005 | high | Nasreddine Bencherchali (Nextron Systems) |
+| Shadow Copies Deletion Using Operating Systems Utilities<br>`proc_creation_win_susp_shadow_copies_deletion.yml` | Stealth, Impact | T1070, T1490 | high | Florian Roth (Nextron Systems), Michael Haag, Teymur Kheirkhabarov, Daniil Yugoslavskiy, oscd.community, Andreas Hunkeler (@Karneades) |
+| Suspicious Eventlog Clearing or Configuration Change Activity<br>`proc_creation_win_susp_eventlog_clear.yml` | Defense Impairment | T1685.005, T1685.001 | high | Ecco, Daniil Yugoslavskiy, oscd.community, D3F7A5105, Swachchhanda Shrawan Poudel (Nextron Systems) |
+| Suspicious File Downloaded From Direct IP Via Certutil.EXE<br>`proc_creation_win_certutil_download_direct_ip.yml` | Stealth, Command and Control | T1027, T1105 | high | Nasreddine Bencherchali (Nextron Systems) |
+| Suspicious Regsvr32 Execution From Remote Share<br>`proc_creation_win_regsvr32_remote_share.yml` | Stealth | T1218.010 | high | Nasreddine Bencherchali (Nextron Systems) |
+| Windows Credential Manager Access via VaultCmd<br>`proc_creation_win_vaultcmd_list_creds.yml` | Credential Access | T1555.004 | medium | frack113 |
+| WMIC Remote Command Execution<br>`proc_creation_win_wmic_remote_execution.yml` | Execution | T1047 | medium | frack113, Nasreddine Bencherchali (Nextron Systems) |
+
+**Linux (16 rules, `rules/sigma/linux/`).**
+
+| Rule (file) | Tactic | Technique | Severity | Sigma author |
+|---|---|---|---|---|
+| Copy Passwd Or Shadow From TMP Path<br>`proc_creation_lnx_cp_passwd_or_shadow_tmp.yml` | Credential Access | T1552.001 | high | Joseliyo Sanchez, @Joseliyo_Jstnk |
+| Disable Or Stop Services<br>`proc_creation_lnx_services_stop_and_disable.yml` | Impact, Defense Impairment | T1685, T1489 | medium | Nasreddine Bencherchali (Nextron Systems) |
+| History File Deletion<br>`proc_creation_lnx_susp_history_delete.yml` | Impact | T1565.001 | high | Florian Roth (Nextron Systems) |
+| Linux HackTool Execution<br>`proc_creation_lnx_susp_hktl_execution.yml` | Execution, Resource Development | T1587 | high | Nasreddine Bencherchali (Nextron Systems), Georg Lauenstein (sure[secure]) |
+| Linux Reverse Shell Indicator<br>`net_connection_lnx_back_connect_shell_dev.yml` | Execution | T1059.004 | critical | Florian Roth (Nextron Systems) |
+| Linux Webshell Indicators<br>`proc_creation_lnx_webshell_detection.yml` | Persistence | T1505.003 | high | Florian Roth (Nextron Systems), Nasreddine Bencherchali (Nextron Systems) |
+| Potential Linux Process Code Injection Via DD Utility<br>`proc_creation_lnx_dd_process_injection.yml` | Privilege Escalation, Stealth | T1055.009 | medium | Joseph Kamau |
+| Potential Netcat Reverse Shell Execution<br>`proc_creation_lnx_netcat_reverse_shell.yml` | Execution | T1059 | high | @d4ns4n_, Nasreddine Bencherchali (Nextron Systems) |
+| Potential Perl Reverse Shell Execution<br>`proc_creation_lnx_perl_reverse_shell.yml` | Execution | (none) | high | @d4ns4n_, Nasreddine Bencherchali (Nextron Systems) |
+| Potential PHP Reverse Shell<br>`proc_creation_lnx_php_reverse_shell.yml` | Execution | (none) | high | @d4ns4n_ |
+| Python Reverse Shell Execution Via PTY And Socket Modules<br>`proc_creation_lnx_python_reverse_shell.yml` | Execution | (none) | high | @d4ns4n_, Nasreddine Bencherchali (Nextron Systems) |
+| Remove Immutable File Attribute<br>`proc_creation_lnx_chattr_immutable_removal.yml` | Defense Impairment | T1222.002 | medium | Nasreddine Bencherchali (Nextron Systems) |
+| Suspicious Java Children Processes<br>`proc_creation_lnx_susp_java_children.yml` | Execution | T1059 | high | Nasreddine Bencherchali (Nextron Systems) |
+| Syslog Clearing or Removal Via System Utilities<br>`proc_creation_lnx_clear_syslog.yml` | Defense Impairment | T1685.006 | high | Max Altgelt (Nextron Systems), Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC |
+| Touch Suspicious Service File<br>`proc_creation_lnx_touch_susp.yml` | Stealth | T1070.006 | medium | Joseliyo Sanchez, @Joseliyo_Jstnk |
+| User Has Been Deleted Via Userdel<br>`proc_creation_lnx_userdel.yml` | Impact | T1531 | medium | Tuan Le (NCSGroup) |
+
+The Windows and Linux tables list every tactic and technique the rule carries from SigmaHQ.
+Three Linux reverse-shell rules (Perl, PHP, Python) have no technique (the Sigma rules carry
+only the tactic tag), so `rules validate` warns about them and they add nothing to the
+technique count. Severities come from the Sigma level: Windows has 3 critical, 16 high and
+9 medium rules, Linux 1 critical, 10 high and 5 medium; there are no low ones.
 
 **Atomic tests for converted rules.** `zaafvesper sigma convert --atomics map.yml` adds
 Atomic Red Team GUIDs to `tests.atomic`. The map is YAML, Sigma rule id to a list of GUIDs,
@@ -233,8 +296,10 @@ prints techniques per platform and per tactic and the rules without an atomic te
 bundle and exits 1 on an unknown, revoked or deprecated ID (a tactic tag that is not one of
 the rule's techniques' tactics is a warning). The CI job "ATT&CK coverage and rule
 benchmark" downloads the bundle shipped with Atomic Red Team at commit `a0e3f9bc`, checks
-its SHA-256, runs the report and writes it to the job summary. Result on this branch: 0
-problems, 4 warnings (converted SigmaHQ tags).
+its SHA-256, runs the report and writes it to the job summary. Result on this branch
+(commands in "How the fixtures were checked"): 0 problems, 2 warnings (converted SigmaHQ
+tags). The report also lists, per platform, the rules that apply there and link no atomic
+test (a rule for several platforms counts in each): macOS 36, Windows 20, Linux 21.
 
 **Benchmark.** Two engine-only benchmarks (no eslogger or Sysmon decoding, no process
 table, no YARA, no output sinks; one goroutine; events already in memory). Neither is a
@@ -249,24 +314,26 @@ full-pipeline figure, and neither replaces a measurement on a live host.
   the like-for-like production case; `benign` and `fixtures-all` load every platform's
   rules at once and are upper bounds on cost.
 
-Apple M4, macOS, Go 1.27.3, branch `feat/detection-expansion` (136 rules) and the same
+Apple M4, macOS, Go 1.27.3, branch `feat/detection-expansion` (135 rules) and the same
 benchmark run on the v0.3 rule set (commit `7112b12`, 94 rules):
 
 | Benchmark | Rules loaded | Rules evaluated per event | Alerts per event | Events per second | µs per event |
 |---|:-:|:-:|:-:|--:|--:|
-| BenchmarkEngine (synthetic) | 30 | 7.4 | not reported | 1 650 000 | 0.61 |
-| benign-macos, v0.3 → v0.4 | 58 → 78 | 21.6 → 36.3 | 0.25 → 0.21 | 278 000 → 178 000 | 3.6 → 5.6 |
-| benign-windows, v0.3 → v0.4 | 22 → 40 | 5.1 → 17.9 | 0.03 → 0.03 | 595 000 → 179 000 | 1.7 → 5.6 |
-| benign-linux, v0.3 → v0.4 | 18 → 32 | 8.3 → 19.5 | 0 → 0 | 714 000 → 406 000 | 1.4 → 2.5 |
-| benign, all platforms, v0.3 → v0.4 | 94 → 136 | 33.0 → 64.9 | 0.23 → 0.18 | 130 000 → 79 000 | 7.7 → 12.6 |
-| fixtures-all, all platforms (v0.4) | 136 | 64.3 | 0.58 | 74 000 | 13.5 |
+| BenchmarkEngine (synthetic) | 30 | 7.4 | not reported | 1 690 000 | 0.59 |
+| benign-macos, v0.3 → v0.4 | 58 → 78 | 21.6 → 36.5 | 0.25 → 0.21 | 278 000 → 191 000 | 3.6 → 5.2 |
+| benign-windows, v0.3 → v0.4 | 22 → 38 | 5.1 → 16.8 | 0.03 → 0.03 | 595 000 → 186 000 | 1.7 → 5.4 |
+| benign-linux, v0.3 → v0.4 | 18 → 33 | 8.3 → 21.0 | 0 → 0 | 714 000 → 342 000 | 1.4 → 2.9 |
+| benign, all platforms, v0.3 → v0.4 | 94 → 135 | 33.0 → 65.3 | 0.23 → 0.18 | 130 000 → 77 600 | 7.7 → 12.9 |
+| fixtures-all, all platforms (v0.4) | 135 | 64.9 | 0.58 | 72 900 | 13.7 |
 
-What the numbers say. The engine indexes rules by event name, and the index holds: the
+What the numbers say. (The table is from a second run on the final rules; a first run under
+machine load, load average 14, gave 47 000 events per second for `benign` and was
+discarded. Treat all of them as one machine on one day.) The engine indexes rules by event name, and the index holds: the
 cost per evaluated rule stays about the same (roughly 150 to 330 ns for shipped rules,
 80 ns for the short synthetic ones), and the time per event grows with the number of
 rules that share the event's name. v0.4 added mostly process-creation rules, so every
 CreateProcess event now meets more of them: on Windows the rules evaluated per event
-went from 5 to 18 and throughput fell by about 3.3 times; on macOS by about 1.6 times.
+went from 5 to 17 and throughput fell by about 3.2 times; on macOS by about 1.5 times.
 Converted SigmaHQ rules cost more per rule than the synthetic ones (long lists of
 case-insensitive substrings, each lower-casing the command line again; 120 to 230
 allocations per event). Alerts are not the main cost (`benign` is only about 7% faster
@@ -346,7 +413,7 @@ Seq = sequence rule. Action = response taken only when ZAAFVesper runs with `--e
 | 51 | File uploaded with curl or wget over unencrypted HTTP or FTP (macos, linux)<br>`rules/exfiltration_upload_over_plain_http_or_ftp.yml` | TA0010 Exfiltration | T1048.003 Exfiltration Over Unencrypted Non-C2 Protocol | medium |  |  | (none indexed for this behaviour) |
 | 52 | rclone copies data to a remote (all)<br>`rules/exfiltration_rclone_copy_to_remote.yml` | TA0010 Exfiltration | T1567.002 Exfiltration to Cloud Storage | medium |  |  | `a4b74723-5cee-4300-91c3-5e34166909b4` |
 | 53 | User account deleted or its password reset with dscl or sysadminctl (macos)<br>`rules/impact_account_deleted_or_password_reset.yml` | TA0040 Impact | T1531 Account Access Removal | medium |  |  | `4d938c43-2fe8-4d70-a5b3-5bf239aa7846`<br>`d3812c4e-30ee-466a-a0aa-07e355b561d6` |
-| 54 | Cryptocurrency miner started (all)<br>`rules/impact_cryptocurrency_miner.yml` | TA0040 Impact | T1496 Resource Hijacking | high |  |  | (none indexed for this behaviour) |
+| 54 | Cryptocurrency miner started (all)<br>`rules/impact_cryptocurrency_miner.yml` | TA0040 Impact | T1496.001 Compute Hijacking | high |  |  | (none indexed for this behaviour) |
 | 55 | File or disk overwritten with zeros or random data by dd (macos, linux)<br>`rules/impact_data_destruction_dd_overwrite.yml` | TA0040 Impact | T1485 Data Destruction | high |  |  | `38deee99-fd65-4031-bec8-bfa4f9f26146` |
 | 56 | Disk or volume erased with diskutil (macos)<br>`rules/impact_disk_erased_with_diskutil.yml` | TA0040 Impact | T1561.001 Disk Content Wipe | high |  |  | (none indexed for this behaviour) |
 | 57 | Files encrypted with openssl, gpg or 7z from the command line (macos, linux)<br>`rules/impact_file_encryption_with_cli_tool.yml` | TA0040 Impact | T1486 Data Encrypted for Impact | medium |  |  | `645f0f5a-ef09-48d8-b9bc-f0e24c642d72`<br>`1a01f6b8-b1e8-418e-bbe3-78a6f822759e` |
@@ -654,6 +721,21 @@ process snapshot), `yara.meta[attack]` and `yara.meta[description]` (output only
 
 ## How the fixtures were checked
 
+**v0.4 detection expansion (final tree of branch `feat/detection-expansion`, 10 Nov 2026).**
+Every number in this file about the v0.4 rule set comes from these commands on that tree:
+
+- `zaafvesper rules validate rules`: 135 rules (135 enabled, 4 sequences), 76 macros,
+  3 warnings (the three Linux reverse-shell rules without a technique).
+- `zaafvesper rules test rules`: 699 scenarios passed, 0 failed.
+- `zaafvesper coverage --report --rules rules --attack enterprise-attack.json` (the pinned
+  bundle of the CI job, SHA-256 `fc783039...`): 135 enabled rules, 107 techniques (macOS 61,
+  Windows 41, Linux 27), 65 rules with an atomic test and 70 without, 0 problems, 2 warnings.
+- `go test -run '^$' -bench 'BenchmarkEngine|BenchmarkShippedRules' -benchtime 3s ./pkg/rules ./cmd/zaafvesper`:
+  the benchmark table.
+- `go test ./scripts/...`: the Windows and Linux live-validation plans name every shipped
+  rule for those platforms (see `scripts/ci/b/README.md`); the converted and new rules that
+  no live run has exercised are listed there with the reason.
+
 - `zaafvesper rules validate --rules rules`: 43 rules, 4 sequences, 70 macros/lists, 0 warnings
   (v0.2 active response, 9 Nov 2026).
 - `zaafvesper rules test --rules rules`: 287 scenarios, 287 passed, 0 failed (194 before
@@ -684,12 +766,13 @@ to confirm field population (`ps.env`, `evt.arg[...]`, `/private` path forms).
 
 ## Windows and Linux starter rules (v0.2, Sysmon)
 
-Hand-written starters for the Sysmon sources, each with `platforms:`, one or more
+Hand-written rules for the Sysmon sources (6 Windows and 7 Linux; eleven are the v0.2
+starters, the `/etc/shadow` reader and the scripted-SSH rule were added in v0.4), each with `platforms:`, one or more
 `match` scenarios and at least one benign lookalike `nomatch`. Technique IDs and
 tactics were checked against the same `enterprise-attack.json` as the macOS rules;
 the Atomic Red Team GUIDs were checked in that checkout (test name and platform).
 The fixtures are hand-written from Sysmon's documented fields, not captured from a
-live host. Converted SigmaHQ rules for Windows (30) and Linux (16) are in `rules/sigma/windows/`
+live host. Converted SigmaHQ rules for Windows (28) and Linux (16) are in `rules/sigma/windows/`
 and `rules/sigma/linux/`; how they were chosen and what was left out is in
 [`rules/sigma/NOTICE.md`](../rules/sigma/NOTICE.md).
 
@@ -706,7 +789,8 @@ and `rules/sigma/linux/`; how they were chosen and what was left out is in
 | Sudoers file created outside visudo<br>`rules/linux/privilege_escalation_sudoers_file_write.yml` | TA0004 Privilege Escalation | T1548.003 Sudo and Sudo Caching | high | (the Atomic tests edit with sed -i: a rename, which Sysmon for Linux does not report as FileCreate of sudoers) |
 | Shell history file deleted<br>`rules/linux/stealth_shell_history_deleted.yml` | TA0005 Stealth | T1070.003 Clear Command History | medium | `a934276e-2be5-4a36-93fd-98adbb5bd4fc` |
 | Interactive shell redirected to a network socket<br>`rules/linux/execution_reverse_shell_dev_tcp.yml` | TA0002 Execution | T1059.004 Unix Shell | critical | (none for this pattern) |
-| /etc/shadow read with a file or text tool<br>`rules/linux/credential_access_shadow_read_by_tool.yml` | TA0006 Credential Access | T1003.008 /etc/passwd and /etc/shadow | high | `3723ab77-c546-403c-8fb4-bb577033b235`<br>`df1a55ae-019d-4120-bc35-94f4bc5c4b0a` |
+| SSH run with a password tool or with host key checking turned off<br>`rules/linux/lateral_movement_scripted_ssh.yml` | TA0008 Lateral Movement | T1021.004 SSH | medium | (no Atomic test exists for this behaviour) |
+| /etc/shadow read with a file or text tool<br>`rules/linux/credential_access_shadow_read_by_tool.yml` | TA0006 Credential Access | T1003.008 /etc/passwd and /etc/shadow | high | `3723ab77-c546-403c-8fb4-bb577033b235` (the `ed` test, df1a55ae, feeds the path on stdin and is not linked) |
 
 Field notes for Sysmon events: `ps.uid` is -1 (Sysmon reports a user name, in
 `ps.username`); `ps.original_name` is the PE original file name, which survives a

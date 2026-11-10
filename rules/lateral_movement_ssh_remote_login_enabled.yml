@@ -3,8 +3,8 @@ id: 7348cfa4-c0f5-451c-b707-80e25f3cb61a
 version: 1.0.0
 platforms: [macos]
 description: |
-  Remote Login was turned on with systemsetup -setremotelogin on, or launchctl loaded or
-  enabled the sshd daemon. Attackers enable SSH to log back in or to reach the Mac from
+  Remote Login was turned on with systemsetup -setremotelogin on, or launchctl loaded,
+  enabled, bootstrapped or kickstarted the sshd daemon. Attackers enable SSH to log back in or to reach the Mac from
   another host. Turning Remote Login on in System Settings does not run these commands.
 labels:
   tactic.id: TA0008
@@ -17,7 +17,7 @@ condition: >
   spawn_process
   and (
     (ps.name = 'systemsetup' and ps.args iin '-setremotelogin' and ps.args iin ('on', 'yes'))
-    or (ps.name = 'launchctl' and ps.args in ('load', 'enable', 'bootstrap')
+    or (ps.name = 'launchctl' and ps.args in ('load', 'enable', 'bootstrap', 'kickstart')
         and ps.cmdline icontains ('com.openssh.sshd', '/LaunchDaemons/ssh.plist'))
   )
 output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) enabled SSH: %ps.cmdline"

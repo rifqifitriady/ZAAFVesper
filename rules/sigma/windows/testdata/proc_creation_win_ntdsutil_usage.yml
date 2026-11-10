@@ -10,3 +10,9 @@ nomatch:
   - desc: "ntfrsutl is a different tool"
     events:
       - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8012, "ppid": 4000, "exe": "C:\\Windows\\System32\\ntfrsutl.exe", "name": "ntfrsutl.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "ntfrsutl ds", "args": ["ntfrsutl", "ds"], "original_name": "ntfrsutl.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "same-name lookalike - notepad opens a file called ntdsutil.exe.txt"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8013, "ppid": 4000, "exe": "C:\\Windows\\System32\\notepad.exe", "name": "notepad.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "notepad.exe C:\\Users\\alice\\notes\\ntdsutil.exe.txt", "args": ["notepad.exe", "C:\\Users\\alice\\notes\\ntdsutil.exe.txt"], "original_name": "NOTEPAD.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "same-name lookalike - ntdsutil.exe.mui style resource name, not the executable"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8014, "ppid": 4000, "exe": "C:\\Windows\\System32\\en-US\\ntdsutil.exe.mui", "name": "ntdsutil.exe.mui", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "ntdsutil.exe.mui", "args": ["ntdsutil.exe.mui"], "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

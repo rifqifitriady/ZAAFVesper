@@ -11,10 +11,10 @@ description: |
 labels:
   tactic.id: TA0040
   tactic.name: Impact
-  technique.id: T1496
-  technique.name: Resource Hijacking
+  technique.id: T1496.001
+  technique.name: Compute Hijacking
 references:
-  - https://attack.mitre.org/techniques/T1496/
+  - https://attack.mitre.org/techniques/T1496/001/
 condition: >
   spawn_process
   and (

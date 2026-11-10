@@ -10,3 +10,9 @@ nomatch:
   - desc: "usermod locks an account (different tool)"
     events:
       - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 25092, "ppid": 24000, "exe": "/usr/sbin/usermod", "name": "usermod", "uid": -1, "euid": -1, "username": "root", "cmdline": "usermod -L bob", "args": ["usermod", "-L", "bob"], "parent": {"pid": 24000, "exe": "/usr/bin/sudo", "name": "sudo"}}}
+  - desc: "same-name lookalike - a pager opens a file called userdel.conf"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 25093, "ppid": 24000, "exe": "/usr/bin/less", "name": "less", "uid": -1, "euid": -1, "username": "root", "cmdline": "less /etc/userdel.conf", "args": ["less", "/etc/userdel.conf"], "parent": {"pid": 24000, "exe": "/usr/bin/sudo", "name": "sudo"}}}
+  - desc: "same-name lookalike - a helper named userdel-ldap, not userdel"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 25094, "ppid": 24000, "exe": "/usr/sbin/userdel-ldap", "name": "userdel-ldap", "uid": -1, "euid": -1, "username": "root", "cmdline": "userdel-ldap alice", "args": ["userdel-ldap", "alice"], "parent": {"pid": 24000, "exe": "/usr/bin/sudo", "name": "sudo"}}}

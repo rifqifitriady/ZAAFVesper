@@ -5,6 +5,9 @@ match:
   - desc: "launchctl loads the sshd daemon"
     events:
       - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5903, "ppid": 4000, "exe": "/bin/launchctl", "name": "launchctl", "args": ["launchctl", "load", "-w", "/System/Library/LaunchDaemons/ssh.plist"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.launchctl", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "launchctl kickstart starts the sshd daemon"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5906, "ppid": 4000, "exe": "/bin/launchctl", "name": "launchctl", "args": ["launchctl", "kickstart", "-k", "system/com.openssh.sshd"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.launchctl", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
 nomatch:
   - desc: "benign lookalike - systemsetup reads the Remote Login state"
     events:
@@ -15,3 +18,6 @@ nomatch:
   - desc: "launchctl loads an unrelated agent"
     events:
       - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5913, "ppid": 4000, "exe": "/bin/launchctl", "name": "launchctl", "args": ["launchctl", "load", "-w", "/Users/rifqi/Library/LaunchAgents/com.example.sync.plist"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.launchctl", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "launchctl kickstart restarts an unrelated daemon"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5917, "ppid": 4000, "exe": "/bin/launchctl", "name": "launchctl", "args": ["launchctl", "kickstart", "-k", "gui/501/com.example.sync"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.launchctl", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}

@@ -16,12 +16,15 @@ import (
 // coverageReport summarises a rule set: ATT&CK techniques per platform and
 // per tactic, and the rules without a linked atomic test.
 type coverageReport struct {
-	Rules             int                 `json:"rules"`
-	Techniques        int                 `json:"techniques"`
-	PerPlatform       map[string]int      `json:"techniques_per_platform"`
-	PerTactic         map[string]int      `json:"techniques_per_tactic"`
-	RulesWithAtomics  int                 `json:"rules_with_atomics"`
-	RulesNoAtomics    []string            `json:"rules_without_atomics"`
+	Rules            int            `json:"rules"`
+	Techniques       int            `json:"techniques"`
+	PerPlatform      map[string]int `json:"techniques_per_platform"`
+	PerTactic        map[string]int `json:"techniques_per_tactic"`
+	RulesWithAtomics int            `json:"rules_with_atomics"`
+	RulesNoAtomics   []string       `json:"rules_without_atomics"`
+	// NoAtomicsByPlat lists, per platform, the rules that apply there and
+	// link no atomic test (a rule without platforms is listed under all).
+	NoAtomicsByPlat   map[string][]string `json:"rules_without_atomics_by_platform"`
 	TechniquesByPlat  map[string][]string `json:"techniques_by_platform"`
 	AttackProblems    []string            `json:"attack_problems,omitempty"`
 	AttackWarnings    []string            `json:"attack_warnings,omitempty"`
@@ -31,7 +34,7 @@ type coverageReport struct {
 var allPlatforms = []string{event.PlatformMacOS, event.PlatformWindows, event.PlatformLinux}
 
 func buildCoverageReport(rs *rules.Ruleset) *coverageReport {
-	rep := &coverageReport{PerPlatform: map[string]int{}, PerTactic: map[string]int{}, TechniquesByPlat: map[string][]string{}}
+	rep := &coverageReport{PerPlatform: map[string]int{}, PerTactic: map[string]int{}, TechniquesByPlat: map[string][]string{}, NoAtomicsByPlat: map[string][]string{}}
 	all := map[string]bool{}
 	byPlat := map[string]map[string]bool{}
 	byTactic := map[string]map[string]bool{}
@@ -40,14 +43,18 @@ func buildCoverageReport(rs *rules.Ruleset) *coverageReport {
 	}
 	for _, r := range rs.Enabled() {
 		rep.Rules++
-		if len(r.Tests.Atomic) > 0 {
-			rep.RulesWithAtomics++
-		} else {
-			rep.RulesNoAtomics = append(rep.RulesNoAtomics, alert.Sanitize(ruleRel(rs.Dir, r.File)))
-		}
 		plats := r.Platforms
 		if len(plats) == 0 {
 			plats = allPlatforms
+		}
+		if len(r.Tests.Atomic) > 0 {
+			rep.RulesWithAtomics++
+		} else {
+			rel := alert.Sanitize(ruleRel(rs.Dir, r.File))
+			rep.RulesNoAtomics = append(rep.RulesNoAtomics, rel)
+			for _, p := range plats {
+				rep.NoAtomicsByPlat[p] = append(rep.NoAtomicsByPlat[p], rel)
+			}
 		}
 		tactics := splitIDs(r.Labels["tactic.name"])
 		for _, t := range r.TechniqueIDs() {
@@ -72,6 +79,9 @@ func buildCoverageReport(rs *rules.Ruleset) *coverageReport {
 		rep.PerTactic[alert.Sanitize(ta)] = len(set)
 	}
 	sort.Strings(rep.RulesNoAtomics)
+	for _, p := range allPlatforms {
+		sort.Strings(rep.NoAtomicsByPlat[p])
+	}
 	return rep
 }
 
@@ -292,6 +302,10 @@ func printCoverageReport(w io.Writer, rep *coverageReport) {
 	say(w, "techniques per tactic (thinnest first):")
 	for _, t := range tactics {
 		say(w, "  %3d  %s", rep.PerTactic[t], t)
+	}
+	say(w, "rules without an atomic test, per platform (a rule for several platforms counts in each):")
+	for _, p := range allPlatforms {
+		say(w, "  %-8s %3d", p, len(rep.NoAtomicsByPlat[p]))
 	}
 	say(w, "%d rules link an atomic test; %d do not:", rep.RulesWithAtomics, len(rep.RulesNoAtomics))
 	for _, r := range rep.RulesNoAtomics {
