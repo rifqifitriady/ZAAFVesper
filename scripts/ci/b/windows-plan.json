@@ -222,6 +222,10 @@
   ],
   "untestable": [
     {
+      "rule": "Run value pointing into a temporary or public folder",
+      "reason": "No Atomic Red Team test in the pinned T1547.001 file sets a Run or RunOnce value that points into Temp or Public (checked at ART_COMMIT; the Run-key tests use other paths), and no atomic GUID is claimed. Covered by the rule's unit and testdata cases; a live inline test is a follow-up."
+    },
+    {
       "rule": "LSASS process memory opened for reading",
       "reason": "Would read the runner's real LSASS memory (credentials). Not run."
     },
