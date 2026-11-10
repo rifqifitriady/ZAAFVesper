@@ -9,13 +9,13 @@ import (
 	"github.com/rifqifitriady/ZAAFVesper/pkg/rules"
 )
 
-// Response actions per platform: everything on macOS, kill and suspend on
-// Linux, kill on Windows; the rest are refused with a reason.
+// Response actions per platform: everything on macOS; everything but
+// requarantine (macOS only) on Linux and Windows.
 func TestUnsupportedActionPerPlatform(t *testing.T) {
 	want := map[string]map[string]bool{
 		"darwin":  {rules.ActionKill: true, rules.ActionSuspend: true, rules.ActionQuarantineFile: true, rules.ActionRequarantine: true, rules.ActionRemovePersistence: true, rules.ActionIsolateProcess: true},
-		"linux":   {rules.ActionKill: true, rules.ActionSuspend: true},
-		"windows": {rules.ActionKill: true},
+		"linux":   {rules.ActionKill: true, rules.ActionSuspend: true, rules.ActionQuarantineFile: true, rules.ActionRemovePersistence: true, rules.ActionIsolateProcess: true},
+		"windows": {rules.ActionKill: true, rules.ActionSuspend: true, rules.ActionQuarantineFile: true, rules.ActionRemovePersistence: true, rules.ActionIsolateProcess: true},
 	}[runtime.GOOS]
 	if want == nil {
 		t.Skip("no response actions on " + runtime.GOOS)
@@ -29,8 +29,8 @@ func TestUnsupportedActionPerPlatform(t *testing.T) {
 			t.Errorf("%s: reason %q", a, why)
 		}
 	}
-	if pfAvailable != (runtime.GOOS == "darwin") {
-		t.Errorf("pfAvailable=%v on %s", pfAvailable, runtime.GOOS)
+	if firewallAvailable != (runtime.GOOS == "darwin" || runtime.GOOS == "linux" || runtime.GOOS == "windows") {
+		t.Errorf("firewallAvailable=%v on %s", firewallAvailable, runtime.GOOS)
 	}
 }
 

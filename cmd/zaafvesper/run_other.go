@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"io"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/config"
@@ -32,8 +33,10 @@ func newSource(*config.Config, *pipeline, io.Writer) source.Source { return nil 
 // platformOutputCheck: every output works here.
 func platformOutputCheck(*netOutOptions) error { return nil }
 
-// pfAvailable: pf (isolate_process) is macOS only.
-const pfAvailable = false
+// firewallAvailable: no host firewall back end on this platform.
+const firewallAvailable = false
+
+var ownServicePaths []string
 
 // supportedActions are the response actions implemented on this platform; the
 // others (quarantine_file, requarantine, remove_persistence and
@@ -47,3 +50,6 @@ func unsupportedAction(name string) string {
 	}
 	return "action " + name + " is not supported on this platform (macOS only)"
 }
+
+// registerSourceFlag: only one event source here, so there is no --source.
+func registerSourceFlag(*flag.FlagSet) {}

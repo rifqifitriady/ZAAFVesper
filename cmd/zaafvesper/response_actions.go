@@ -38,6 +38,15 @@ func (p *pipeline) respondActions(a *rules.Alert) {
 	ev := a.Last()
 	rule, reason := a.RuleID, "rule "+a.RuleName+" ("+a.RuleID+")"
 	for _, act := range a.Response {
+		if act.Name == rules.ActionQuarantineFile && act.EffectiveTarget() == rules.TargetProcess {
+			// Bind the executable while the process runs (Linux, Sysmon
+			// events carry no inode): a kill of the same rule may end it
+			// before the quarantine runs on the worker.
+			ev = r.BindExecutable(ev)
+			break
+		}
+	}
+	for _, act := range a.Response {
 		parent := act.KillTarget() == rules.TargetParent
 		target := act.EffectiveTarget()
 		if why := unsupportedAction(act.Name); why != "" {
@@ -168,7 +177,7 @@ func responseActionConfig(rc *response.Config, o runOptions, cfg *config.Config,
 	// ZAAFVesper's own files: the binary, rules, configuration, output, the
 	// LaunchDaemon plist and its log directory. The vault and the state
 	// directory are added by response.New.
-	own := []string{rulesDir, daemonPlistPath, "/private/var/log/zaafvesper", "/var/log/zaafvesper"}
+	own := append([]string{rulesDir, daemonPlistPath, "/private/var/log/zaafvesper", "/var/log/zaafvesper"}, ownServicePaths...)
 	if exe, err := os.Executable(); err == nil {
 		own = append(own, exe)
 		if r, err := filepath.EvalSymlinks(exe); err == nil {
@@ -219,12 +228,12 @@ func (s *sensor) startResponse(o runOptions, stderr io.Writer) {
 	if r == nil {
 		return
 	}
-	// pf (isolate_process) exists only on macOS; elsewhere the action is
-	// refused before it reaches the responder (unsupportedAction).
-	usePF := o.responseRunner != nil || (o.asRoot && pfAvailable)
-	if usePF {
+	// The host firewall (pf, nftables, Windows Firewall) is driven only as
+	// root (an elevated administrator) or with a test runner.
+	useFW := o.responseRunner != nil || (o.asRoot && firewallAvailable)
+	if useFW {
 		if err := r.StartResponse(); err != nil {
-			say(stderr, "response: preparing the pf anchor %s: %v (isolate_process may fail)", response.PFAnchor, err)
+			say(stderr, "response: preparing %s: %v (isolate_process may fail)", response.FirewallName, err)
 		}
 	}
 	r.StartWorker(responseQueue)
@@ -232,7 +241,7 @@ func (s *sensor) startResponse(o runOptions, stderr io.Writer) {
 	// passed the exclusions (Observe keeps only network events).
 	s.p.taps = append(s.p.taps, r.Observe)
 	s.closers = append(s.closers, func() error {
-		if !usePF {
+		if !useFW {
 			r.StopWorker()
 			r.ResumeAll()
 			return nil
@@ -246,8 +255,8 @@ func (s *sensor) startResponse(o runOptions, stderr io.Writer) {
 
 // warnIsolation warns when an enabled rule uses isolate_process while the
 // management allow-list is empty: only the built-in never-block set
-// (loopback, link-local, multicast, this Mac's addresses, its default
-// gateways and DNS resolvers, Apple's 17.0.0.0/8) is then protected.
+// (loopback, link-local, multicast, this host's addresses, its gateways and
+// DNS resolvers, and on macOS Apple's 17.0.0.0/8) is then protected.
 func warnIsolation(rs *rules.Ruleset, cfg *config.Config, stderr io.Writer) {
 	if len(cfg.Response.IsolationAllow) > 0 {
 		return
@@ -255,7 +264,7 @@ func warnIsolation(rs *rules.Ruleset, cfg *config.Config, stderr io.Writer) {
 	for _, r := range rs.Enabled() {
 		for _, a := range r.Action {
 			if a.Name == rules.ActionIsolateProcess {
-				say(stderr, "warning: rule %q uses isolate_process but response.isolation_allow is empty; the gateway, DNS resolvers and Apple's 17.0.0.0/8 are never blocked, but add your proxy, MDM and log collector, or the rule can block them for the whole Mac", r.Name)
+				say(stderr, "warning: rule %q uses isolate_process but response.isolation_allow is empty; the gateways and DNS resolvers (and on macOS Apple's 17.0.0.0/8) are never blocked, but add your proxy, management server and log collector, or the rule can block them for the whole host", r.Name)
 				return
 			}
 		}

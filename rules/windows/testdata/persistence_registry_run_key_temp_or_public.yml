@@ -1,0 +1,32 @@
+match:
+  - desc: dropper in the user's Temp sets an HKCU Run value to itself
+    events:
+      - name: RegistrySetValue
+        platform: windows
+        proc: {pid: 6229, exe: 'C:\Users\alice\AppData\Local\Temp\drop.exe', name: drop.exe, uid: -1, euid: -1}
+        registry: {key: 'HKU\S-1-5-21-1-2-3-1001\Software\Microsoft\Windows\CurrentVersion\Run\Updater', value: Updater, data: '"C:\Users\alice\AppData\Local\Temp\drop.exe" -silent'}
+  - desc: reg.exe sets an HKLM RunOnce value to C:\Users\Public
+    events:
+      - name: RegistrySetValue
+        platform: windows
+        proc: {pid: 6230, exe: 'C:\Windows\System32\reg.exe', name: reg.exe, uid: -1, euid: -1}
+        registry: {key: 'HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\RunOnce\x', value: x, data: 'C:\Users\Public\x.exe'}
+nomatch:
+  - desc: benign - a chat client registers its own updater in AppData\Local
+    events:
+      - name: RegistrySetValue
+        platform: windows
+        proc: {pid: 7000, exe: 'C:\Users\alice\AppData\Local\Chat\Update.exe', name: Update.exe, uid: -1, euid: -1}
+        registry: {key: 'HKU\S-1-5-21-1-2-3-1001\Software\Microsoft\Windows\CurrentVersion\Run\Chat', value: Chat, data: '"C:\Users\alice\AppData\Local\Chat\Update.exe" --processStart Chat.exe'}
+  - desc: benign - an installer registers a program in Program Files
+    events:
+      - name: RegistrySetValue
+        platform: windows
+        proc: {pid: 7001, exe: 'C:\Windows\System32\msiexec.exe', name: msiexec.exe, uid: -1, euid: -1}
+        registry: {key: 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\Vendor', value: Vendor, data: '"C:\Program Files\Vendor\tray.exe"'}
+  - desc: a Temp path in a value outside the Run keys
+    events:
+      - name: RegistrySetValue
+        platform: windows
+        proc: {pid: 7002, exe: 'C:\Program Files\App\app.exe', name: app.exe, uid: -1, euid: -1}
+        registry: {key: 'HKU\S-1-5-21-1-2-3-1001\Software\App\LastDir', value: LastDir, data: 'C:\Users\alice\AppData\Local\Temp\x'}

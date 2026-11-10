@@ -26,14 +26,21 @@ const degradedEvery = time.Minute
 // Ceilings on SensorDegraded events from components. Each condition has its
 // own share per minute, so a flood of one condition cannot starve another;
 // maxDegradedPerMinute bounds the sum over all conditions. Conditions in
-// neverSuppressed (es_events_dropped: lost telemetry, already aggregated by
-// the source) pass both limits.
+// neverSuppressed (lost or unreadable telemetry, already aggregated and
+// rate-limited by each source: es_events_dropped, ebpf_events_dropped,
+// ebpf_events_unreadable, sysmon_events_dropped) pass both limits, so a
+// flood of another condition cannot hide that events were lost.
 const (
 	degradedSharePerMinute = 20
 	maxDegradedPerMinute   = 120
 )
 
-var neverSuppressed = map[string]bool{"es_events_dropped": true}
+var neverSuppressed = map[string]bool{
+	"es_events_dropped":      true,
+	"ebpf_events_dropped":    true,
+	"ebpf_events_unreadable": true,
+	"sysmon_events_dropped":  true,
+}
 
 // condSuppressed is the summary SensorDegraded raised at most once a minute
 // while reports are being suppressed; its detail lists the counts.

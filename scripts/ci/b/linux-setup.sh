@@ -46,6 +46,9 @@ sudo cp -R rules /usr/local/etc/zaafvesper/rules
 sudo chown -R root:root /usr/local/etc/zaafvesper
 sudo chmod -R go-w /usr/local/etc/zaafvesper
 sudo install -m 0644 packaging/linux/zaafvesper.service /etc/systemd/system/zaafvesper.service
+# The unit uses the eBPF source by default (v0.4); this run validates Sysmon
+# for Linux, so switch with the documented drop-in.
+sudo install -D -m 0644 packaging/linux/zaafvesper-source-sysmon.conf /etc/systemd/system/zaafvesper.service.d/source-sysmon.conf
 sudo systemctl daemon-reload
 sudo systemctl start zaafvesper
 started=no
@@ -56,3 +59,4 @@ done
 sudo journalctl -u zaafvesper --no-pager | tail -40
 if [ "$started" != yes ]; then echo "zaafvesper did not start (see its journal above)" >&2; exit 1; fi
 systemctl is-active zaafvesper
+systemctl show zaafvesper -p ExecStart | grep -q -- '--source sysmon' || { echo 'the Sysmon drop-in is not in effect' >&2; exit 1; }

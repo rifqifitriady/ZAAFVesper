@@ -13,7 +13,17 @@ import (
 )
 
 func TestIdentifyWindowsSelf(t *testing.T) {
-	id, err := identify(int32(os.Getpid()))
+	// The running binary is ZAAFVesper's own image (protectedWinImage):
+	// never identified for an action.
+	if _, err := identify(int32(os.Getpid())); err == nil || !strings.Contains(err.Error(), "ZAAFVesper itself") {
+		t.Fatalf("own process: %v", err)
+	}
+	cmd := exec.Command("ping", "-n", "30", "127.0.0.1")
+	if err := cmd.Start(); err != nil {
+		t.Skip(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
+	id, err := identify(int32(cmd.Process.Pid))
 	if err != nil {
 		t.Fatal(err)
 	}

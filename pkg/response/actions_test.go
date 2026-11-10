@@ -1408,7 +1408,9 @@ func TestIsolateWithNetpollEvents(t *testing.T) {
 // default gateway (the Mac joined another network) is released at the next
 // minute's check.
 func TestNeverBlockRecheck(t *testing.T) {
-	g := newRig(t, false, nil)
+	// Resolvers are pinned empty: a host whose resolver is 192.168.0.1 would
+	// refuse the first isolation as "a DNS resolver of this host".
+	g := newRig(t, false, func(c *Config) { c.Resolvers = func() []netip.Addr { return nil } })
 	gw := ""
 	g.r.cfg.Gateways = func() ([]netip.Addr, error) {
 		if gw == "" {

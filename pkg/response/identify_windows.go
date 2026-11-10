@@ -87,18 +87,35 @@ func identify(pid int32) (Identity, error) {
 	return id, nil
 }
 
-// defaultKill opens the pid with PROCESS_TERMINATE, checks on that handle
-// that its creation time is the one identify read, then terminates the
-// process behind the same handle. Only SIGKILL is accepted.
+// ntdll's process suspend and resume (no Win32 equivalent).
+var (
+	ntdll            = windows.NewLazySystemDLL("ntdll.dll")
+	ntSuspendProcess = ntdll.NewProc("NtSuspendProcess")
+	ntResumeProcess  = ntdll.NewProc("NtResumeProcess")
+)
+
+// defaultKill opens the pid with only the right the step needs
+// (PROCESS_TERMINATE for kill, PROCESS_SUSPEND_RESUME for suspend and
+// resume), checks on that handle that its creation time is the one
+// identify read and that it is not a critical process, then acts on the
+// same handle: TerminateProcess (SIGKILL), NtSuspendProcess (sigStop) or
+// NtResumeProcess (sigCont). Any other signal is refused, so a suspend can
+// never become a terminate.
 func defaultKill(pid int, sig syscall.Signal) error {
-	if sig != syscall.SIGKILL {
-		return fmt.Errorf("signal %d is not supported on Windows (only kill)", sig)
+	var access uint32
+	switch sig {
+	case syscall.SIGKILL:
+		access = windows.PROCESS_TERMINATE
+	case sigStop, sigCont:
+		access = windows.PROCESS_SUSPEND_RESUME
+	default:
+		return fmt.Errorf("signal %d is not supported on Windows (only kill, suspend and resume)", sig)
 	}
 	want, err := takeStamp(int32(pid))
 	if err != nil {
 		return err
 	}
-	h, err := winproc.Open(uint32(pid), windows.PROCESS_TERMINATE|windows.PROCESS_QUERY_LIMITED_INFORMATION)
+	h, err := winproc.Open(uint32(pid), access|windows.PROCESS_QUERY_LIMITED_INFORMATION)
 	if err != nil {
 		return fmt.Errorf("OpenProcess(%d): %w", pid, err)
 	}
@@ -108,10 +125,27 @@ func defaultKill(pid int, sig syscall.Signal) error {
 		return err
 	}
 	if ft != want {
-		return fmt.Errorf("pid %d now has creation time %d, verified %d (another process; not terminated)", pid, ft, want)
+		return fmt.Errorf("pid %d now has creation time %d, verified %d (another process; not touched)", pid, ft, want)
 	}
 	if crit, err := winproc.IsCritical(h); err != nil || crit {
 		return fmt.Errorf("pid %d: %v", pid, errors.Join(errCritical, err))
 	}
+	switch sig {
+	case sigStop:
+		return ntStatus("NtSuspendProcess", ntSuspendProcess, h)
+	case sigCont:
+		return ntStatus("NtResumeProcess", ntResumeProcess, h)
+	}
 	return windows.TerminateProcess(h, 1)
+}
+
+func ntStatus(name string, p *windows.LazyProc, h windows.Handle) error {
+	if err := p.Find(); err != nil {
+		return err
+	}
+	st, _, _ := p.Call(uintptr(h))
+	if st != 0 {
+		return fmt.Errorf("%s: NTSTATUS %#x", name, uint32(st))
+	}
+	return nil
 }
