@@ -1,0 +1,5 @@
+# Atomic Red Team tests (redcanaryco/atomic-red-team at a0e3f9b) that exercise
+# the behaviour of a converted SigmaHQ rule, keyed by Sigma rule id. Read by
+# zaafvesper sigma convert --atomics.
+34979410-e4b5-4e5d-8cfb-389fdff05c12: [e7469fe2-ad41-4382-8965-99b94dd3c13f] # proc_creation_lnx_chattr_immutable_removal
+de25eeb8-3655-4643-ac3a-b662d3f26b6b: [42e3a5bd-1e45-427f-aa08-2a65fa29a820] # proc_creation_lnx_services_stop_and_disable

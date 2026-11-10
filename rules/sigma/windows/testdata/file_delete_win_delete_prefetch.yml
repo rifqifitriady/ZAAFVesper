@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "PowerShell deletes a prefetch file (ART T1070.004 prefetch)"
+    events:
+      - {"name": "DeleteFile", "platform": "windows", "proc": {"pid": 8301, "ppid": 4000, "exe": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "name": "powershell.exe", "uid": -1, "euid": -1, "username": "CORP\\alice"}, "file": {"path": "C:\\Windows\\Prefetch\\CMD.EXE-0BD30981.pf"}}
+nomatch:
+  - desc: "benign lookalike - the system cleans prefetch from svchost as SYSTEM"
+    events:
+      - {"name": "DeleteFile", "platform": "windows", "proc": {"pid": 8311, "ppid": 4000, "exe": "C:\\windows\\system32\\svchost.exe", "name": "svchost.exe", "uid": -1, "euid": -1, "username": "NT AUTHORITY\\SYSTEM"}, "file": {"path": "C:\\Windows\\Prefetch\\OLDAPP.EXE-12345678.pf"}}
+  - desc: "a .pf file deleted outside Prefetch"
+    events:
+      - {"name": "DeleteFile", "platform": "windows", "proc": {"pid": 8312, "ppid": 4000, "exe": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "name": "powershell.exe", "uid": -1, "euid": -1, "username": "CORP\\alice"}, "file": {"path": "C:\\Users\\alice\\Documents\\notes.pf"}}

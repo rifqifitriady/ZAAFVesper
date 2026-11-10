@@ -8,6 +8,16 @@ description: |
   after a reboot or a killed implant.
   Known benign: package managers installing cron jobs (dpkg, rpm) and crontab(1) editing
   a user's own table.
+  With response on, remove_persistence moves the file into the vault, but only when the
+  writer runs from outside the system directories or is a system program driven by such a
+  process (an administrator's editor under a system shell is refused); /etc/crontab is
+  protected and never moved. The file must belong to the writer's user, and the writer must
+  still run in the host mount namespace when the action runs: a writer that already exited or
+  runs in a container is refused (the event's path cannot be tied to this host's file).
+  Honest limit: the writer check judges the process the event names and its known parents, so
+  a file written through systemd-run --user, at, another cron job, or by a process that
+  detached from its parent comes from a system program with system parents and is not
+  removed; the alert is still raised.
 labels:
   tactic.id: TA0003
   tactic.name: Persistence
@@ -22,7 +32,7 @@ condition: >
   and not ps.name in ('dpkg', 'rpm', 'dnf', 'yum', 'apt', 'apt-get', 'crontab', 'unattended-upgrade')
 output: "%ps.exe (pid %ps.pid, user %ps.username) created cron file %file.path"
 severity: medium
-action: []
+action: [{name: remove_persistence}]
 tests:
   atomic: [078e69eb-d9fb-450e-b9d0-2e118217c846, 2d943c18-e74a-44bf-936f-25ade6cccab4]
 min-engine-version: 0.1.0

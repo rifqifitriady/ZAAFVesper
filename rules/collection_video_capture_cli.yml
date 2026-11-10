@@ -1,0 +1,28 @@
+name: Camera recorded from the command line
+id: 6ef8fd1b-976b-496b-8ecc-63e99046993d
+version: 1.0.0
+platforms: [macos]
+description: |
+  imagesnap or videosnap took a camera picture or video, osascript made QuickTime Player
+  start a new movie recording, or ffmpeg captured an AVFoundation video device
+  (-f avfoundation with -i "N" or "N:M"). Spyware films the user this way. TCC asks the
+  first time unless camera access was already granted to the parent app. Screen
+  recording is T1113 and covered elsewhere.
+labels:
+  tactic.id: TA0009
+  tactic.name: Collection
+  technique.id: T1125
+  technique.name: Video Capture
+references:
+  - https://attack.mitre.org/techniques/T1125/
+condition: >
+  spawn_process
+  and (
+    ps.name in ('imagesnap', 'videosnap')
+    or (ps.name = 'osascript' and ps.cmdline icontains 'new movie recording')
+    or (base(ps.exe) = 'ffmpeg' and ps.args = 'avfoundation' and ps.cmdline regex '-i\\s+"?[0-9]+(:[0-9]+)?"?(\\s|$)')
+  )
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) recorded video: %ps.cmdline"
+severity: medium
+action: []
+min-engine-version: 0.1.0

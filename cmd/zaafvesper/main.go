@@ -38,9 +38,10 @@ usage:
                <file.rcap|events.jsonl|eslogger.jsonl>
   zaafvesper rules list|validate|test [--rules dir | dir] [--config file] [-v]
   zaafvesper coverage --navigator layer.json|- [--rules dir]
+  zaafvesper coverage --report [--attack enterprise-attack.json] [--json] [--rules dir]
   zaafvesper quarantine list|restore <id> [--state-dir dir]
   zaafvesper isolation list|release <address|all> [--state-dir dir]
-  zaafvesper sigma convert <sigma dir|file> -o <rules dir> [--report report.json] [--force]
+  zaafvesper sigma convert <sigma dir|file> -o <rules dir> [--report report.json] [--force] [--atomics map.yml]
   zaafvesper version
 
 run needs root (eslogger). replay, rules and coverage do not. The supported live
@@ -58,7 +59,8 @@ The response actions (kill, suspend, quarantine_file, requarantine,
 remove_persistence, isolate_process) are off unless --enable-response is given;
 --dry-run-response only logs what they would do and wins over --enable-response.
 They act after the event that triggered them: none of them prevents anything.
-quarantine and isolation manage what they did; both need root.
+quarantine and isolation manage what they did; both need root (an elevated
+administrator on Windows).
 sigma convert turns Sigma rules (macos, windows, linux) into ZAAFVesper rules;
 rules it cannot convert exactly are skipped with a reason. It never follows
 symbolic links and never replaces an existing rule file unless --force is given.`

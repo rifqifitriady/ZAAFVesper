@@ -1,0 +1,50 @@
+match:
+  - desc: "openssl 3 double-dash cipher and password with -a"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 1, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "cmdline": "openssl enc --aes-256-cbc -a --pbkdf2 --pass pass:x -in victim.txt -out v1.enc", "args": ["openssl", "enc", "--aes-256-cbc", "-a", "--pbkdf2", "--pass", "pass:x", "-in", "victim.txt", "-out", "v1.enc"], "uid": 501, "euid": 501, "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+  - desc: "LibreSSL -blowfish with -K/-iv and -a"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 2, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "cmdline": "openssl enc -blowfish -a -K 00112233445566778899aabbccddeeff -iv 0011223344556677 -in victim.txt -out v2.enc", "args": ["openssl", "enc", "-blowfish", "-a", "-K", "00112233445566778899aabbccddeeff", "-iv", "0011223344556677", "-in", "victim.txt", "-out", "v2.enc"], "uid": 501, "euid": 501, "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+  - desc: "LibreSSL -chacha / -gost89 with -a"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 3, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "cmdline": "openssl enc -gost89 -a -K 00 -iv 00 -in victim.txt -out v3.enc", "args": ["openssl", "enc", "-gost89", "-a", "-K", "00", "-iv", "00", "-in", "victim.txt", "-out", "v3.enc"], "uid": 501, "euid": 501, "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+  - desc: "cipher-as-command, output file literally named enc"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 4, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "cmdline": "openssl aes-256-cbc -a -K 0011 -iv 0011 -in victim.txt -out enc", "args": ["openssl", "aes-256-cbc", "-a", "-K", "0011", "-iv", "0011", "-in", "victim.txt", "-out", "enc"], "uid": 501, "euid": 501, "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+  - desc: "-d then --e still encrypts"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 18, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "cmdline": "openssl enc -aes-256-cbc -d --e -pbkdf2 -pass pass:x -in victim.txt -out w.enc", "args": ["openssl", "enc", "-aes-256-cbc", "-d", "--e", "-pbkdf2", "-pass", "pass:x", "-in", "victim.txt", "-out", "w.enc"], "uid": 501, "euid": 501, "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+  - desc: "cipher-as-command, --pass, output named enc"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 19, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "cmdline": "openssl aes-256-cbc -a --pass pass:x --pbkdf2 -in victim.txt -out enc", "args": ["openssl", "aes-256-cbc", "-a", "--pass", "pass:x", "--pbkdf2", "-in", "victim.txt", "-out", "enc"], "uid": 501, "euid": 501, "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh"}}}
+  - desc: "openssl enc -pbkdf2 encrypts a file (ART T1486 openssl)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5501, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "args": ["openssl", "enc", "-pbkdf2", "-in", "/Users/rifqi/test.txt", "-out", "ARTFile"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.openssl", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "7z a -p with header encryption (ART T1486 7z)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5502, "ppid": 4000, "exe": "/opt/homebrew/bin/7z", "name": "7z", "args": ["7z", "a", "-p", "passwd", "-mhe=on", "ARTArchive.7z", "/Users/rifqi/test.txt"], "uid": 501, "euid": 501, "is_platform": false, "is_signed": true, "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "gpg --batch --symmetric on Linux"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24503, "ppid": 24000, "exe": "/usr/bin/gpg", "name": "gpg", "uid": -1, "euid": -1, "username": "alice", "cmdline": "gpg --batch --yes --passphrase-fd 0 -c /home/alice/report.docx", "args": ["gpg", "--batch", "--yes", "--passphrase-fd", "0", "-c", "/home/alice/report.docx"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "openssl -d -e still encrypts (decoy -d)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5503, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "args": ["openssl", "enc", "-d", "-e", "-aes-256-cbc", "-in", "a.docx", "-out", "a.enc"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.openssl", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "openssl camellia cipher command"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5504, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "args": ["openssl", "camellia-256-cbc", "-in", "b.xlsx", "-out", "b.enc", "-k", "x"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.openssl", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+nomatch:
+  - desc: "benign lookalike - openssl enc -d decrypts"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5511, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "args": ["openssl", "enc", "-d", "-aes-256-cbc", "-in", "secret.enc", "-out", "secret.txt"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.openssl", "tty": "/dev/ttys001", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "openssl x509 reads a certificate"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5512, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "args": ["openssl", "x509", "-in", "cert.pem", "-noout", "-text"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.openssl", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "openssl dgst hashes a file named design.pdf"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5514, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "args": ["openssl", "dgst", "-sha256", "design.pdf"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.openssl", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "openssl enc -base64 only encodes"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5515, "ppid": 4000, "exe": "/usr/bin/openssl", "name": "openssl", "args": ["openssl", "enc", "-base64", "-in", "logo.png", "-out", "logo.b64"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.openssl", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "7z extracts an archive"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5513, "ppid": 4000, "exe": "/opt/homebrew/bin/7z", "name": "7z", "args": ["7z", "x", "-pinfected", "sample.7z"], "uid": 501, "euid": 501, "is_platform": false, "is_signed": true, "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}

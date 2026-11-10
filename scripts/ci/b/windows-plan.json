@@ -222,6 +222,10 @@
   ],
   "untestable": [
     {
+      "rule": "Run value pointing into a temporary or public folder",
+      "reason": "No Atomic Red Team test in the pinned T1547.001 file sets a Run or RunOnce value that points into Temp or Public (checked at ART_COMMIT; the Run-key tests use other paths), and no atomic GUID is claimed. Covered by the rule's unit and testdata cases; a live inline test is a follow-up."
+    },
+    {
       "rule": "LSASS process memory opened for reading",
       "reason": "Would read the runner's real LSASS memory (credentials). Not run."
     },
@@ -236,6 +240,62 @@
     {
       "rule": "Driver Load From A Temporary Directory",
       "reason": "Needs loading a kernel driver from a Temp folder. Not run."
+    },
+    {
+      "rule": "WMIC Remote Command Execution",
+      "reason": "No Atomic test is linked. Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. A live test needs a second host to run wmic /node against."
+    },
+    {
+      "rule": "Potentially Suspicious Rundll32 Activity",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. Linked Atomics 22cfde89, f3ad3c5b and 8a7f56ee have no prerequisites and could be added to the plan; e4c04b6f and d91cae26 declare prerequisites that are never fetched."
+    },
+    {
+      "rule": "Prefetch File Deleted",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. The linked Atomic (36f96049) deletes real files from C:\\Windows\\Prefetch; not added until a harmless target is chosen."
+    },
+    {
+      "rule": "HackTool - Rubeus Execution",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. The linked Atomic (14625569, Rubeus kerberoast) needs a domain-joined machine and Rubeus.exe downloaded; prerequisites are never fetched."
+    },
+    {
+      "rule": "Enumeration for Credentials in Registry",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. Linked Atomics b6ec082c and af197fd7 only read the registry and could be added to the plan."
+    },
+    {
+      "rule": "Findstr GPP Passwords",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. The linked Atomic (870fe8fb) needs a domain-joined machine as its prerequisite."
+    },
+    {
+      "rule": "File Download Via Bitsadmin",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. Linked Atomics 3c73d728 and 62a06ec5 download from the internet and could be added once a loopback server is arranged."
+    },
+    {
+      "rule": "Suspicious Regsvr32 Execution From Remote Share",
+      "reason": "No Atomic test is linked. Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. A live test needs an SMB share to load the scriptlet from."
+    },
+    {
+      "rule": "Potential Tampering With RDP Related Registry Keys Via Reg.EXE",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. Linked Atomics 74ace21e and 01d1c6c0 change the runner's RDP port and NLA setting; not added until the cleanup is proven to restore them."
+    },
+    {
+      "rule": "Invocation of Active Directory Diagnostic Tool (ntdsutil.exe)",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. The linked Atomic (2364e33d) dumps the Active Directory database and needs a domain controller."
+    },
+    {
+      "rule": "HackTool - WinRM Access Via Evil-WinRM",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. The linked Atomic (efe86d95) installs Evil-WinRM with Ruby and needs a WinRM target; prerequisites are never fetched."
+    },
+    {
+      "rule": "Msxsl.EXE Execution",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. Linked Atomics ca23bfb2 and a7c3ab07 need msxsl.exe and XML/XSL files downloaded; prerequisites are never fetched."
+    },
+    {
+      "rule": "Psexec Execution",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. Linked Atomics 873106b7 and 004a5d68 need PsExec downloaded; prerequisites are never fetched."
+    },
+    {
+      "rule": "Windows Credential Manager Access via VaultCmd",
+      "reason": "Added in v0.4 H after the last live run; its fixtures pass (rules test) but no live runner has exercised it yet. The linked Atomic (9c2dd36d) only lists saved credentials and could be added to the plan."
     }
   ],
   "skipped_atomics": [
@@ -270,6 +330,94 @@
     {
       "guid": "263ba6cb-ea2b-41c9-9d4e-b652dadd002c",
       "reason": "Deletes the machine's backup catalog (wbadmin delete catalog), which has no harmless target. Not run; the rule's vssadmin branch is tested."
+    },
+    {
+      "guid": "36f96049-0ad7-4a5f-8418-460acaeb92fb",
+      "reason": "Deletes real files from C:\\Windows\\Prefetch. Not run; the Prefetch File Deleted rule has no live test yet."
+    },
+    {
+      "guid": "3c73d728-75fb-4180-a12f-6712864d7421",
+      "reason": "Downloads from the internet (bitsadmin). Not run; the File Download Via Bitsadmin rule has no live test yet."
+    },
+    {
+      "guid": "62a06ec5-5754-47d2-bcfc-123d8314c6ae",
+      "reason": "Downloads from the internet and persists a BITS job. Not run; the File Download Via Bitsadmin rule has no live test yet."
+    },
+    {
+      "guid": "870fe8fb-5e23-4f5f-b89d-dd7fe26f3b5f",
+      "reason": "Needs a domain-joined machine (it searches %logonserver%\\sysvol). Not run."
+    },
+    {
+      "guid": "efe86d95-44c4-4509-ae42-7bfd9d1f5b3d",
+      "reason": "Installs Evil-WinRM with Ruby and needs a WinRM target; prerequisites are never fetched. Not run."
+    },
+    {
+      "guid": "14625569-6def-4497-99ac-8e7817105b55",
+      "reason": "Needs a domain-joined machine and Rubeus.exe downloaded; prerequisites are never fetched. Not run."
+    },
+    {
+      "guid": "ca23bfb2-023f-49c5-8802-e66997de462d",
+      "reason": "Needs the msxsl.exe download and XML and XSL files fetched; prerequisites are never fetched. Not run."
+    },
+    {
+      "guid": "a7c3ab07-52fb-49c8-ab6d-e9c6d4a0a985",
+      "reason": "Needs msxsl.exe downloaded; prerequisites are never fetched. Not run."
+    },
+    {
+      "guid": "2364e33d-ceab-4641-8468-bfb1d7cc2723",
+      "reason": "Dumps the Active Directory database; needs a domain controller. Not run."
+    },
+    {
+      "guid": "b6ec082c-7384-46b3-a111-9a9b8b14e5e7",
+      "reason": "Not yet added to the plan; the Enumeration for Credentials in Registry rule has no live test yet."
+    },
+    {
+      "guid": "af197fd7-e868-448e-9bd5-05d1bcd9d9e5",
+      "reason": "Not yet added to the plan; the Enumeration for Credentials in Registry rule has no live test yet."
+    },
+    {
+      "guid": "74ace21e-a31c-4f7d-b540-53e4eb6d1f73",
+      "reason": "Changes the runner's RDP port. Not run until its cleanup is proven to restore the setting."
+    },
+    {
+      "guid": "01d1c6c0-faf0-408e-b368-752a02285cb2",
+      "reason": "Disables NLA for RDP on the runner. Not run until its cleanup is proven to restore the setting."
+    },
+    {
+      "guid": "22cfde89-befe-4e15-9753-47306b37a6e3",
+      "reason": "Not yet added to the plan; the Rundll32 rule has no live test yet."
+    },
+    {
+      "guid": "f3ad3c5b-1db1-45c1-81bf-d3370ebab6c8",
+      "reason": "Not yet added to the plan; the Rundll32 rule has no live test yet."
+    },
+    {
+      "guid": "8a7f56ee-10e7-444c-a139-0109438288eb",
+      "reason": "Not yet added to the plan; the Rundll32 rule has no live test yet."
+    },
+    {
+      "guid": "e4c04b6f-c492-4782-82c7-3bf75eb8077e",
+      "reason": "Declares prerequisites that are never fetched. Not run."
+    },
+    {
+      "guid": "d91cae26-7fc1-457b-a854-34c8aad48c89",
+      "reason": "Declares prerequisites that are never fetched. Not run."
+    },
+    {
+      "guid": "873106b7-cfed-454b-8680-fa9f6400431c",
+      "reason": "Needs PsExec downloaded and a remote host; prerequisites are never fetched. Not run."
+    },
+    {
+      "guid": "004a5d68-627b-452d-af3d-43bd1fc75a3b",
+      "reason": "Needs PsExec downloaded; prerequisites are never fetched. Not run."
+    },
+    {
+      "guid": "9c2dd36d-5c8b-4b29-8d72-a11b0d5d7439",
+      "reason": "Not yet added to the plan; the VaultCmd rule has no live test yet."
+    },
+    {
+      "guid": "a4b74723-5cee-4300-91c3-5e34166909b4",
+      "reason": "The Atomic supports only Linux and macOS (it is linked because the rclone rule applies to every platform). There is no Windows Atomic for this rule; nothing is run."
     }
   ]
 }

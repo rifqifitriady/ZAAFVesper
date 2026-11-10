@@ -1,0 +1,33 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Disable Or Stop Services
+id: de25eeb8-3655-4643-ac3a-b662d3f26b6b
+version: 1.0.0
+platforms: [linux]
+description: |-
+  Detects the usage of utilities such as 'systemctl', 'service'...etc to stop or disable tools and services on Linux systems.
+  Attackers may stop or disable security tools and services to evade detection, maintain persistence, or disrupt system operations.
+
+  Converted from Sigma rule de25eeb8-3655-4643-ac3a-b662d3f26b6b by zaafvesper sigma convert. Sigma author: Nasreddine Bencherchali (Nextron Systems).
+labels:
+  sigma.author: Nasreddine Bencherchali (Nextron Systems)
+  sigma.id: de25eeb8-3655-4643-ac3a-b662d3f26b6b
+  sigma.level: medium
+  sigma.source: rules/linux/process_creation/proc_creation_lnx_services_stop_and_disable.yml
+  sigma.status: test
+  sigma.tags: attack.defense-impairment, attack.t1685, attack.impact, attack.t1489
+  sigma.title: Disable Or Stop Services
+  tactic.id: TA0040, TA0112
+  tactic.name: Impact, Defense Impairment
+  technique.id: T1685, T1489
+references:
+  - https://www.trendmicro.com/pl_pl/research/20/i/the-evolution-of-malicious-shell-scripts.html
+condition: evt.name in ('CreateProcess') and (((ps.exe iendswith ('/service', '/systemctl', '/chkconfig') and ps.cmdline icontains (' stop ', ' disable ')) and not ((ps.exe iendswith '/systemctl' and ps.cmdline icontains ('--no-reload disable snap-snapd-', ' stop snap-snapd-')) or (ps.exe iendswith '/systemctl' and ps.parent.cmdline icontains 'tmp.ci/preinst upgrade' and (ps.cmdline icontains ' stop ' and ps.cmdline icontains 'ssh.')) or (ps.parent.cmdline icontains '/dpkg/info/ubuntu-pro-client.prerm upgrade' and ps.exe iendswith '/systemctl'))) and not (ps.exe iendswith '/systemctl' and ps.cmdline iendswith 'snap.amazon-ssm-agent.amazon-ssm-agent.service'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Nasreddine Bencherchali (Nextron Systems))'
+severity: medium
+action: []
+tests:
+  atomic:
+    - 42e3a5bd-1e45-427f-aa08-2a65fa29a820
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Legitimate administration activities; Some false positives are to be expected. Apply additional filters as needed before pushing to production.'

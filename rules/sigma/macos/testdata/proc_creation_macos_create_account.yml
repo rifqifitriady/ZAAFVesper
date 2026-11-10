@@ -1,0 +1,18 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "dscl creates a user record (ART T1136.001 macOS)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7041, "ppid": 4000, "exe": "/usr/bin/dscl", "name": "dscl", "args": ["dscl", ".", "-create", "/Users/art_user"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.dscl", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "sysadminctl -addUser"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7042, "ppid": 4000, "exe": "/usr/sbin/sysadminctl", "name": "sysadminctl", "args": ["sysadminctl", "-addUser", "support2", "-password", "x"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.sysadminctl", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+nomatch:
+  - desc: "benign lookalike - dscl reads a user"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7051, "ppid": 4000, "exe": "/usr/bin/dscl", "name": "dscl", "args": ["dscl", ".", "-read", "/Users/rifqi", "RealName"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.dscl", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "sysadminctl reads the guest account state"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7052, "ppid": 4000, "exe": "/usr/sbin/sysadminctl", "name": "sysadminctl", "args": ["sysadminctl", "-guestAccount", "status"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.sysadminctl", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "touch creates a file"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7053, "ppid": 4000, "exe": "/usr/bin/touch", "name": "touch", "args": ["touch", "/tmp/create-me"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.touch", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}

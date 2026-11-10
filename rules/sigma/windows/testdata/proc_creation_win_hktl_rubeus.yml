@@ -1,0 +1,21 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "Rubeus kerberoast (ART T1558.003 Rubeus)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8021, "ppid": 4000, "exe": "C:\\Users\\Public\\rubeus.exe", "name": "rubeus.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "rubeus.exe kerberoast /outfile:C:\\Users\\Public\\rubeus_output.txt", "args": ["rubeus.exe", "kerberoast", "/outfile:C:\\Users\\Public\\rubeus_output.txt"], "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "renamed Rubeus found by its command line"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8022, "ppid": 4000, "exe": "C:\\ProgramData\\svc.exe", "name": "svc.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "svc.exe asktgt /user:admin /rc4:0123456789abcdef0123456789abcdef /ptt", "args": ["svc.exe", "asktgt", "/user:admin", "/rc4:0123456789abcdef0123456789abcdef", "/ptt"], "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "name": "powershell.exe"}}}
+nomatch:
+  - desc: "benign lookalike - klist lists Kerberos tickets"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8031, "ppid": 4000, "exe": "C:\\Windows\\System32\\klist.exe", "name": "klist.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "klist tickets", "args": ["klist", "tickets"], "original_name": "klist.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "setspn lists SPNs (different tool)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8032, "ppid": 4000, "exe": "C:\\Windows\\System32\\setspn.exe", "name": "setspn.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "setspn -L web01", "args": ["setspn", "-L", "web01"], "original_name": "setspn.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "same-name lookalike - explorer opens a folder called Rubeus-notes"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8033, "ppid": 4000, "exe": "C:\\Windows\\explorer.exe", "name": "explorer.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "explorer.exe C:\\Users\\alice\\Documents\\Rubeus-notes", "args": ["explorer.exe", "C:\\Users\\alice\\Documents\\Rubeus-notes"], "original_name": "EXPLORER.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "same-name lookalike - a Rubeus.exe.config reader, not Rubeus.exe"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8034, "ppid": 4000, "exe": "C:\\Windows\\System32\\notepad.exe", "name": "notepad.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "notepad.exe C:\\Tools\\Rubeus.exe.config", "args": ["notepad.exe", "C:\\Tools\\Rubeus.exe.config"], "original_name": "NOTEPAD.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

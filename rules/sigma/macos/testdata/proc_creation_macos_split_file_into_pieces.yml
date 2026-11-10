@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "split -b cuts an archive into 5 MB parts (ART T1030 #1)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7061, "ppid": 4000, "exe": "/usr/bin/split", "name": "split", "args": ["split", "-b", "5000000", "/tmp/T1030/data.zip"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.split", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+nomatch:
+  - desc: "benign lookalike - sort (another coreutil) on a large file"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7071, "ppid": 4000, "exe": "/usr/bin/sort", "name": "sort", "args": ["sort", "-u", "/tmp/words.txt"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.sort", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "csplit is a different binary"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7072, "ppid": 4000, "exe": "/usr/bin/csplit", "name": "csplit", "args": ["csplit", "-f", "part", "notes.txt", "/^#/", "{*}"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.csplit", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}

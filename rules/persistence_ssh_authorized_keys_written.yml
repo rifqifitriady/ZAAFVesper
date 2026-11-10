@@ -1,0 +1,31 @@
+name: SSH authorized_keys written or replaced
+id: 0e8b5c29-4d6a-4f13-9a72-b3c1e6f0d857
+version: 1.0.0
+platforms: [macos, linux]
+description: |
+  A file named authorized_keys or authorized_keys2 under a .ssh folder was created or
+  written, or another file was renamed onto it (mv, sed -i), by anything but a trusted
+  editor app (VS Code or Sublime Text with a verified Developer ID; see "Trusted
+  editors"). Terminal editors are not trusted, because any binary can be named vim, so
+  editing the file by hand in vim also alerts. Adding a key there gives an attacker SSH access that survives
+  password changes. ssh-copy-id from another host also matches (it writes through a
+  remote shell), which is worth an alert on a Mac.
+labels:
+  tactic.id: TA0003, TA0004
+  tactic.name: Persistence, Privilege Escalation
+  technique.id: T1098.004
+  technique.name: SSH Authorized Keys
+references:
+  - https://attack.mitre.org/techniques/T1098/004/
+condition: >
+  (
+    (file_written and file.path imatches ('*/.ssh/authorized_keys', '*/.ssh/authorized_keys2'))
+    or (rename_file and file.dest imatches ('*/.ssh/authorized_keys', '*/.ssh/authorized_keys2'))
+  )
+  and not trusted_editor
+output: "%ps.exe (pid %ps.pid, parent %ps.parent.exe) wrote %file.path"
+severity: high
+action: []
+tests:
+  atomic: [342cc723-127c-4d3a-8292-9c0c6b4ecadc]
+min-engine-version: 0.1.0

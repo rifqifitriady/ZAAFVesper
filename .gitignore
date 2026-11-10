@@ -5,3 +5,4 @@ dist/
 
 # A binary built in the repo root by "go build ./cmd/zaafvesper" (never commit it).
 /zaafvesper
+/zaafvesper.exe

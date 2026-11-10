@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "VaultCmd lists saved Windows credentials (ART T1555.004 #1)"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8041, "ppid": 4000, "exe": "C:\\Windows\\System32\\VaultCmd.exe", "name": "VaultCmd.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "VaultCmd.exe /listcreds:\"Windows Credentials\" /all", "args": ["VaultCmd.exe", "/listcreds:\"Windows", "Credentials\"", "/all"], "original_name": "VAULTCMD.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+nomatch:
+  - desc: "benign lookalike - VaultCmd lists vaults"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8051, "ppid": 4000, "exe": "C:\\Windows\\System32\\VaultCmd.exe", "name": "VaultCmd.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "VaultCmd.exe /list", "args": ["VaultCmd.exe", "/list"], "original_name": "VAULTCMD.EXE", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}
+  - desc: "cmdkey adds a credential"
+    events:
+      - {"name": "CreateProcess", "platform": "windows", "proc": {"pid": 8052, "ppid": 4000, "exe": "C:\\Windows\\System32\\cmdkey.exe", "name": "cmdkey.exe", "uid": -1, "euid": -1, "username": "CORP\\alice", "cmdline": "cmdkey /add:server01 /user:alice /pass", "args": ["cmdkey", "/add:server01", "/user:alice", "/pass"], "original_name": "cmdkey.exe", "parent": {"pid": 4000, "exe": "C:\\Windows\\System32\\cmd.exe", "name": "cmd.exe"}}}

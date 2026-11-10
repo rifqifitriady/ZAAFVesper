@@ -2,8 +2,8 @@ package main
 
 import (
 	"io"
-	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/response"
@@ -12,9 +12,9 @@ import (
 // cliRunner is the Runner of the isolation CLI; tests replace it.
 var cliRunner response.Runner = response.RunPinned
 
-// stateDirFlag registers --state-dir (default /private/var/db/zaafvesper).
-// As root the directory (and the vault in it) must be owned by root and
-// closed to group and others.
+// stateDirFlag registers --state-dir (default response.DefaultStateDir).
+// As root (an elevated administrator on Windows) the directory and the
+// vault in it must be private to root (SYSTEM and Administrators).
 func stateDirFlag(name string) (*stateDirOpts, func([]string, io.Writer) ([]string, bool)) {
 	o := &stateDirOpts{}
 	fs := newFlagSet(name)
@@ -38,11 +38,11 @@ func stateDirFlag(name string) (*stateDirOpts, func([]string, io.Writer) ([]stri
 type stateDirOpts struct{ dir string }
 
 func (o *stateDirOpts) vault() response.Vault {
-	return response.Vault{Dir: filepath.Join(o.dir, "quarantine"), RequireRootOwned: os.Geteuid() == 0}
+	return response.Vault{Dir: filepath.Join(o.dir, "quarantine"), RequireRootOwned: checkPrivileges() == nil}
 }
 
 func (o *stateDirOpts) store() response.IsolationStore {
-	return response.IsolationStore{Dir: o.dir, RequireRootOwned: os.Geteuid() == 0}
+	return response.IsolationStore{Dir: o.dir, RequireRootOwned: checkPrivileges() == nil}
 }
 
 // cmdQuarantine: zaafvesper quarantine list | restore <id>.
@@ -98,8 +98,20 @@ func cmdQuarantine(args []string, stdout, stderr io.Writer) int {
 			say(stderr, "zaafvesper quarantine restore: %v", err)
 			return 1
 		}
-		say(stdout, "restored %s to %s (mode %04o, owner %d:%d)", rec.ID[:16], rec.OriginalPath, rec.Mode&0o777, rec.UID, rec.GID)
-		if rec.Label != "" {
+		switch {
+		case rec.Kind != "":
+			// A Windows registry value, service or scheduled task.
+			say(stdout, "restored %s: %s %s (%s)", rec.ID[:16], rec.Kind, rec.Label, rec.OriginalPath)
+		case runtime.GOOS == "windows":
+			say(stdout, "restored %s to %s", rec.ID[:16], rec.OriginalPath)
+		default:
+			say(stdout, "restored %s to %s (mode %04o, owner %d:%d)", rec.ID[:16], rec.OriginalPath, rec.Mode&0o777, rec.UID, rec.GID)
+		}
+		switch {
+		case rec.Kind != "":
+		case rec.Label != "" && runtime.GOOS == "linux":
+			say(stdout, "the systemd unit %s is NOT reloaded or started; run systemctl daemon-reload and enable it yourself if you trust it", rec.Label)
+		case rec.Label != "":
 			say(stdout, "the launch item %s is NOT loaded again; load it yourself if you trust it", rec.Label)
 		}
 		return 0
@@ -132,13 +144,13 @@ func cmdIsolation(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		if len(isos) == 0 {
-			say(stdout, "no isolated address (pf anchor %s)", response.PFAnchor)
+			say(stdout, "no isolated address (%s)", response.FirewallName)
 			return 0
 		}
 		for _, iso := range isos {
 			say(stdout, "%s  until %s  (rule %s, pid %d %s)", iso.Addr, iso.Expires.UTC().Format(time.RFC3339), iso.Rule, iso.PID, iso.Exe)
 		}
-		say(stdout, "pf blocks these addresses for the whole Mac (anchor %s, table %s)", response.PFAnchor, response.PFTable)
+		say(stdout, "these addresses are blocked for the whole host (%s)", response.FirewallName)
 		return 0
 	case "release":
 		if len(rest) != 1 {

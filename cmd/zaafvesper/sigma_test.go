@@ -237,7 +237,11 @@ func TestSigmaOutName(t *testing.T) {
 // pkg/sigma/testdata/sigmahq (no hand edits, no stale output).
 func TestShippedSigmaRulesRegenerate(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "out")
-	rep, err := sigmaConvert("../../pkg/sigma/testdata/sigmahq", out, false)
+	atomics, err := loadAtomicsMap("../../pkg/sigma/testdata/atomics-macos.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := sigmaConvert("../../pkg/sigma/testdata/sigmahq", out, false, atomics)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +259,7 @@ func TestShippedSigmaRulesRegenerate(t *testing.T) {
 		}
 		got, _ := os.ReadFile(f)
 		if string(got) != string(want) {
-			t.Errorf("%s differs from the converter output; re-run: zaafvesper sigma convert pkg/sigma/testdata/sigmahq -o rules/sigma/macos --force", f)
+			t.Errorf("%s differs from the converter output; re-run: zaafvesper sigma convert pkg/sigma/testdata/sigmahq -o rules/sigma/macos --force --atomics pkg/sigma/testdata/atomics-macos.yml", f)
 		}
 	}
 }
@@ -284,5 +288,30 @@ func TestShippedSigmaRulesLoad(t *testing.T) {
 	}
 	if n == 0 {
 		t.Fatal("no shipped Sigma rules found")
+	}
+}
+
+func TestSigmaConvertAtomicsMap(t *testing.T) {
+	in, out := sigmaTree(t)
+	dir := filepath.Dir(out)
+	good := filepath.Join(dir, "atomics.yml")
+	writeFile(t, good, "3603f18a-ec15-43a1-9af2-d196c8a7fec6: [2364e33d-ceab-4641-8468-bfb1d7cc2723]\nffffffff-ffff-4fff-bfff-ffffffffffff: [2364e33d-ceab-4641-8468-bfb1d7cc2723]\n")
+	code, stdout, _ := runCLI(t, "sigma", "convert", in, "-o", out, "--atomics", good)
+	if code != 1 || !strings.Contains(stdout, "which no input rule has") {
+		t.Errorf("unused map entry must be reported: exit %d\n%s", code, stdout)
+	}
+	data, err := os.ReadFile(filepath.Join(out, "good_rule.yml"))
+	if err != nil || !strings.Contains(string(data), "2364e33d-ceab-4641-8468-bfb1d7cc2723") {
+		t.Fatalf("tests.atomic missing: %v\n%s", err, data)
+	}
+	if _, err := rules.LoadDir(out); err != nil {
+		t.Fatalf("rule with tests.atomic does not load: %v", err)
+	}
+	bad := filepath.Join(dir, "bad.yml")
+	for _, body := range []string{"x: [not-a-guid]\n", "x: []\n", "x: {a: b}\n", "- a\n"} {
+		writeFile(t, bad, body)
+		if code, _, stderr := runCLI(t, "sigma", "convert", in, "-o", filepath.Join(dir, "o2"), "--atomics", bad); code != 1 || stderr == "" {
+			t.Errorf("bad atomics map %q accepted: exit %d", body, code)
+		}
 	}
 }

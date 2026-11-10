@@ -1,0 +1,12 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "dd writes shellcode into another process's memory"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 25021, "ppid": 24000, "exe": "/usr/bin/dd", "name": "dd", "uid": -1, "euid": -1, "username": "www-data", "cmdline": "dd if=/tmp/sc.bin of=/proc/4242/mem bs=1 seek=4196381 conv=notrunc", "args": ["dd", "if=/tmp/sc.bin", "of=/proc/4242/mem", "bs=1", "seek=4196381", "conv=notrunc"], "parent": {"pid": 24000, "exe": "/usr/bin/sh", "name": "sh"}}}
+nomatch:
+  - desc: "benign lookalike - dd reads /proc/meminfo-like data into a file"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 25031, "ppid": 24000, "exe": "/usr/bin/dd", "name": "dd", "uid": -1, "euid": -1, "username": "root", "cmdline": "dd if=/proc/kcore of=/tmp/k bs=1 count=0", "args": ["dd", "if=/proc/kcore", "of=/tmp/k", "bs=1", "count=0"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "dd writes a disk image"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 25032, "ppid": 24000, "exe": "/usr/bin/dd", "name": "dd", "uid": -1, "euid": -1, "username": "root", "cmdline": "dd if=ubuntu.iso of=/dev/sdb bs=4M", "args": ["dd", "if=ubuntu.iso", "of=/dev/sdb", "bs=4M"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}

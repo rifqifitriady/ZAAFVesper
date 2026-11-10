@@ -1,0 +1,32 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Remove Immutable File Attribute
+id: 34979410-e4b5-4e5d-8cfb-389fdff05c12
+version: 1.0.0
+platforms: [linux]
+description: |-
+  Detects usage of the 'chattr' utility to remove immutable file attribute.
+
+  Converted from Sigma rule 34979410-e4b5-4e5d-8cfb-389fdff05c12 by zaafvesper sigma convert. Sigma author: Nasreddine Bencherchali (Nextron Systems).
+labels:
+  sigma.author: Nasreddine Bencherchali (Nextron Systems)
+  sigma.id: 34979410-e4b5-4e5d-8cfb-389fdff05c12
+  sigma.level: medium
+  sigma.source: rules/linux/process_creation/proc_creation_lnx_chattr_immutable_removal.yml
+  sigma.status: test
+  sigma.tags: attack.defense-impairment, attack.t1222.002
+  sigma.title: Remove Immutable File Attribute
+  tactic.id: TA0112
+  tactic.name: Defense Impairment
+  technique.id: T1222.002
+references:
+  - https://www.trendmicro.com/en_us/research/22/i/how-malicious-actors-abuse-native-linux-tools-in-their-attacks.html
+condition: evt.name in ('CreateProcess') and (ps.exe iendswith '/chattr' and ps.cmdline icontains ' -i ')
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by Nasreddine Bencherchali (Nextron Systems))'
+severity: medium
+action: []
+tests:
+  atomic:
+    - e7469fe2-ad41-4382-8965-99b94dd3c13f
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Administrator interacting with immutable files (e.g. for instance backups).'

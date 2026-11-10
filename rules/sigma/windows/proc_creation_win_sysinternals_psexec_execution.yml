@@ -1,0 +1,33 @@
+# Converted from Sigma by zaafvesper sigma convert. Do not edit by hand;
+# re-run the converter instead.
+name: Psexec Execution
+id: 730fc21b-eaff-474b-ad23-90fd265d4988
+version: 1.0.0
+platforms: [windows]
+description: |-
+  Detects user accept agreement execution in psexec commandline
+
+  Converted from Sigma rule 730fc21b-eaff-474b-ad23-90fd265d4988 by zaafvesper sigma convert. Sigma author: omkar72.
+labels:
+  sigma.author: omkar72
+  sigma.id: 730fc21b-eaff-474b-ad23-90fd265d4988
+  sigma.level: medium
+  sigma.source: rules/windows/process_creation/proc_creation_win_sysinternals_psexec_execution.yml
+  sigma.status: test
+  sigma.tags: attack.execution, attack.lateral-movement, attack.t1569, attack.t1021
+  sigma.title: Psexec Execution
+  tactic.id: TA0002, TA0008
+  tactic.name: Execution, Lateral Movement
+  technique.id: T1569, T1021
+references:
+  - https://www.fireeye.com/blog/threat-research/2020/10/kegtap-and-singlemalt-with-a-ransomware-chaser.html
+condition: evt.name in ('CreateProcess') and (ps.exe iendswith '\\psexec.exe' or ps.original_name iin ('psexec.c'))
+output: '%ps.exe (pid %ps.pid, parent %ps.parent.exe) ran: %ps.cmdline (Sigma rule by omkar72)'
+severity: medium
+action: []
+tests:
+  atomic:
+    - 873106b7-cfed-454b-8680-fa9f6400431c
+    - 004a5d68-627b-452d-af3d-43bd1fc75a3b
+min-engine-version: 0.1.0
+notes: 'Sigma false positives: Administrative scripts.'

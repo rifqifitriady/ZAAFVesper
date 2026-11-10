@@ -1,0 +1,18 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "cat ~/.bash_history to grep for secrets (ART T1552.003 #1)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7021, "ppid": 4000, "exe": "/bin/cat", "name": "cat", "args": ["cat", "/Users/rifqi/.bash_history"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.cat", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "grep through ~/.zsh_history (ART T1552.003 zsh)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7022, "ppid": 4000, "exe": "/usr/bin/grep", "name": "grep", "args": ["grep", "-i", "password", "/Users/rifqi/.zsh_history"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.grep", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+nomatch:
+  - desc: "benign lookalike - the history builtin opens no file on the command line"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7031, "ppid": 4000, "exe": "/bin/zsh", "name": "zsh", "args": ["zsh", "-i"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.zsh", "tty": "/dev/ttys002", "parent": {"pid": 4000, "exe": "/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal", "name": "Terminal", "is_platform": true, "is_signed": true}}}
+  - desc: "cat of a project file named history.md"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7032, "ppid": 4000, "exe": "/bin/cat", "name": "cat", "args": ["cat", "/Users/rifqi/notes/history.md"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.cat", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}
+  - desc: "git log (history of a repository)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 7033, "ppid": 4000, "exe": "/usr/bin/git", "name": "git", "args": ["git", "log", "--oneline"], "uid": 501, "euid": 501, "is_platform": true, "is_signed": true, "signing_id": "com.apple.git", "parent": {"pid": 4000, "exe": "/bin/zsh", "name": "zsh", "is_platform": true, "is_signed": true}}}

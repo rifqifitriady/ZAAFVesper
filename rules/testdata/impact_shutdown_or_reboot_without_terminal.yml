@@ -1,0 +1,26 @@
+match:
+  - desc: "shutdown -r from a script (ART T1529 #1)"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5701, "ppid": 4000, "exe": "/sbin/shutdown", "name": "shutdown", "args": ["shutdown", "-r", "1"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.shutdown", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "poweroff on Linux (ART T1529 poweroff)"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24505, "ppid": 24000, "exe": "/usr/sbin/poweroff", "name": "poweroff", "uid": -1, "euid": -1, "username": "root", "cmdline": "poweroff", "args": ["poweroff"], "parent": {"pid": 24000, "exe": "/usr/bin/sh", "name": "sh"}}}
+  - desc: "poweroff on systemd Linux: the image is systemctl"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24506, "ppid": 24000, "exe": "/usr/bin/systemctl", "name": "systemctl", "uid": -1, "euid": -1, "username": "root", "cmdline": "poweroff", "args": ["poweroff"], "parent": {"pid": 24000, "exe": "/usr/bin/sh", "name": "sh"}}}
+  - desc: "script -q gives shutdown a pty"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5702, "ppid": 4000, "exe": "/sbin/shutdown", "name": "shutdown", "args": ["shutdown", "-r", "now"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.shutdown", "tty": "/dev/ttys009", "parent": {"pid": 4000, "exe": "/usr/bin/script", "name": "script", "is_platform": true, "is_signed": true}}}
+nomatch:
+  - desc: "benign lookalike - admin types sudo shutdown -h now in Terminal"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5711, "ppid": 4000, "exe": "/sbin/shutdown", "name": "shutdown", "args": ["shutdown", "-h", "now"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.shutdown", "tty": "/dev/ttys000", "parent": {"pid": 4000, "exe": "/usr/bin/sudo", "name": "sudo", "is_platform": true, "is_signed": true}}}
+  - desc: "softwareupdate --restart"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5712, "ppid": 4000, "exe": "/usr/sbin/softwareupdate", "name": "softwareupdate", "args": ["softwareupdate", "-i", "-a", "--restart"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.softwareupdate", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "launchctl reboot userspace is a different binary"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5713, "ppid": 4000, "exe": "/bin/launchctl", "name": "launchctl", "args": ["launchctl", "reboot", "userspace"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.launchctl", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "systemctl restart of a service"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 24515, "ppid": 24000, "exe": "/usr/bin/systemctl", "name": "systemctl", "uid": -1, "euid": -1, "username": "root", "cmdline": "systemctl restart nginx", "args": ["systemctl", "restart", "nginx"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}

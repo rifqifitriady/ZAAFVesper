@@ -69,7 +69,12 @@ func (m CategoryMapper) Name() string { return "category " + m.Cat.Name }
 type Options struct {
 	// Source names the Sigma file (relative path) in labels and messages.
 	Source string
+	// Atomics are Atomic Red Team test GUIDs to list in tests.atomic: the
+	// tests a person checked to exercise this rule's behaviour.
+	Atomics []string
 }
+
+var guidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // Result is one converted rule.
 type Result struct {
@@ -120,6 +125,11 @@ const defaultOutput = "%ps.exe (pid %ps.pid) matched on %evt.name"
 // Convert converts a parsed Sigma rule into a ZAAFVesper rule file. It
 // returns a *SkipError when the rule cannot be converted exactly.
 func Convert(r *Rule, opt Options) (*Result, error) {
+	for _, g := range opt.Atomics {
+		if !guidRe.MatchString(g) {
+			return nil, invalid("atomic test id %q is not a GUID", g)
+		}
+	}
 	switch r.Status {
 	case "deprecated", "unsupported":
 		return nil, unsupported("status %q: SigmaHQ does not maintain this rule", r.Status)
@@ -239,6 +249,7 @@ func Convert(r *Rule, opt Options) (*Result, error) {
 		Output:           out,
 		Severity:         sev,
 		Action:           []rules.Action{},
+		Tests:            rules.Tests{Atomic: opt.Atomics},
 		MinEngineVersion: rules.EngineVersion,
 		Notes:            notes,
 	}
@@ -280,6 +291,7 @@ type ruleDoc struct {
 	Output           string            `yaml:"output"`
 	Severity         string            `yaml:"severity"`
 	Action           []rules.Action    `yaml:"action,flow"`
+	Tests            rules.Tests       `yaml:"tests,omitempty"`
 	MinEngineVersion string            `yaml:"min-engine-version"`
 	Notes            string            `yaml:"notes,omitempty"`
 }

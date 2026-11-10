@@ -8,6 +8,18 @@ description: |
   package manager or systemctl. A new unit is started at boot (or on its timer).
   Known benign: configuration management (Ansible, Puppet) writing units; add their
   interpreters after review.
+  With response on, remove_persistence disables and stops a unit in /etc/systemd/system that
+  systemd loaded from this file, moves the file into the vault and reloads systemd; only when
+  the writer runs from outside the system directories or is a system program driven by such
+  a process. Units under /usr/lib and /lib, and system, remote-access and agent services
+  (ssh, systemd-*, dbus, cron, ...), are never stopped.
+  The file must belong to the writer's user, and the writer must still run in the host mount
+  namespace when the action runs: a writer that already exited or runs in a container is
+  refused (the event's path cannot be tied to this host's file).
+  Honest limit: the writer check judges the process the event names and its known parents, so
+  a unit written through systemd-run --user, at, a cron job, or by a process that detached
+  from its parent comes from a system program with system parents and is not removed; the
+  alert is still raised.
 labels:
   tactic.id: TA0003
   tactic.name: Persistence
@@ -23,7 +35,7 @@ condition: >
   and not ps.name in ('dpkg', 'rpm', 'dnf', 'yum', 'apt', 'apt-get', 'systemctl', 'systemd', 'unattended-upgrade')
 output: "%ps.exe (pid %ps.pid, user %ps.username) created systemd unit %file.path"
 severity: high
-action: []
+action: [{name: remove_persistence}]
 tests:
   atomic: [d9e4f24f-aa67-4c6e-bcbf-85622b697a7c]
 min-engine-version: 0.1.0

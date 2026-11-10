@@ -181,8 +181,11 @@ func TestExecNotDroppedUnderFileFlood(t *testing.T) {
 	if st["dropped_exec"] != 0 || st["dropped_file"] < 90 {
 		t.Errorf("stats %v", st)
 	}
-	if e, _ := sc.q.lens(); e != 5 {
-		t.Errorf("queued exec jobs %d", e)
+	// The single worker may already hold one exec job (exec jobs are taken
+	// first) when it blocks on its first match, so 4 or 5 remain queued.
+	// What matters is that none was dropped.
+	if e, _ := sc.q.lens(); e < 4 || e > 5 {
+		t.Errorf("queued exec jobs %d, want 4 or 5 (none dropped)", e)
 	}
 }
 

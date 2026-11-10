@@ -1,0 +1,18 @@
+# Hand-written fixtures (the converter does not generate them); values are invented.
+match:
+  - desc: "systemctl stop a service (ART T1489 systemctl)"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 25041, "ppid": 24000, "exe": "/usr/bin/systemctl", "name": "systemctl", "uid": -1, "euid": -1, "username": "root", "cmdline": "systemctl stop auditd.service", "args": ["systemctl", "stop", "auditd.service"], "parent": {"pid": 24000, "exe": "/usr/bin/sudo", "name": "sudo"}}}
+  - desc: "service disable of a monitoring agent"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 25042, "ppid": 24000, "exe": "/usr/sbin/chkconfig", "name": "chkconfig", "uid": -1, "euid": -1, "username": "root", "cmdline": "chkconfig falcon-sensor disable off", "args": ["chkconfig", "falcon-sensor", "disable", "off"], "parent": {"pid": 24000, "exe": "/usr/bin/sh", "name": "sh"}}}
+nomatch:
+  - desc: "benign lookalike - snapd refresh stops its own unit"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 25051, "ppid": 24000, "exe": "/usr/bin/systemctl", "name": "systemctl", "uid": -1, "euid": -1, "username": "root", "cmdline": "systemctl stop snap-snapd-21759.mount", "args": ["systemctl", "stop", "snap-snapd-21759.mount"], "parent": {"pid": 24000, "exe": "/usr/lib/snapd/snapd", "name": "snapd"}}}
+  - desc: "systemctl status"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 25052, "ppid": 24000, "exe": "/usr/bin/systemctl", "name": "systemctl", "uid": -1, "euid": -1, "username": "root", "cmdline": "systemctl status nginx", "args": ["systemctl", "status", "nginx"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}
+  - desc: "systemctl restart (not stop or disable)"
+    events:
+      - {"name": "CreateProcess", "platform": "linux", "proc": {"pid": 25053, "ppid": 24000, "exe": "/usr/bin/systemctl", "name": "systemctl", "uid": -1, "euid": -1, "username": "root", "cmdline": "systemctl restart nginx", "args": ["systemctl", "restart", "nginx"], "parent": {"pid": 24000, "exe": "/usr/bin/bash", "name": "bash"}}}

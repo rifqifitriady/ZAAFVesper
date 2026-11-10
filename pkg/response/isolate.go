@@ -1,38 +1,17 @@
 package response
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"net/netip"
-	"os"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
 )
-
-// pf objects of isolate_process. pf has no per-process filter on macOS, so
-// an isolation blocks the process's remote peers for the WHOLE host.
-//
-// The stock /etc/pf.conf evaluates only anchors under "com.apple/*", so
-// ZAAFVesper's anchor com.rifqifitriady.zaafvesper is attached there; an
-// anchor outside it would never be evaluated.
-const (
-	PFAnchor = "com.apple/com.rifqifitriady.zaafvesper"
-	PFTable  = "zaafvesper_isolated"
-)
-
-// pfRules is the anchor's whole ruleset: one table, two quick block rules.
-// It is a constant: no event data is ever written into a pf rule; peers
-// only enter the table, as addresses that net/netip parsed and re-printed.
-const pfRules = "table <" + PFTable + "> persist\n" +
-	"block drop quick from any to <" + PFTable + ">\n" +
-	"block drop quick from <" + PFTable + "> to any\n"
 
 // Bounds of isolate_process.
 const (
@@ -44,6 +23,14 @@ const (
 	isolationState    = "isolation.json" // in Config.StateDir
 	isolationLock     = "isolation.lock"
 )
+
+// fwItem is one address for the firewall and how long it stays blocked
+// (nftables keeps that time in the kernel too, so a block outlives no
+// crashed sensor by more than its time to live).
+type fwItem struct {
+	Addr netip.Addr
+	TTL  time.Duration
+}
 
 // Isolation is one blocked remote address.
 type Isolation struct {
@@ -180,19 +167,11 @@ func (r *Responder) peersOf(e *event.Event, p *event.Proc, now time.Time) []neti
 	return out
 }
 
-// blockable returns why a must never be blocked, or "": invalid, loopback,
-// unspecified, multicast, broadcast, link-local, with a zone, this host's
-// own address, or inside the management allow-list.
-// NeverBlockNetworks are networks isolate_process never blocks, whatever
-// the configuration: Apple's 17.0.0.0/8 and 2620:149::/32 (software update, XProtect,
-// notarization, push). Private RFC 1918 addresses can be isolated (owner
-// decision 9 Nov 2026); protect your own servers with response.isolation_allow.
-var NeverBlockNetworks = []netip.Prefix{netip.MustParsePrefix("17.0.0.0/8"), netip.MustParsePrefix("2620:149::/32")}
-
 // blockable returns why a must never be blocked, or "": invalid, scoped,
 // loopback, unspecified, multicast, broadcast, link-local, this host's own
-// address, a default gateway or DNS resolver of this Mac (never), Apple's
-// 17.0.0.0/8, or inside the management allow-list. never holds the host's
+// address, a default gateway or DNS resolver of this host (never), a
+// NeverBlockNetworks network (Apple's 17.0.0.0/8 on macOS), or inside the
+// management allow-list. never holds the host's
 // addresses, gateways and resolvers.
 func (r *Responder) blockable(a netip.Addr, never map[netip.Addr]string) string {
 	switch {
@@ -213,7 +192,7 @@ func (r *Responder) blockable(a netip.Addr, never map[netip.Addr]string) string 
 	}
 	for _, p := range NeverBlockNetworks {
 		if p.Contains(a) {
-			return "Apple's network " + p.String()
+			return neverBlockLabel + p.String()
 		}
 	}
 	for _, p := range r.cfg.IsolationAllow {
@@ -224,7 +203,7 @@ func (r *Responder) blockable(a netip.Addr, never map[netip.Addr]string) string 
 	return ""
 }
 
-// neverBlock returns this Mac's own addresses, default gateways and DNS
+// neverBlock returns this host's own addresses, default gateways and DNS
 // resolvers with the reason each is never blocked. It fails (and the
 // isolation is refused) when the addresses or the gateways cannot be read.
 // Caller holds actMu.
@@ -242,50 +221,12 @@ func (r *Responder) neverBlock() (map[netip.Addr]string, error) {
 		return nil, fmt.Errorf("cannot read the default gateway (%v)", err)
 	}
 	for _, a := range gws {
-		never[a.WithZone("").Unmap()] = "a default gateway of this Mac"
+		never[a.WithZone("").Unmap()] = "a default gateway of this host"
 	}
 	for a := range r.resolvers() {
-		never[a] = "a DNS resolver of this Mac (/etc/resolv.conf)"
+		never[a] = "a DNS resolver of this host"
 	}
 	return never, nil
-}
-
-// routeGateways is the default Config.Gateways: the gateway lines of
-// `/sbin/route -n get default` and `/sbin/route -n get -inet6 default`
-// (pinned, fixed argv). A family without a default route (exit 1, "not in
-// table") is not an error; a command that cannot run, times out or answers
-// anything else is.
-func routeGateways(run Runner) func() ([]netip.Addr, error) {
-	return func() ([]netip.Addr, error) {
-		var out []netip.Addr
-		for _, args := range [][]string{{"-n", "get", "default"}, {"-n", "get", "-inet6", "default"}} {
-			b, err := run(context.Background(), RouteBin, args, nil)
-			var ee *ExitError
-			switch {
-			case errors.As(err, &ee) && ee.Code == 1 && strings.Contains(ee.Output, "not in table"):
-				continue // no default route for this family
-			case err != nil:
-				// A timeout, a crash or any other answer: the gateway is
-				// unknown, so the caller refuses (fail closed).
-				return nil, err
-			}
-			out = append(out, parseRouteGateway(b)...)
-		}
-		return out, nil
-	}
-}
-
-// parseRouteGateway returns the address on the "gateway:" line of `route
-// get` output (none when the gateway is an interface, not an address).
-func parseRouteGateway(b []byte) []netip.Addr {
-	for _, line := range strings.Split(string(b), "\n") {
-		if v, ok := strings.CutPrefix(strings.TrimSpace(line), "gateway:"); ok {
-			if a, err := netip.ParseAddr(strings.TrimSpace(v)); err == nil {
-				return []netip.Addr{a.WithZone("").Unmap()}
-			}
-		}
-	}
-	return nil
 }
 
 // resolvers returns the DNS resolvers that are never blocked.
@@ -296,26 +237,6 @@ func (r *Responder) resolvers() map[netip.Addr]bool {
 	}
 	for _, a := range r.cfg.Resolvers() {
 		out[a.Unmap()] = true
-	}
-	return out
-}
-
-// resolvConfAddrs is the default Config.Resolvers: the nameserver lines of
-// /private/var/run/resolv.conf (what /etc/resolv.conf points to), which
-// macOS keeps in step with the system's DNS configuration.
-func resolvConfAddrs() []netip.Addr {
-	b, err := os.ReadFile("/private/var/run/resolv.conf")
-	if err != nil {
-		return nil
-	}
-	var out []netip.Addr
-	for _, line := range strings.Split(string(b), "\n") {
-		f := strings.Fields(line)
-		if len(f) >= 2 && f[0] == "nameserver" {
-			if a, err := netip.ParseAddr(f[1]); err == nil {
-				out = append(out, a.WithZone("").Unmap())
-			}
-		}
 	}
 	return out
 }
@@ -336,7 +257,8 @@ func interfaceAddrs() ([]netip.Addr, error) {
 }
 
 // IsolateProcess blocks the remote peers of the process (target process)
-// or of its parent (target parent) in the pf anchor for Config.IsolationTTL.
+// or of its parent (target parent) in ZAAFVesper's firewall objects (pf
+// anchor, nftables table, Windows Firewall rules) for Config.IsolationTTL.
 // The peers are the event's own (a NetworkConnect or NetworkAccept) and
 // those Observe saw for the same process in the last ten minutes. Guard
 // rails: the process identity rules of kill (protected pids, paths, names,
@@ -344,8 +266,9 @@ func interfaceAddrs() ([]netip.Addr, error) {
 // platform flag that must be known); never loopback, link-local, multicast,
 // this host's addresses, its default gateways and DNS resolvers, Apple's
 // 17.0.0.0/8 or the management allow-list; at most 16 addresses per action
-// and 256 in all; the file/network budget; dry-run. pf filters by address, not by process: every
-// program on this Mac loses those peers until the isolation expires or is
+// and 256 in all; the file/network budget; dry-run. The firewall filters by
+// address, not by process: every program on this host loses those peers
+// until the isolation expires or is
 // released. Connections the process opens to new peers later are not
 // blocked.
 func (r *Responder) IsolateProcess(e *event.Event, target, rule, reason string) error {
@@ -412,28 +335,38 @@ func (r *Responder) isolateProcess(e *event.Event, target, rule, reason string) 
 		for i, a := range block {
 			addrs[i] = a.String()
 		}
-		note := fmt.Sprintf("%s for %s; pf blocks these addresses for the whole host, not only this process%s",
-			strings.Join(addrs, ", "), r.cfg.IsolationTTL, skippedNote(skipped))
+		note := fmt.Sprintf("%s for %s; %s%s",
+			strings.Join(addrs, ", "), r.cfg.IsolationTTL, firewallScope, skippedNote(skipped))
 		if r.cfg.DryRun {
 			return result{OutcomeDryRun, "would block " + note, nil}
 		}
-		if err := r.ensurePF(); err != nil {
-			return result{OutcomeError, "pf: " + err.Error(), fmt.Errorf("response: isolate: %w", err)}
+		if err := r.fwEnsure(); err != nil {
+			return result{OutcomeError, firewallKind + ": " + err.Error(), fmt.Errorf("response: isolate: %w", err)}
 		}
-		if _, err := r.pfctl(append([]string{"-a", PFAnchor, "-t", PFTable, "-T", "add"}, addrs...)...); err != nil {
-			return result{OutcomeError, "pfctl add: " + err.Error(), fmt.Errorf("response: isolate: %w", err)}
-		}
-		for _, a := range block {
-			r.killStates(a)
+		isos := make([]*Isolation, len(block))
+		items := make([]fwItem, len(block))
+		for i, a := range block {
 			iso := &Isolation{Addr: a.String(), Added: now.UTC(), Expires: now.Add(r.cfg.IsolationTTL).UTC(),
 				Rule: rule, Reason: reason, PID: p.PID, Exe: p.Exe}
 			if old, ok := r.isolated[iso.Addr]; ok && old.Expires.After(iso.Expires) {
 				iso.Expires = old.Expires
 			}
+			isos[i], items[i] = iso, fwItem{Addr: a, TTL: iso.Expires.Sub(now)}
+		}
+		if err := r.fwAdd(items); err != nil {
+			return result{OutcomeError, firewallKind + " add: " + err.Error(), fmt.Errorf("response: isolate: %w", err)}
+		}
+		for _, iso := range isos {
 			r.isolated[iso.Addr] = iso
 		}
 		if err := r.saveIsolations(); err != nil {
 			note += "; state file not written: " + err.Error()
+		}
+		if warn, partial := r.fwWarn(); warn != "" {
+			note += "; " + warn
+			if partial {
+				return result{OutcomePartial, "rules added for " + note + " (release: zaafvesper isolation release <addr>|all)", nil}
+			}
 		}
 		return result{OutcomeIsolated, "blocked " + note + " (release: zaafvesper isolation release <addr>|all)", nil}
 	})
@@ -456,45 +389,8 @@ func skippedNote(skipped []string) string {
 	return "; not blocked: " + strings.Join(skipped, ", ")
 }
 
-// pfctl runs /sbin/pfctl with args through the Runner.
-func (r *Responder) pfctl(args ...string) ([]byte, error) {
-	return r.cfg.Runner(context.Background(), PfctlBin, args, nil)
-}
-
-var pfTokenRe = regexp.MustCompile(`Token : ([0-9]+)`)
-
-// ensurePF loads the anchor's constant ruleset and takes a pf enable
-// reference (pfctl -E), once. Caller holds actMu.
-func (r *Responder) ensurePF() error {
-	if r.pfLoaded {
-		return nil
-	}
-	if _, err := r.cfg.Runner(context.Background(), PfctlBin, []string{"-a", PFAnchor, "-f", "-"}, []byte(pfRules)); err != nil {
-		return fmt.Errorf("load anchor %s: %w", PFAnchor, err)
-	}
-	out, err := r.pfctl("-E")
-	if err != nil {
-		return fmt.Errorf("enable pf: %w", err)
-	}
-	if m := pfTokenRe.FindSubmatch(out); m != nil {
-		r.pfToken = string(m[1])
-	}
-	r.pfLoaded = true
-	return nil
-}
-
-// killStates drops pf states to and from a (connections already open would
-// otherwise keep flowing). Errors are ignored: there may be no state.
-func (r *Responder) killStates(a netip.Addr) {
-	all := "0.0.0.0/0"
-	if a.Is6() {
-		all = "::/0"
-	}
-	_, _ = r.pfctl("-k", a.String())
-	_, _ = r.pfctl("-k", all, "-k", a.String())
-}
-
-// StartResponse prepares the actions at sensor start: the pf anchor is
+// StartResponse prepares the actions at sensor start: ZAAFVesper's
+// firewall objects (pf anchor, nftables table, Windows Firewall rules) are
 // flushed (an earlier run that did not shut down cleanly may have left
 // blocks) and the isolation state is cleared. Dry-run touches nothing.
 func (r *Responder) StartResponse() error {
@@ -503,7 +399,7 @@ func (r *Responder) StartResponse() error {
 	}
 	r.actMu.Lock()
 	defer r.actMu.Unlock()
-	_, err := r.pfctl("-a", PFAnchor, "-F", "all")
+	err := r.fwFlush()
 	r.isolated, r.saved = map[string]*Isolation{}, nil
 	if fileOpsSupported {
 		if serr := (IsolationStore{Dir: r.cfg.StateDir, RequireRootOwned: r.cfg.RequireRootOwned}).Save([]Isolation{}); serr != nil {
@@ -514,19 +410,40 @@ func (r *Responder) StartResponse() error {
 }
 
 // Tick runs the timed parts of the actions: suspended processes whose time
-// is over are resumed, isolations whose time-to-live is over are released.
-// run calls it every 2 seconds.
+// is over are resumed, and the isolation upkeep (expiry, the never-block
+// recheck, the pick-up of releases done with the CLI) is handed to the
+// slow-action worker. run calls it every 2 seconds, on the event loop, so
+// Tick never waits for a slow action and never starts a process itself
+// (netsh, nft, pfctl, route): a Windows expiry once ran netsh per address
+// here, up to 256 times with a 10 s timeout each.
 func (r *Responder) Tick(now time.Time) {
 	r.mu.Lock()
 	r.tickSuspended(now)
 	r.mu.Unlock()
 	r.tickRetries(now)
-	// The event loop calls Tick: never wait for a slow action. When one is
-	// running, isolation expiry waits for the next tick (2 s later).
 	if !r.actMu.TryLock() {
+		return // a slow action runs; the upkeep waits for the next tick
+	}
+	due := len(r.isolated) > 0
+	r.actMu.Unlock()
+	if !due || !r.queueHasRoom() || !r.upkeepQueued.CompareAndSwap(false, true) {
 		return
 	}
-	defer r.actMu.Unlock()
+	if !r.Go(func() {
+		defer r.upkeepQueued.Store(false)
+		r.actMu.Lock()
+		defer r.actMu.Unlock()
+		r.isolationUpkeep(now)
+	}) {
+		r.upkeepQueued.Store(false)
+	}
+}
+
+// isolationUpkeep releases the isolations that are now never-block or
+// whose time to live is over, in one firewall call, and saves the state
+// (which picks up releases done with the CLI). It runs on the worker (or
+// inline without one). Caller holds actMu.
+func (r *Responder) isolationUpkeep(now time.Time) {
 	r.recheckNeverBlock(now)
 	var expired []string
 	for a, iso := range r.isolated {
@@ -541,14 +458,14 @@ func (r *Responder) Tick(now time.Time) {
 		return
 	}
 	sort.Slice(expired, func(i, j int) bool { return addrLess(expired[i], expired[j]) })
-	_, err := r.pfctl(append([]string{"-a", PFAnchor, "-t", PFTable, "-T", "delete"}, expired...)...)
+	err := r.fwDelete(expired)
 	for _, a := range expired {
 		iso := r.isolated[a]
 		delete(r.isolated, a)
 		d := Decision{Time: now, Action: ActionIsolateProcess, PID: iso.PID, Target: TargetProcess, Exe: iso.Exe,
 			Reason: iso.Reason, Outcome: OutcomeReleased, Detail: a + " expired"}
 		if err != nil {
-			d.Outcome, d.Detail = OutcomeError, a+" expired, but pfctl delete failed: "+err.Error()
+			d.Outcome, d.Detail = OutcomeError, a+" expired, but the "+firewallKind+" delete failed: "+err.Error()
 		}
 		r.mu.Lock()
 		r.logLocked(d)
@@ -557,11 +474,11 @@ func (r *Responder) Tick(now time.Time) {
 	_ = r.saveIsolations()
 }
 
-// Close ends the response at a clean shutdown, quickly enough for launchd's
-// exit timeout: every suspended process is resumed first, then the worker
-// stops (the action running now finishes, queued ones are dropped), the pf
-// anchor is flushed, the pf enable reference released and the isolation
-// state cleared.
+// Close ends the response at a clean shutdown, quickly enough for the
+// service manager's exit timeout: every suspended process is resumed
+// first, then the worker stops (the action running now finishes, queued
+// ones are dropped), ZAAFVesper's firewall objects are flushed (macOS: the
+// pf enable reference is released too) and the isolation state cleared.
 func (r *Responder) Close() error {
 	r.ResumeAll()
 	r.mu.Lock()
@@ -573,14 +490,7 @@ func (r *Responder) Close() error {
 	}
 	r.actMu.Lock()
 	defer r.actMu.Unlock()
-	_, err := r.pfctl("-a", PFAnchor, "-F", "all")
-	if r.pfToken != "" {
-		if _, xerr := r.pfctl("-X", r.pfToken); xerr != nil {
-			err = errors.Join(err, xerr)
-		}
-		r.pfToken = ""
-	}
-	r.pfLoaded = false
+	err := r.fwClose()
 	r.isolated, r.saved = map[string]*Isolation{}, nil
 	if fileOpsSupported {
 		if serr := (IsolationStore{Dir: r.cfg.StateDir, RequireRootOwned: r.cfg.RequireRootOwned}).Save([]Isolation{}); serr != nil {
@@ -602,6 +512,8 @@ func (r *Responder) Isolations() []Isolation {
 	return out
 }
 
+var errUnsupportedState = errors.New("the isolation state is not implemented on this platform")
+
 // IsolationStore is the isolation state file shared by the sensor and the
 // CLI (`zaafvesper isolation list|release`), in a root-only directory.
 type IsolationStore struct {
@@ -610,6 +522,9 @@ type IsolationStore struct {
 }
 
 func (s IsolationStore) withLock(create bool, f func(dirfd int) error) error {
+	if !fileOpsSupported {
+		return errUnsupportedState
+	}
 	v := Vault{Dir: s.Dir, RequireRootOwned: s.RequireRootOwned}
 	dfd, err := v.open(create)
 	if err != nil {
@@ -646,7 +561,7 @@ func (s IsolationStore) Save(isos []Isolation) error {
 // saveIsolations writes r.isolated to the state file. An address that was
 // in the file at the last save and is gone now was released with
 // `zaafvesper isolation release`: it is dropped from r.isolated first (and
-// deleted from the pf table again, which is harmless when the CLI already
+// deleted from the firewall again, which is harmless when the CLI already
 // did), so the CLI's release sticks and no block is left untracked. A state
 // file that cannot be read or parsed is not taken as a release. Caller holds
 // actMu.
@@ -673,7 +588,7 @@ func (r *Responder) saveIsolations() error {
 			}
 			if len(gone) > 0 {
 				sort.Slice(gone, func(i, j int) bool { return addrLess(gone[i], gone[j]) })
-				_, _ = r.pfctl(append([]string{"-a", PFAnchor, "-t", PFTable, "-T", "delete"}, gone...)...)
+				_ = r.fwDelete(gone)
 			}
 		}
 		isos := make([]Isolation, 0, len(r.isolated))
@@ -715,7 +630,7 @@ func saveIsolationsAt(dfd int, isos []Isolation) error {
 }
 
 // ReleaseIsolation removes addr (or every address when addr is "all") from
-// the pf table and from the state file, for `zaafvesper isolation release`.
+// ZAAFVesper's firewall objects and from the state file, for `zaafvesper isolation release`.
 // The state file stays locked from its read to its write, so a sensor that
 // isolates another address meanwhile waits and keeps it. A running sensor
 // stops tracking a released address at its next tick.
@@ -739,22 +654,24 @@ func ReleaseIsolation(store IsolationStore, run Runner, addr string) ([]string, 
 		}
 		keep := []Isolation{}
 		if target == "" {
-			if _, err := run(context.Background(), PfctlBin, []string{"-a", PFAnchor, "-t", PFTable, "-T", "flush"}, nil); err != nil {
-				return fmt.Errorf("pfctl flush: %w", err)
+			if err := fwRelease(run, nil, nil); err != nil {
+				return fmt.Errorf("%s flush: %w", firewallKind, err)
 			}
 			for _, iso := range isos {
 				released = append(released, iso.Addr)
 			}
 		} else {
-			if _, err := run(context.Background(), PfctlBin, []string{"-a", PFAnchor, "-t", PFTable, "-T", "delete", target}, nil); err != nil {
-				return fmt.Errorf("pfctl delete: %w", err)
-			}
-			released = []string{target}
+			var rest []string
 			for _, iso := range isos {
 				if iso.Addr != target {
 					keep = append(keep, iso)
+					rest = append(rest, iso.Addr)
 				}
 			}
+			if err := fwRelease(run, []string{target}, rest); err != nil {
+				return fmt.Errorf("%s delete: %w", firewallKind, err)
+			}
+			released = []string{target}
 		}
 		return saveIsolationsAt(dfd, keep)
 	})
@@ -762,7 +679,7 @@ func ReleaseIsolation(store IsolationStore, run Runner, addr string) ([]string, 
 }
 
 // neverRecheckEvery is how often isolated addresses are checked again
-// against the never-block set (the Mac may have moved to a network where
+// against the never-block set (the host may have moved to a network where
 // one of them is now the gateway or a DNS resolver).
 const neverRecheckEvery = time.Minute
 
@@ -788,14 +705,14 @@ func (r *Responder) recheckNeverBlock(now time.Time) {
 		return
 	}
 	sort.Slice(release, func(i, j int) bool { return addrLess(release[i], release[j]) })
-	_, err = r.pfctl(append([]string{"-a", PFAnchor, "-t", PFTable, "-T", "delete"}, release...)...)
+	err = r.fwDelete(release)
 	for _, a := range release {
 		iso := r.isolated[a]
 		ip, _ := netip.ParseAddr(a)
 		d := Decision{Time: now, Action: ActionIsolateProcess, PID: iso.PID, Target: TargetProcess, Exe: iso.Exe,
 			Reason: iso.Reason, Outcome: OutcomeReleased, Detail: a + " released: now " + r.blockable(ip, never)}
 		if err != nil {
-			d.Outcome, d.Detail = OutcomeError, a+" is now never-block, but pfctl delete failed: "+err.Error()
+			d.Outcome, d.Detail = OutcomeError, a+" is now never-block, but the "+firewallKind+" delete failed: "+err.Error()
 		} else {
 			delete(r.isolated, a)
 		}

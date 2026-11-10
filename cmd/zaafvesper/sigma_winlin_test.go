@@ -15,7 +15,11 @@ import (
 func TestShippedSigmaWindowsLinuxRegenerate(t *testing.T) {
 	for _, plat := range []string{"windows", "linux"} {
 		out := filepath.Join(t.TempDir(), plat)
-		rep, err := sigmaConvert("../../pkg/sigma/testdata/sigmahq-"+plat, out, false)
+		atomics, err := loadAtomicsMap("../../pkg/sigma/testdata/atomics-" + plat + ".yml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		rep, err := sigmaConvert("../../pkg/sigma/testdata/sigmahq-"+plat, out, false, atomics)
 		if err != nil {
 			t.Fatal(err)
 		}
