@@ -58,7 +58,8 @@ The response actions (kill, suspend, quarantine_file, requarantine,
 remove_persistence, isolate_process) are off unless --enable-response is given;
 --dry-run-response only logs what they would do and wins over --enable-response.
 They act after the event that triggered them: none of them prevents anything.
-quarantine and isolation manage what they did; both need root.
+quarantine and isolation manage what they did; both need root (an elevated
+administrator on Windows).
 sigma convert turns Sigma rules (macos, windows, linux) into ZAAFVesper rules;
 rules it cannot convert exactly are skipped with a reason. It never follows
 symbolic links and never replaces an existing rule file unless --force is given.`

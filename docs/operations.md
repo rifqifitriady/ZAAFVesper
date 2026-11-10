@@ -205,6 +205,17 @@ sudo /usr/local/sbin/zaafvesper isolation list
 sudo /usr/local/sbin/zaafvesper isolation release 203.0.113.5     # or: release all
 ```
 
+### Response on Linux and Windows
+
+Linux and Windows support `kill`, `suspend`, `quarantine_file`, `remove_persistence` and `isolate_process`; `requarantine` is macOS only. Validated on GitHub runners, not on your machines ([docs/validation/response.md](validation/response.md)). The limits:
+
+- **Isolation is whole-host.** nftables (Linux) and Windows Firewall rules (Windows) block the peer addresses for every program on the host, not only the process. Windows rules do not cut connections already open.
+- **Windows rules have no time to live across a crash.** Expiry is done by the sensor; if it dies, the rules stay until the next start, which flushes them (`StartResponse`). Release them by hand with `zaafvesper isolation release all` or `netsh advfirewall firewall delete rule name=ZAAFVesper-isolation`.
+- **Group Policy can turn isolation into a no-op that reports success.** With `AllowLocalPolicyMerge=0` (or a policy that disables the profile) the local rules are ignored by Windows although `netsh` accepts them. The sensor reads the firewall state; an off profile is reported, an unreadable one is reported as "isolation not verified" and the result is partial, but a merge ban is not detected.
+- **The writer must be alive.** File actions on Linux and Windows bind the file to the event by creation time (or hash) and the writer's user. On Linux the writer's mount namespace must be the host's: a writer that already exited, or one in another mount namespace (a container, `unshare --mount`), cannot be checked and the action is refused.
+- **Packaging.** The shipped Linux unit (`PrivateTmp=yes`, `ProtectSystem=strict`) runs in a private mount namespace without write access to the vault, so the creation-time file actions are refused under it. Response needs a drop-in or a separate unit; an untested example is in [packaging/linux/README.md](../packaging/linux/README.md).
+- **Honest limits of the trust test** are in the open findings: [E-5](security/open-findings.md) (protected names matched by prefix), [E-6](security/open-findings.md) (writer-chain bypasses such as PPID spoofing or WMI) and [E-7](security/open-findings.md) (task restore re-registers raw XML).
+
 ### Settings
 
 ```yaml

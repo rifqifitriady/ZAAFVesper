@@ -144,12 +144,30 @@ program called `sysmon` in `/tmp` stays killable.
 
 ## Response actions on Linux
 
-Of the response actions, Linux supports `kill` and `suspend` (SIGSTOP, resumed
-after `response.suspend_for` unless a kill follows; the resume re-checks the start
-time). `quarantine_file`, `requarantine`, `remove_persistence` and
-`isolate_process` use the macOS quarantine attribute, launchctl and pf: on Linux
-they are refused (`refused-unsupported`, nothing is changed), `zaafvesper run`
-warns at start which enabled rules ask for them, and the alert is still raised.
+Linux supports all of the response actions except `requarantine` (macOS only; refused as `refused-unsupported`):
+
+- `kill` and `suspend` (SIGSTOP, resumed after `response.suspend_for` unless a kill follows; the resume re-checks the start time).
+- `quarantine_file`: moves the file into the vault `/var/lib/zaafvesper/quarantine`, bound to the event by creation time (or hash) and the writer's user.
+- `remove_persistence`: systemd units (disabled, stopped, moved, `daemon-reload`), cron files, shell rc files and `/etc/profile.d` scripts.
+- `isolate_process`: nftables table `inet zaafvesper`. It blocks the process's remote peers for the whole host, not only that process.
+
+Details and limits: [docs/operations.md](../../docs/operations.md), "Response on Linux and Windows".
+
+**Packaging limit: the shipped unit does not allow the file actions.** `zaafvesper.service` has `PrivateTmp=yes` and `ProtectSystem=strict` with `ReadWritePaths=/var/log/zaafvesper` only. The service therefore runs in a private mount namespace and has no write access to the vault or to the files the actions must move. The vault cannot be written, and a writer in the host namespace is expected to be refused too (the mount-namespace check compares it with the service's). So under the unit as shipped, `quarantine_file` and `remove_persistence` are refused (or end in `error`), and `isolate_process` is limited to what its state directory allows. `kill` and `suspend` are not affected. To use the creation-time file actions, run response from a drop-in or a separate unit.
+
+Example drop-in. **It is not enabled by default and is untested on a real host**; the live validation ran the responder as plain root from a shell, not under this unit:
+
+```
+# /etc/systemd/system/zaafvesper.service.d/response.conf   (systemctl edit zaafvesper)
+[Service]
+PrivateTmp=no
+ReadWritePaths=/var/log/zaafvesper /var/lib/zaafvesper
+# systemctl needs to reach the manager for remove_persistence of systemd units;
+# the files being removed (/etc/systemd/system, /etc/cron.d, homes) must also
+# be writable: either list them in ReadWritePaths or drop ProtectSystem=strict.
+```
+
+Create the state directory first (`install -d -m 0700 /var/lib/zaafvesper`). Removing `ProtectSystem=strict` or widening `ReadWritePaths` weakens the sensor's own hardening; decide that per host.
 
 ## Known limits
 

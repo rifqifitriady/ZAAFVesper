@@ -72,8 +72,12 @@ func newSource(cfg *config.Config, p *pipeline, stderr io.Writer) source.Source 
 // platformOutputCheck: every output works here.
 func platformOutputCheck(*netOutOptions) error { return nil }
 
-// pfAvailable: isolate_process uses pf.
-const pfAvailable = true
+// firewallAvailable: isolate_process uses pf.
+const firewallAvailable = true
+
+// ownServicePaths are the sensor's service definition files (besides the
+// LaunchDaemon plist, daemonPlistPath).
+var ownServicePaths []string
 
 // unsupportedAction: every response action is implemented on macOS.
 func unsupportedAction(string) string { return "" }

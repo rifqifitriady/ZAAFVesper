@@ -167,14 +167,18 @@ func platformOutputCheck(n *netOutOptions) error {
 	return nil
 }
 
-// pfAvailable: pf (isolate_process) is macOS only.
-const pfAvailable = false
+// firewallAvailable: isolate_process uses Windows Firewall rules (netsh).
+const firewallAvailable = true
 
-// supportedActions are the response actions implemented on Windows; the
-// others (quarantine_file, requarantine, remove_persistence and
-// isolate_process use the quarantine attribute, launchctl and pf) are macOS
-// only and are refused with a clear reason.
-var supportedActions = map[string]bool{rules.ActionKill: true}
+// ownServicePaths: the sensor's files live under Program Files (protected)
+// and the state directory (added by the responder).
+var ownServicePaths []string
+
+// supportedActions are the response actions implemented on Windows; only
+// requarantine (it sets com.apple.quarantine) is macOS only and refused
+// with a clear reason.
+var supportedActions = map[string]bool{rules.ActionKill: true, rules.ActionSuspend: true, rules.ActionQuarantineFile: true,
+	rules.ActionRemovePersistence: true, rules.ActionIsolateProcess: true}
 
 func unsupportedAction(name string) string {
 	if supportedActions[name] {

@@ -1,9 +1,12 @@
-# Live validation of the response actions (v0.3 workstream D).
+# Live validation of the response actions (v0.3 workstream D, v0.4 E).
 # Runs the real zaafvesper binary as root on throw-away GitHub runners:
 # macOS (kill, suspend, quarantine_file, quarantine restore, requarantine,
 # remove_persistence, isolate_process with real pfctl, never-block set),
-# Linux and Windows (kill with their platform identity checks; suspend on
-# Linux). Every test object is created by the harness itself. The harness
+# Linux (kill, suspend, quarantine_file, remove_persistence for systemd,
+# cron and profile.d, isolate_process with real nftables) and Windows
+# (kill, suspend, quarantine_file, remove_persistence for Run values,
+# services and scheduled tasks, isolate_process with Windows Firewall
+# rules). Every test object is created by the harness itself. The harness
 # (`validate-response`) exists only in this build (-tags zaafvesper_validate);
 # release and package builds do not contain it.
 # Results: docs/validation/response.md.
@@ -81,15 +84,50 @@ jobs:
       - name: Build
         shell: bash
         run: CGO_ENABLED=0 go build -trimpath -tags zaafvesper_validate -o "$RUNNER_TEMP/zaafvesper" ./cmd/zaafvesper
+      - name: Tools (nft, ip) and kernel
+        shell: bash
+        run: |
+          uname -r
+          ls -l /usr/sbin/nft /usr/sbin/ip
+          sudo /usr/sbin/nft list tables
+      - name: Unit tests of pkg/response as root
+        shell: bash
+        run: |
+          set -o pipefail
+          go test -c -o "$RUNNER_TEMP/response.test" ./pkg/response
+          mkdir -m 700 "$RUNNER_TEMP/t"
+          sudo TMPDIR="$RUNNER_TEMP/t" "$RUNNER_TEMP/response.test" -test.count=1 -test.v 2>&1 | grep -vE '^(=== RUN|=== PAUSE|=== CONT)'
       - name: Validate response actions (root)
         shell: bash
-        run: sudo /usr/bin/env ZAAFVESPER_VALIDATE_RESPONSE=throwaway-runner GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" "$RUNNER_TEMP/zaafvesper" validate-response --out "$RUNNER_TEMP/response-linux.json" 2>&1 | tee "$RUNNER_TEMP/response-linux.log"
+        run: |
+          set -o pipefail
+          sudo /usr/bin/env ZAAFVESPER_VALIDATE_RESPONSE=throwaway-runner GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" "$RUNNER_TEMP/zaafvesper" validate-response --out "$RUNNER_TEMP/response-linux.json" 2>&1 | tee "$RUNNER_TEMP/response-linux.log"
       - name: Summary
         if: always()
         shell: bash
         run: |
           echo "## Response actions on ubuntu-latest" >> "$GITHUB_STEP_SUMMARY"
           grep '^|' "$RUNNER_TEMP/response-linux.log" >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Clean up the nftables table, the dummy interface and the test units
+        if: always()
+        shell: bash
+        run: |
+          sudo /usr/sbin/nft delete table inet zaafvesper 2>/dev/null || true
+          sudo /usr/sbin/ip link del zvtest0 2>/dev/null || true
+          for u in /etc/systemd/system/zv-validate-*.service; do
+            [ -e "$u" ] || continue
+            sudo systemctl disable --now "$(basename "$u")" || true
+            sudo rm -f "$u"
+          done
+          sudo rm -f /etc/cron.d/zv-validate-* /var/spool/cron/crontabs/zv-validate-* /etc/profile.d/zv-validate-*
+          sudo systemctl daemon-reload || true
+      - name: The runner still reaches GitHub (isolation never blocked its own connectivity)
+        if: always()
+        shell: bash
+        run: |
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 https://api.github.com/zen)
+          echo "api.github.com answered HTTP $code"
+          test "$code" = 200
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -115,6 +153,15 @@ jobs:
         run: |
           $env:CGO_ENABLED = "0"
           go build -trimpath -tags zaafvesper_validate -o "$env:RUNNER_TEMP\zaafvesper.exe" ./cmd/zaafvesper
+      - name: Unit tests of pkg/response (elevated)
+        shell: pwsh
+        run: |
+          $env:CGO_ENABLED = "0"
+          go test -count=1 -v ./pkg/response 2>&1 | Select-String -NotMatch -Pattern '^=== (RUN|PAUSE|CONT)'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Windows Firewall state
+        shell: pwsh
+        run: netsh advfirewall show allprofiles state
       - name: Validate response actions (elevated)
         shell: pwsh
         run: |
@@ -126,7 +173,28 @@ jobs:
         shell: pwsh
         run: |
           "## Response actions on windows-latest" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
-          Get-Content "$env:RUNNER_TEMP\response-windows.log" | Where-Object { $_ -like '|*' } | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          if (Test-Path "$env:RUNNER_TEMP\response-windows.log") {
+            Get-Content "$env:RUNNER_TEMP\response-windows.log" | Where-Object { $_ -like '|*' } | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          }
+      - name: Clean up the firewall rules, test services, tasks and Run values
+        if: always()
+        shell: pwsh
+        run: |
+          netsh advfirewall firewall delete rule name=ZAAFVesper-isolation | Out-Null
+          Get-Service -Name 'ZVValidate*' -ErrorAction SilentlyContinue | ForEach-Object { sc.exe delete $_.Name | Out-Null }
+          Get-ScheduledTask -TaskPath '\ZVValidate\' -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false
+          foreach ($k in 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run', 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run') {
+            $item = Get-Item $k -ErrorAction SilentlyContinue
+            if ($item) { $item.Property | Where-Object { $_ -like 'ZVValidate*' } | ForEach-Object { Remove-ItemProperty -Path $k -Name $_ } }
+          }
+          exit 0
+      - name: The runner still reaches GitHub (isolation never blocked its own connectivity)
+        if: always()
+        shell: pwsh
+        run: |
+          $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 20 https://api.github.com/zen
+          "api.github.com answered HTTP $($r.StatusCode)"
+          if ($r.StatusCode -ne 200) { exit 1 }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:

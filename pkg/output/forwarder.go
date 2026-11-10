@@ -22,6 +22,10 @@ const (
 	DefaultQueueBytes = 32 << 20
 	minBackoff        = time.Second
 	maxBackoff        = time.Minute
+	// finalFlushTimeout bounds the last delivery attempt at Close.
+	finalFlushTimeout = 3 * time.Second
+	// closeMargin is kept free of the final flush within Close's timeout.
+	closeMargin = 500 * time.Millisecond
 )
 
 // Conditions of the SensorDegraded events a forwarder reports.
@@ -68,6 +72,10 @@ type Forwarder struct {
 	sent, failedBatches, queueDropped, encodeErrs, spooled, lost, spoolSent atomic.Uint64
 	down                                                                    atomic.Bool
 	queuedBytes                                                             atomic.Int64
+	// flushBudget bounds the final delivery at Close (nanoseconds): the
+	// smaller of finalFlushTimeout and Close's timeout minus a margin, so
+	// the transport is never closed under a running Send.
+	flushBudget atomic.Int64
 }
 
 // NewForwarder starts the forwarder's goroutine.
@@ -216,7 +224,9 @@ func (f *Forwarder) loop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			// Close: whatever is queued or batched goes to the spool.
+			// Close: whatever is queued or batched is delivered in one last
+			// bounded attempt when the endpoint is up, and spooled otherwise
+			// (or when that attempt fails), so it is sent at the next start.
 			for {
 				select {
 				case r := <-f.queue:
@@ -227,7 +237,13 @@ func (f *Forwarder) loop(ctx context.Context) {
 				}
 				break
 			}
-			f.toSpool(batch)
+			if budget := time.Duration(f.flushBudget.Load()); len(batch) > 0 && budget > 0 && !f.down.Load() && !time.Now().Before(retryAt) {
+				fctx, cancel := context.WithTimeout(context.Background(), budget)
+				f.deliver(fctx, batch) // spools what it could not send
+				cancel()
+			} else {
+				f.toSpool(batch)
+			}
 			return
 		case r := <-f.queue:
 			f.queuedBytes.Add(-int64(len(r.Body)))
@@ -324,6 +340,11 @@ func (f *Forwarder) deliverSpooled(ctx context.Context, recs []Record) bool {
 func (f *Forwarder) Close(timeout time.Duration) error {
 	var err error
 	f.closeOnce.Do(func() {
+		budget := finalFlushTimeout
+		if b := timeout - closeMargin; b < budget {
+			budget = b // may be <= 0: no final attempt, the records are spooled
+		}
+		f.flushBudget.Store(int64(budget))
 		f.closed.Store(true)
 		f.stop()
 		select {

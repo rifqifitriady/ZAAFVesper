@@ -393,7 +393,7 @@ func TestForwarderSpoolsWhileDownAndDrains(t *testing.T) {
 		_ = f.Send(testAlert("a" + strconv.Itoa(i)))
 	}
 	f.SendEvent(&event.Event{Name: event.CreateProcess, Proc: &event.Proc{PID: 5, Exe: "/bin/ls"}})
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for f.Stats()["spooled"] < 6 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -403,7 +403,11 @@ func TestForwarderSpoolsWhileDownAndDrains(t *testing.T) {
 	tr.mu.Lock()
 	tr.down = false
 	tr.mu.Unlock()
-	deadline = time.Now().Add(5 * time.Second) // first backoff is 1 s
+	// Bounded by the largest backoff, not by the first one: on a slow
+	// runner (-race) the forwarder may fail a few more retries while the
+	// spool fills, doubling its backoff (1, 2, 4, 8 s ...) before the
+	// endpoint comes back. The loop returns as soon as delivery happens.
+	deadline = time.Now().Add(maxBackoff + 10*time.Second)
 	for time.Now().Before(deadline) {
 		tr.mu.Lock()
 		n := len(tr.got)
@@ -564,7 +568,7 @@ func TestSyslogDownThenUpDeliversSpool(t *testing.T) {
 	_ = f.Send(testAlert("before"))
 	select {
 	case <-msgs:
-	case <-time.After(3 * time.Second):
+	case <-time.After(15 * time.Second):
 		t.Fatal("first alert not delivered")
 	}
 	// The receiver goes away (listener and connection).
@@ -577,7 +581,7 @@ func TestSyslogDownThenUpDeliversSpool(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	_ = f.Send(testAlert("while-down-1"))
 	_ = f.Send(testAlert("while-down-2"))
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for f.Stats()["spooled"] < 2 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -592,7 +596,7 @@ func TestSyslogDownThenUpDeliversSpool(t *testing.T) {
 	defer ln2.Close()
 	go serve(ln2)
 	got := map[string]bool{}
-	timeout := time.After(6 * time.Second) // backoff starts at 1 s
+	timeout := time.After(maxBackoff + 10*time.Second) // see TestForwarderSpoolsWhileDownAndDrains
 	for len(got) < 2 {
 		select {
 		case m := <-msgs:
@@ -626,5 +630,95 @@ func TestSpoolDirSymlinkRefused(t *testing.T) {
 	_ = os.Symlink(real, link)
 	if _, err := OpenSpool(link, 1<<20, false); err == nil {
 		t.Fatal("a symbolic link as the spool directory was accepted")
+	}
+}
+
+// A record still queued when the forwarder closes is delivered in a last
+// bounded attempt while the endpoint is up, not left in the spool (found by
+// the live-macos validation: an alert raised just before shutdown waited in
+// the spool for the next start).
+func TestForwarderFinalFlushOnClose(t *testing.T) {
+	sp, _ := OpenSpool(filepath.Join(t.TempDir(), "sp"), 1<<20, false)
+	tr := &flaky{}
+	f := NewForwarder(ForwarderConfig{Transport: tr, Spool: sp, FlushEvery: time.Hour})
+	_ = f.Send(testAlert("last words"))
+	time.Sleep(20 * time.Millisecond) // the record is in the loop's batch or queue
+	if err := f.Close(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	tr.mu.Lock()
+	n := len(tr.got)
+	tr.mu.Unlock()
+	if n != 1 || f.Stats()["spooled"] != 0 {
+		t.Fatalf("delivered %d, stats %v", n, f.Stats())
+	}
+	// While the endpoint is down the record is spooled at Close instead.
+	sp2, _ := OpenSpool(filepath.Join(t.TempDir(), "sp2"), 1<<20, false)
+	down := &flaky{down: true}
+	f2 := NewForwarder(ForwarderConfig{Transport: down, Spool: sp2, FlushEvery: 20 * time.Millisecond})
+	_ = f2.Send(testAlert("one"))
+	deadline := time.Now().Add(15 * time.Second)
+	for f2.Stats()["failed_batches"] == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	_ = f2.Send(testAlert("two"))
+	start := time.Now()
+	_ = f2.Close(5 * time.Second)
+	if f2.Stats()["spooled"] != 2 || time.Since(start) > 2*time.Second {
+		t.Fatalf("down at close: stats %v after %v", f2.Stats(), time.Since(start))
+	}
+}
+
+// An endpoint that accepts the request and never answers cannot hold up
+// Close: the final flush is bounded (finalFlushTimeout) and the record is
+// spooled for the next start (security review note on v0.3 C).
+func TestFinalFlushBoundedByHangingEndpoint(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+	defer close(release)
+	conf := &tls.Config{RootCAs: x509.NewCertPool(), MinVersion: tls.VersionTLS12}
+	conf.RootCAs.AddCert(srv.Certificate())
+	w, err := NewWebhook(WebhookConfig{URL: srv.URL + "/hook", Token: "t", TLS: conf, Host: "h"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp, _ := OpenSpool(filepath.Join(t.TempDir(), "sp"), 1<<20, false)
+	f := NewForwarder(ForwarderConfig{Transport: w, Spool: sp, FlushEvery: time.Hour})
+	_ = f.Send(testAlert("hanging"))
+	time.Sleep(20 * time.Millisecond)
+	start := time.Now()
+	_ = f.Close(5 * time.Second)
+	if el := time.Since(start); el > finalFlushTimeout+time.Second {
+		t.Fatalf("Close took %v with a hanging endpoint", el)
+	}
+	if st := f.Stats(); st["spooled"] != 1 || st["sent"] != 0 {
+		t.Fatalf("stats %v", st)
+	}
+}
+
+// A Close timeout shorter than finalFlushTimeout shortens the final flush
+// too, so Close never returns while a Send still runs on the transport.
+func TestFinalFlushFollowsCloseTimeout(t *testing.T) {
+	tr := &blocking{release: make(chan struct{})}
+	defer close(tr.release)
+	sp, _ := OpenSpool(filepath.Join(t.TempDir(), "sp"), 1<<20, false)
+	f := NewForwarder(ForwarderConfig{Transport: tr, Spool: sp, FlushEvery: time.Hour})
+	_ = f.Send(testAlert("short close"))
+	time.Sleep(20 * time.Millisecond)
+	start := time.Now()
+	if err := f.Close(1500 * time.Millisecond); err != nil {
+		t.Fatalf("Close: %v (the loop must finish within the timeout)", err)
+	}
+	if el := time.Since(start); el > 1500*time.Millisecond {
+		t.Fatalf("Close took %v", el)
+	}
+	if f.Stats()["spooled"] != 1 {
+		t.Fatalf("stats %v", f.Stats())
 	}
 }
