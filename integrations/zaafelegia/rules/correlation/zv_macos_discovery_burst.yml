@@ -10,6 +10,9 @@ description: |
 author: ZAAFVesper project
 references:
   - https://attack.mitre.org/techniques/T1082/
+tags:
+  - attack.discovery
+  - attack.t1082
 correlation:
   type: value_count
   rules:

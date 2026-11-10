@@ -33,7 +33,10 @@ const (
 	maxDegradedPerMinute   = 120
 )
 
-var neverSuppressed = map[string]bool{"es_events_dropped": true}
+// elegia_dir_full: capture of the --elegia-dir segments has stopped (the
+// directory is full of segments younger than the retention floor); the
+// writer limits its own reports.
+var neverSuppressed = map[string]bool{"es_events_dropped": true, condElegiaDirFull: true}
 
 // condSuppressed is the summary SensorDegraded raised at most once a minute
 // while reports are being suppressed; its detail lists the counts.

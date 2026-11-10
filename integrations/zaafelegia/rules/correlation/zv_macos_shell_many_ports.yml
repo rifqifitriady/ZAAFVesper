@@ -11,6 +11,11 @@ author: ZAAFVesper project
 references:
   - https://attack.mitre.org/techniques/T1059/004/
   - https://attack.mitre.org/techniques/T1571/
+tags:
+  - attack.execution
+  - attack.t1059.004
+  - attack.command-and-control
+  - attack.t1571
 correlation:
   type: value_count
   rules:

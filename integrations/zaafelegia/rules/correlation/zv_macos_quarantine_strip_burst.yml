@@ -9,6 +9,9 @@ description: |
 author: ZAAFVesper project
 references:
   - https://attack.mitre.org/techniques/T1553/001/
+tags:
+  - attack.defense-evasion
+  - attack.t1553.001
 correlation:
   type: event_count
   rules:

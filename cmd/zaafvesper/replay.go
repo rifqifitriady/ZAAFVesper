@@ -39,6 +39,12 @@ func cmdReplay(args []string, stdout, stderr io.Writer) int {
 		say(stderr, "zaafvesper replay: %v", err)
 		return 2
 	}
+	// Before anything is created: the ZAAFElegia outputs must not share a
+	// path with the alert file or with the capture being read.
+	if err := ex.checkCollisions(flagPath{"--json", *jsonPath}, flagPath{"the capture file", fs.Arg(0)}); err != nil {
+		say(stderr, "zaafvesper replay: %v", err)
+		return 2
+	}
 	replayElegia = ex
 	defer func() { replayElegia = elegiaOptions{} }()
 	switch *platform {

@@ -97,8 +97,6 @@ func (n *netOutOptions) check() error {
 		return errors.New("--spool-max-bytes and --ocsf-max-bytes must be positive")
 	case n.alertsOCSF == "-":
 		return errors.New("--alerts-ocsf takes a file path")
-	case n.alertsOCSF != "" && n.elegia.out != "" && filepath.Clean(n.alertsOCSF) == filepath.Clean(n.elegia.out):
-		return errors.New("--alerts-ocsf and --elegia-out must be different files")
 	}
 	if n.webhookURL != "" {
 		if _, err := output.ValidateURL(n.webhookURL); err != nil {
@@ -110,10 +108,13 @@ func (n *netOutOptions) check() error {
 			return fmt.Errorf("--syslog-facility: %w", err)
 		}
 	}
-	if n.elegia.dir != "" && (n.syslogAddr != "" || n.webhookURL != "") && filepath.Clean(n.elegia.dir) == filepath.Clean(n.spoolDir) {
-		return errors.New("--elegia-dir and --spool-dir must be different directories")
+	if err := n.elegia.check(); err != nil {
+		return err
 	}
-	return n.elegia.check()
+	// The ZAAFElegia outputs must not share a path with the alert file or
+	// the spool, in either direction, whatever outputs are switched on
+	// (the default --spool-dir counts: it is created on demand).
+	return n.elegia.checkCollisions(flagPath{"--alerts-ocsf", n.alertsOCSF}, flagPath{"--spool-dir", n.spoolDir})
 }
 
 // consoleWriter is where console alerts go: stderr when --elegia-out - owns

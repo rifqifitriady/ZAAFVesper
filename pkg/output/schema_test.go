@@ -1,6 +1,8 @@
 package output
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
+	"github.com/rifqifitriady/ZAAFVesper/pkg/sigmamap"
 )
 
 const schemaFile = "../../integrations/zaafelegia/schema/zaafvesper-elegia-v1.schema.json"
@@ -35,14 +38,15 @@ func TestElegiaRecordsMatchSchema(t *testing.T) {
 				Proc: &event.Proc{PID: 10, PPID: 1, PIDVersion: 3, UniqueID: 99, Exe: "/bin/x", Name: "x", Cmdline: "x -a",
 					Args: []string{"x", "-a"}, Cwd: "/", Username: "u", SigningID: "s", TeamID: "T", CSCategory: "platform",
 					IsPlatform: true, IsSigned: true, Seeded: true, GUID: "{g}", Hashes: "SHA256=00", Integrity: "High",
-					Parent: &event.Proc{PID: 1, UniqueID: 1, Exe: "/sbin/launchd", Cmdline: "launchd", SigningID: "l", TeamID: "P", IsPlatform: true}},
-				Target:   &event.Proc{PID: 11, Exe: "/bin/t"},
+					Company: "c", Product: "p", Description: "d", OriginalName: "o",
+					Parent: &event.Proc{PID: 1, UniqueID: 1, Exe: "/sbin/launchd", Cmdline: "launchd", SigningID: "l", TeamID: "P", IsPlatform: true, Username: "root", GUID: "{pg}"}},
+				Target:   &event.Proc{PID: 11, Exe: "/bin/t", Username: "tu", GUID: "{tg}"},
 				File:     &event.File{Path: "/tmp/f", Dest: "/tmp/g"},
-				Net:      &event.Net{Proto: "tcp", Direction: "outbound", SrcIP: "10.0.0.1", SrcPort: 1, DstIP: "10.0.0.2", DstPort: 2},
-				DNS:      &event.DNS{Query: "example.org", Answers: []string{"192.0.2.1"}},
-				Registry: &event.Registry{Key: `HKLM\x`, Value: "v", Data: "d"},
-				Module:   &event.Module{Path: "/lib/m", Signed: &signed},
-				Args:     map[string]string{"identity": "unverified", "pipe_name": `\p`, "granted_access": "0x10"},
+				Net:      &event.Net{Proto: "tcp", Direction: "outbound", SrcIP: "10.0.0.1", SrcPort: 1, DstIP: "10.0.0.2", DstPort: 2, DstHost: "h.example"},
+				DNS:      &event.DNS{Query: "example.org", Answers: []string{"192.0.2.1"}, Status: "NOERROR"},
+				Registry: &event.Registry{Key: `HKLM\x`, Value: "v", Data: "d", NewKey: `HKLM\y`},
+				Module:   &event.Module{Path: "/lib/m", Signed: &signed, Hashes: "SHA256=11", Signature: "s", SignatureStatus: "Valid"},
+				Args:     schemaTestArgs(),
 				Yara:     &event.Yara{Rule: "r", Target: "/tmp/f"}}
 			for _, host := range []string{"", "mac-01"} {
 				rec := encodeToMap(t, e, SigmaOptions{DefaultProduct: "macos", Host: host}, 0)
@@ -230,4 +234,107 @@ func declared(root map[string]any, prefix string, s map[string]any) []string {
 		out = append(out, declared(root, prefix+k+".", ps.(map[string]any))...)
 	}
 	return out
+}
+
+// schemaTestArgs fills every evt.arg[...] key the Sigma mapping reads, so the
+// schema test sees every exported field.
+func schemaTestArgs() map[string]string {
+	args := map[string]string{"identity": "unverified"}
+	for _, cat := range sigmamap.CategoryNames() {
+		for zv := range sigmamap.ExportFields(cat) {
+			if strings.HasPrefix(zv, "evt.arg[") {
+				args[strings.TrimSuffix(strings.TrimPrefix(zv, "evt.arg["), "]")] = "v"
+			}
+		}
+	}
+	return args
+}
+
+// TestElegiaSchemaFieldTypes derives the JSON type of every exported Sigma
+// field from pkg/event (the field kind) and pkg/sigmamap, and requires the
+// schema to declare exactly that type for it: a process id or port is an
+// integer, a list is an array of strings, a boolean is the string
+// "true"/"false", everything else a string. A field the encoder can emit but
+// the schema does not list fails here (the schema forbids unlisted fields).
+func TestElegiaSchemaFieldTypes(t *testing.T) {
+	raw, err := os.ReadFile(schemaFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	if _, loose := schema["patternProperties"]; loose {
+		t.Fatal("patternProperties would accept any type for a Sigma field; list the fields in properties")
+	}
+	props := schema["properties"].(map[string]any)
+	want := map[string]string{} // Sigma field -> kind
+	for _, cat := range sigmamap.CategoryNames() {
+		for zv, sf := range sigmamap.ExportFields(cat) {
+			kind := "string"
+			if !strings.Contains(zv, "[") {
+				k, ok := event.LookupField(zv)
+				if !ok {
+					t.Fatalf("%s/%s: unknown field %s", cat, sf, zv)
+				}
+				switch k {
+				case event.KindInt:
+					kind = "integer"
+				case event.KindBool:
+					kind = "bool"
+				case event.KindStrings:
+					kind = "array"
+				}
+			}
+			if prev, ok := want[sf]; ok && prev != kind {
+				t.Fatalf("%s has kinds %s and %s in different categories", sf, prev, kind)
+			}
+			want[sf] = kind
+		}
+	}
+	for sf, kind := range want {
+		node, ok := props[sf].(map[string]any)
+		if !ok {
+			t.Errorf("the encoder can emit %s (%s) but the schema does not list it", sf, kind)
+			continue
+		}
+		if ref, ok := node["$ref"].(string); ok {
+			node = schema["$defs"].(map[string]any)[strings.TrimPrefix(ref, "#/$defs/")].(map[string]any)
+		}
+		switch kind {
+		case "bool":
+			if fmt.Sprint(node["enum"]) != "[true false]" {
+				t.Errorf("%s: want enum [true false], got %v", sf, node)
+			}
+		case "array":
+			it, _ := node["items"].(map[string]any)
+			if node["type"] != "array" || it["type"] != "string" {
+				t.Errorf("%s: want array of strings, got %v", sf, node)
+			}
+		default:
+			if node["type"] != kind {
+				t.Errorf("%s: want type %s, got %v", sf, kind, node)
+			}
+		}
+	}
+}
+
+// TestElegiaSchemaGolden pins the published schema file. A change to it is a
+// change to the format ZAAFElegia and every stored segment depend on.
+func TestElegiaSchemaGolden(t *testing.T) {
+	raw, err := os.ReadFile(schemaFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(raw)
+	got := hex.EncodeToString(sum[:])
+	// Changing this requires v2 or an additive-field review: a renamed,
+	// removed or retyped field is zaafvesper.elegia/2 (and the v1 file
+	// stays); a new field is additive and needs the review recorded in the
+	// pull request before this hash is updated.
+	const golden = "b4849537721b1cb112d03d1d2def29cdba1a4eff08b21018b0a769b42fdc817d"
+	if got != golden {
+		t.Fatalf("the schema file changed (sha256 %s, golden %s): changing it requires v2 or an additive-field review", got, golden)
+	}
 }

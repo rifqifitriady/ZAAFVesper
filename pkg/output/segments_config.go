@@ -10,6 +10,10 @@ const (
 	DefaultSegmentBytes = 64 << 20
 	DefaultSegmentAge   = 15 * time.Minute
 	DefaultSegmentKeep  = 1 << 30
+	// DefaultSegmentMinKeep is the retention floor: a closed segment younger
+	// than this is never deleted, whatever the size pressure (the 7-day floor
+	// of the alert files, docs/security/open-findings.md M5).
+	DefaultSegmentMinKeep = 7 * 24 * time.Hour
 	// segmentStamp is fixed width, so names sort in time order.
 	segmentStamp = "20060102T150405.000000000Z"
 	segmentExt   = ".ndjson"
@@ -30,6 +34,24 @@ type SegmentConfig struct {
 	// KeepBytes bounds the closed segments kept; the oldest are deleted
 	// first (default DefaultSegmentKeep).
 	KeepBytes int64
+	// MinKeep is the retention floor (default DefaultSegmentMinKeep; a
+	// negative value switches the floor off, which lets a flood erase the
+	// oldest evidence). A closed segment younger than this is not deleted;
+	// when that leaves the closed segments above KeepBytes, the writer stops
+	// opening segments, drops new records (counted) and reports
+	// CondDirFull until space is free.
+	MinKeep time.Duration
+	// OnDegraded receives the writer's problems: CondDirFull, CondDirError.
+	// It is called with the writer's lock held and must not call back into
+	// it.
+	OnDegraded func(condition, detail string)
 	// Now is the clock (tests).
 	Now func() time.Time
 }
+
+// Conditions the segment writer reports through SegmentConfig.OnDegraded
+// (SensorDegraded evt.arg[condition]).
+const (
+	CondDirFull  = "elegia_dir_full"
+	CondDirError = "elegia_dir_error"
+)

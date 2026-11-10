@@ -4,7 +4,7 @@
 
 | Flag | What it writes |
 |---|---|
-| `--elegia-dir DIR` | The same records in rotating segment files for scheduled hunts: `events-<UTC>.ndjson`, closed at `--elegia-segment-bytes` (64 MiB) or `--elegia-segment-age` (15 min), oldest deleted beyond `--elegia-keep-bytes` (1 GiB). The open segment is `events-<UTC>.ndjson.part`, so `zaaf hunt DIR/*.ndjson` never reads a half-written file. |
+| `--elegia-dir DIR` | The same records in rotating segment files for scheduled hunts: `events-<UTC>.ndjson`, closed at `--elegia-segment-bytes` (64 MiB) or `--elegia-segment-age` (15 min), oldest deleted beyond `--elegia-keep-bytes` (1 GiB), but never one younger than `--elegia-min-keep` (7 days): a full directory of young segments stops capture (`SensorDegraded elegia_dir_full`) instead of erasing evidence, so size the cap for your event rate (see docs/operations.md). The open segment is `events-<UTC>.ndjson.part`, so `zaaf hunt DIR/*.ndjson` never reads a half-written file. |
 | `--elegia-out PATH` or `--elegia-out -` | Every event (after exclusions), one JSON object per line, with **Sigma field names** (`Image`, `CommandLine`, `ParentImage`, `DestinationIp`, `DestinationPort`, `Initiated`, …) plus `logsource.product`, `logsource.category`, a Sysmon-compatible `EventID` and `UtcTime`. |
 | `--alerts-ocsf PATH` | ZAAFVesper's own alerts as OCSF 1.5.0 Detection Findings (class 2004), in the same shape as `zaaf hunt -o ndjson`. |
 
@@ -57,6 +57,8 @@ All of these must be `root:wheel` and not group- or world-writable, never in a u
 sudo /usr/local/bin/zaaf hunt -p /usr/local/share/zaafelegia/zaafvesper.yml -r /usr/local/share/zaafelegia/rules \
   -o ndjson /var/db/zaafvesper/elegia/*.ndjson >> /var/db/zaafvesper/hunts/findings.ndjson
 ```
+
+The schema lists every Sigma field the encoder can emit with its one type (process ids and ports are integers, `QueryResults` a list of strings, booleans the strings `true`/`false`, everything else a string) and forbids unlisted fields; `TestElegiaSchemaFieldTypes` derives the types from `pkg/event` and `pkg/sigmamap`, and `TestElegiaSchemaGolden` fails on any change to the file (changing it requires v2 or an additive-field review). All ten rules carry `attack.*` tactic and technique tags; the e2e check fails otherwise.
 
 Records are bounded before they reach `zaaf`: every string is capped at 2 KiB, every list at 64 items, and every record at 64 KiB. `zaaf` is memory-safe Rust and bounds its own input lines (8 MiB).
 

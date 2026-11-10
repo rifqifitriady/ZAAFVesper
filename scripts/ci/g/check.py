@@ -16,6 +16,14 @@ for f in glob.glob(os.path.join(idir, "rules", "*", "*.yml")):
     if rid and name:
         names[rid.group(1)] = name.group(1)
 check_txt = open(os.path.join(out, "check.txt")).read()
+untagged = []  # rules without an ATT&CK tactic and technique tag
+for f in sorted(glob.glob(os.path.join(idir, "rules", "*", "*.yml"))):
+    txt = open(f).read()
+    tags = re.findall(r"^\s+-\s+(attack\.\S+)\s*$", txt.split("\ntags:\n", 1)[1].split("\n\n", 1)[0] if "\ntags:\n" in txt else "", re.M)
+    tactic = any(not re.fullmatch(r"attack\.t\d{4}(\.\d{3})?", x) for x in tags)
+    technique = any(re.fullmatch(r"attack\.t\d{4}(\.\d{3})?", x) for x in tags)
+    if not (tactic and technique):
+        untagged.append(os.path.basename(f))
 correlations_live = "correlation support arrives in milestone M2" not in check_txt
 fails, rows = [], []
 
@@ -26,6 +34,7 @@ def verdict(ok, what, detail):
         fails.append(what)
 
 
+verdict(not untagged, "every rule carries attack.* tactic and technique tags", ", ".join(untagged) or "all tagged")
 m = re.search(r"checked (\d+) files: (\d+) rules, \d+ filters, (\d+) correlations skipped, (\d+) errors", check_txt)
 verdict(m is not None and m.group(4) == "0", "zaaf check: no rule errors", m.group(0) if m else "no summary line")
 if not correlations_live:

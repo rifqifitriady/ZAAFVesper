@@ -11,6 +11,13 @@ author: ZAAFVesper project
 references:
   - https://attack.mitre.org/techniques/T1105/
   - https://attack.mitre.org/techniques/T1204/002/
+tags:
+  - attack.command-and-control
+  - attack.t1105
+  - attack.defense-evasion
+  - attack.t1222.002
+  - attack.execution
+  - attack.t1204.002
 correlation:
   type: temporal_ordered
   rules:
