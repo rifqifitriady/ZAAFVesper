@@ -4,8 +4,6 @@ package main
 
 import (
 	"bufio"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -97,37 +95,9 @@ func (h *vHarness) runPlatform() {
 	h.isolateCases()
 }
 
-func randID() string {
-	b := make([]byte, 4)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
-func run(bin string, args ...string) (string, error) {
-	out, err := exec.Command(bin, args...).CombinedOutput()
-	return string(out), err
-}
-
-// stdout runs bin and returns its standard output only (pfctl writes
-// notices such as "No ALTQ support in kernel" to stderr).
-func stdout(bin string, args ...string) string {
-	out, _ := exec.Command(bin, args...).Output()
-	return string(out)
-}
-
 // pfEnabled reports whether pf is enabled (pfctl -s info).
 func pfEnabled() bool {
 	return strings.Contains(stdout(response.PfctlBin, "-s", "info"), "Status: Enabled")
-}
-
-// writer starts a test process to play the untrusted writer or remover of
-// a file event and returns its event identity.
-func (h *vHarness) writer() (*event.Proc, error) {
-	s, err := h.spawn()
-	if err != nil {
-		return nil, err
-	}
-	return procOf(s.pid)
 }
 
 // mustEvent is fileEvent for cases whose setup just created path; a failure
@@ -300,32 +270,6 @@ func (h *vHarness) quarantineCases() {
 		err := h.r.QuarantineFile(e, response.TargetFile, "validate-quarantine", "validation: symlink")
 		h.record("quarantine_file", "symbolic link", expectDeny, errors.Is(err, response.ErrFileCheck) && exists(target) && exists(link), "")
 	}
-}
-
-// restoreCase finds path in `zaafvesper quarantine list`, restores it with
-// `zaafvesper quarantine restore` and runs check on the result.
-func (h *vHarness) restoreCase(action, path string, check func() string) {
-	out, err := h.runSelf("quarantine", "list")
-	id := ""
-	for _, line := range strings.Split(out, "\n") {
-		if strings.Contains(line, path) {
-			id = strings.Fields(line)[0]
-			break
-		}
-	}
-	if err != nil || id == "" {
-		h.reset()
-		h.record(action, "quarantine list shows it", expectAct, false, fmt.Sprintf("list: %v %q", err, out))
-		return
-	}
-	h.reset()
-	h.record(action, "zaafvesper quarantine list shows it", expectAct, true, "id "+id)
-	out, err = h.runSelf("quarantine", "restore", id)
-	why := "restore failed"
-	if err == nil {
-		why = check()
-	}
-	h.record(action, "zaafvesper quarantine restore puts it back", expectAct, err == nil && why == "", strings.TrimSpace(why+" "+out))
 }
 
 func (h *vHarness) requarantineCases() {
@@ -650,14 +594,6 @@ func pfTable() map[string]bool {
 		}
 	}
 	return m
-}
-
-func keys(m map[string]bool) []string {
-	var out []string
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
 }
 
 func defaultGateway() string {

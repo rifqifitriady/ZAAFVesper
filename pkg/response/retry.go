@@ -1,6 +1,7 @@
 package response
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"sync/atomic"
@@ -152,10 +153,25 @@ func (r *Responder) Retries() int {
 	return len(r.retries)
 }
 
+// fileRetryKey names one refused action in the retry list: the action,
+// the rule and the item. A file event is keyed on its path and binding. A
+// registry event (a Windows Run value or service ImagePath; it has no
+// file) is keyed on the registry key, a hash of the data written and the
+// writer's identity: keyed on the empty path, every budget-refused removal
+// of one rule shared one entry, and ten decoy values kept the real
+// eleventh one (the N2 decoy problem again).
 func fileRetryKey(action, rule string, e *event.Event, target string) string {
 	if e == nil {
 		return action + "|" + rule
 	}
-	path, dev, ino, _ := fileTarget(e, target)
-	return fmt.Sprintf("%s|%s|%s|%d|%d", action, rule, path, dev, ino)
+	if e.File == nil && e.Registry != nil && target == TargetFile {
+		h := sha256.Sum256([]byte(e.Registry.Data))
+		proc := "-"
+		if e.Proc != nil {
+			proc = procKey(e.Proc)
+		}
+		return fmt.Sprintf("%s|%s|reg:%s|%x|%s", action, rule, e.Registry.Key, h[:12], proc)
+	}
+	path, b, _ := fileTarget(e, target)
+	return fmt.Sprintf("%s|%s|%s|%s", action, rule, path, b)
 }
