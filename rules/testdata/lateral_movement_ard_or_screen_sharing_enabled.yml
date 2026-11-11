@@ -8,6 +8,9 @@ match:
   - desc: "launchctl kickstart starts the Screen Sharing daemon"
     events:
       - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5905, "ppid": 4000, "exe": "/bin/launchctl", "name": "launchctl", "args": ["launchctl", "kickstart", "-k", "system/com.apple.screensharing"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.launchctl", "parent": {"pid": 4000, "exe": "/bin/sh", "name": "sh", "is_platform": true, "is_signed": true}}}
+  - desc: "decoy -stop added to -activate does not hide the run"
+    events:
+      - {"name": "CreateProcess", "platform": "macos", "proc": {"pid": 5921, "ppid": 4000, "exe": "/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart", "name": "kickstart", "args": ["kickstart", "-activate", "-configure", "-allowAccessFor", "-allUsers", "-privs", "-all", "-quiet", "-stop"], "uid": 0, "euid": 0, "is_platform": true, "is_signed": true, "signing_id": "com.apple.kickstart", "parent": {"pid": 4000, "exe": "/usr/bin/sudo", "name": "sudo", "is_platform": true, "is_signed": true}}}
 nomatch:
   - desc: "benign lookalike - kickstart deactivates and stops ARD"
     events:

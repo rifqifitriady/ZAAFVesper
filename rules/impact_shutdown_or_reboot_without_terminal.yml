@@ -1,12 +1,14 @@
 name: Shutdown or reboot run without a terminal
 id: 8b6d3f20-1e7c-4a59-9c84-5d2f7e0a1b36
-version: 1.0.0
+version: 1.0.1
 platforms: [macos, linux]
 description: |
   shutdown, reboot, halt or poweroff ran without a controlling terminal. Malware and
   wipers reboot or power off a host to finish an attack or to cause disruption. The
   macOS Apple menu does not run these commands, and an administrator who types them has
-  a tty, unless the tty comes from script, expect or unbuffer. On systemd Linux these
+  a tty, unless the tty comes from script, expect or unbuffer. Known evasion: an
+  attacker shell on a pty (python pty.spawn, ssh -t) also has a tty, so this rule does
+  not see a reboot typed there; it is a signal for headless automation, not a guarantee. On systemd Linux these
   commands are links to systemctl, which the rule also matches (systemctl poweroff, or a
   link name as argv[0]). The Linux Sysmon source reports no tty, so every run matches
   there, including an administrator's systemctl reboot.

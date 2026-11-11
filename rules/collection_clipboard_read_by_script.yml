@@ -1,6 +1,6 @@
 name: Clipboard read by a script without a terminal
 id: 2e7a9d40-6b1c-4c3f-8e52-7f9a0b4d1c68
-version: 1.0.0
+version: 1.0.1
 platforms: [macos]
 description: |
   pbpaste ran without a controlling terminal from a shell or script interpreter, or
@@ -8,7 +8,9 @@ description: |
   hijackers read the clipboard in the background (passwords, wallet addresses, MFA
   codes). People run pbpaste in Terminal all the time: those runs have a tty and do not
   match. A pty made for the purpose (script -q /dev/null pbpaste, expect, unbuffer) is
-  treated as a script, since a tty alone does not prove a person. Known false positive:
+  treated as a script, since a tty alone does not prove a person. Known evasion: a
+  shell on a pty made another way (python pty.spawn, ssh -t) has a tty and is not
+  seen. Known false positive:
   automation apps (Shortcuts, Keyboard Maestro, Alfred workflows) that run a shell script
   calling pbpaste; exclude them by their script path if you use them. Not covered: reading the clipboard through NSPasteboard or osascript
   "the clipboard" (see the converted SigmaHQ osascript clipboard rule, where shipped).

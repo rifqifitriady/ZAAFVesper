@@ -1,12 +1,14 @@
 name: Apple Remote Desktop or Screen Sharing enabled from the command line
 id: 5e0d9c38-2a7f-4b14-a6e3-8c1f4d9b2e70
-version: 1.0.0
+version: 1.0.1
 platforms: [macos]
 description: |
   The Apple Remote Desktop agent was activated with kickstart (-activate or -configure),
   or launchctl loaded, enabled, bootstrapped or kickstarted the Screen Sharing daemon. Attackers turn these on to
   control the Mac over VNC from another host. Turning them on in System Settings uses
-  neither command and does not match.
+  neither command and does not match. A decoy `-stop` or `-deactivate` added to
+  `-activate` does not hide the run; `-configure` alone with `-deactivate` or `-stop`
+  (turning access off) is still excluded.
 labels:
   tactic.id: TA0008
   tactic.name: Lateral Movement
@@ -18,7 +20,8 @@ condition: >
   spawn_process
   and (
     (ps.name = 'kickstart' and ps.exe icontains '/RemoteManagement/ARDAgent.app/'
-     and ps.args in ('-activate', '-configure') and not ps.args in ('-deactivate', '-stop'))
+     and (ps.args in ('-activate')
+          or (ps.args in ('-configure') and not ps.args in ('-deactivate', '-stop'))))
     or (ps.name = 'launchctl' and ps.args in ('load', 'enable', 'bootstrap', 'kickstart')
         and ps.cmdline icontains 'com.apple.screensharing')
   )
