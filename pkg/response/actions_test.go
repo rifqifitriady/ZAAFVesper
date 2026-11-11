@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -936,11 +937,13 @@ func TestStartResponseFlushes(t *testing.T) {
 
 func TestSuspend(t *testing.T) {
 	g := newRig(t, false, nil)
-	e := &event.Event{Source: ESSource, Proc: g.proc(8000, "/private/tmp/stealer")}
+	pid := testPID(8000)
+	e := &event.Event{Source: ESSource, Proc: g.proc(pid, "/private/tmp/stealer")}
 	if err := g.r.SuspendEvent(e, "rule-s", "s"); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(g.signals, []string{"8000 SIGSTOP"}) || g.last().Outcome != OutcomeSuspended || g.last().Action != ActionSuspend {
+	stop, cont := fmt.Sprintf("%d SIGSTOP", pid), fmt.Sprintf("%d SIGCONT", pid)
+	if !reflect.DeepEqual(g.signals, []string{stop}) || g.last().Outcome != OutcomeSuspended || g.last().Action != ActionSuspend {
 		t.Fatalf("signals %v decision %+v", g.signals, g.last())
 	}
 	// Not yet time: still stopped.
@@ -951,7 +954,7 @@ func TestSuspend(t *testing.T) {
 	}
 	g.now = g.now.Add(time.Second)
 	g.r.Tick(g.now)
-	if !reflect.DeepEqual(g.signals, []string{"8000 SIGSTOP", "8000 SIGCONT"}) || g.last().Outcome != OutcomeResumed || len(g.r.Suspended()) != 0 {
+	if !reflect.DeepEqual(g.signals, []string{stop, cont}) || g.last().Outcome != OutcomeResumed || len(g.r.Suspended()) != 0 {
 		t.Fatalf("resume: %v %+v", g.signals, g.last())
 	}
 	// Suspend then kill: no resume.

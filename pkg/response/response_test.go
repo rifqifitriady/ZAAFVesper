@@ -600,7 +600,7 @@ func TestRateLimit(t *testing.T) {
 	h := newHarness(false, nil)
 	var notes []string
 	h.r.cfg.OnDegraded = func(cond, detail string) { notes = append(notes, cond+": "+detail) }
-	ev := func(pid int32) *event.Event { return &event.Event{Proc: h.proc(pid, "/tmp/payload")} }
+	ev := func(pid int32) *event.Event { return &event.Event{Proc: h.proc(testPID(pid), "/tmp/payload")} }
 	// Per rule: 10 kills per minute.
 	for i := 0; i < DefaultMaxPerRulePerMinute; i++ {
 		if err := h.r.KillEvent(ev(int32(5000+i)), "rule-a", "rule A"); err != nil {
