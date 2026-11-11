@@ -299,7 +299,7 @@ benchmark" downloads the bundle shipped with Atomic Red Team at commit `a0e3f9bc
 its SHA-256, runs the report and writes it to the job summary. Result on this branch
 (commands in "How the fixtures were checked"): 0 problems, 2 warnings (converted SigmaHQ
 tags). The report also lists, per platform, the rules that apply there and link no atomic
-test (a rule for several platforms counts in each): macOS 36, Windows 20, Linux 21.
+test (a rule for several platforms counts in each): macOS 36, Windows 21, Linux 21.
 
 **Benchmark.** Two engine-only benchmarks (no eslogger or Sysmon decoding, no process
 table, no YARA, no output sinks; one goroutine; events already in memory). Neither is a
@@ -773,7 +773,7 @@ Every number in this file about the v0.4 rule set comes from these commands on t
 
 - `zaafvesper rules validate rules`: 136 rules (136 enabled, 4 sequences), 76 macros,
   3 warnings (the three Linux reverse-shell rules without a technique).
-- `zaafvesper rules test rules`: 704 scenarios passed, 0 failed.
+- `zaafvesper rules test rules`: 705 scenarios passed, 0 failed.
 - `zaafvesper coverage --report --rules rules --attack enterprise-attack.json` (the pinned
   bundle of the CI job, SHA-256 `fc783039...`): 136 enabled rules, 107 techniques (macOS 61,
   Windows 41, Linux 27), 65 rules with an atomic test and 71 without, 0 problems, 2 warnings.

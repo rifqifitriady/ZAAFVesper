@@ -12,7 +12,7 @@ Four workstreams (#9 to #12), each with an independent security review and an en
 - **Linux eBPF source ([#11](https://github.com/rifqifitriady/ZAAFVesper/pull/11)).**
   - `--source ebpf` (default on Linux) reads exec, file, network, DNS, ptrace and module events from the kernel without Sysmon. Ubuntu 24.04 fired 16 of 16 rules, Ubuntu 26.04 fired 13 of 16, the same as Sysmon.
   - Known limits: a single ring buffer (F11, v0.5), validated on arm64 6.8 and GitHub's 7.0 kernels only. `bpf/vmlinux_min.h` is hand-written, an owner-accepted deviation.
-- **Detection expansion ([#10](https://github.com/rifqifitriady/ZAAFVesper/pull/10)).** From 63 to 107 ATT&CK techniques: 136 rules, 704 test scenarios. New `coverage --report --attack` and `sigma convert --atomics`. Seven SigmaHQ exclusions that test attacker-controlled text are documented as known weaknesses.
+- **Detection expansion ([#10](https://github.com/rifqifitriady/ZAAFVesper/pull/10)).** From 63 to 107 ATT&CK techniques: 136 rules, 705 test scenarios. New `coverage --report --attack` and `sigma convert --atomics`. Seven SigmaHQ exclusions that test attacker-controlled text are documented as known weaknesses.
 - **ZAAFElegia integration ([#9](https://github.com/rifqifitriady/ZAAFVesper/pull/9)).**
   - A versioned record format (`zaafvesper.elegia/1`) with a published JSON schema; `--elegia-dir` writes rotating segment files (up to 8 GiB, never deleting a segment younger than 7 days; a full directory stops capture and raises `elegia_dir_full`).
   - Four correlation rules for ZAAFElegia's M2, and an end-to-end CI job that builds ZAAFElegia at a pinned commit. No ZAAFElegia M2 owner has confirmed the format yet.
