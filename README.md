@@ -132,21 +132,27 @@ cat testdata/eslogger/*.jsonl > demo.jsonl
 - **Details:** the full rule list, false-positive notes and trust policy are in [docs/rules.md](docs/rules.md).
 
 <details>
-<summary><b>macOS rules by tactic</b> (46 hand-written + 12 converted from SigmaHQ)</summary>
+<summary><b>macOS rules by tactic</b> (61 hand-written + 17 converted from SigmaHQ)</summary>
+
+A rule with several tactics is counted under the first one. Rules for macOS only; the same rules for other platforms are in [docs/rules.md](docs/rules.md).
 
 | Tactic | Rules | Examples |
 |---|:-:|---|
-| Persistence | 11 | Launch Agents and Daemons, Login Items, cron, emond, kernel extensions, shell start-up files |
+| Persistence | 14 | Launch Agents and Daemons, Login Items, cron, emond, kernel extensions, shell start-up files |
+| Execution | 10 | Script piped into a shell, suspicious AppleScript/JXA, launchctl jobs from temp, unsigned binary dropped and run, XProtect and YARA hits, reverse shell |
 | Defense Impairment | 9 | Gatekeeper or firewall disabled, quarantine stripped, logs cleared, security tool or sensor stopped |
-| Execution | 7 | Script piped into a shell, suspicious AppleScript/JXA, launchctl jobs from temp, unsigned binary dropped and run, XProtect and YARA hits, reverse shell |
-| Credential Access | 6 | Fake password prompts, Keychain dumps, browser credential stores, SSH and GnuPG keys |
-| Stealth | 4 | `DYLD_INSERT_LIBRARIES`, task port and ptrace injection, hidden files, shell history deleted |
+| Impact | 8 | Disk or volume erased with `diskutil`, `dd` overwrites, files encrypted from the command line, cryptocurrency miner, Time Machine backups deleted or disabled |
+| Credential Access | 7 | Fake password prompts, Keychain dumps, browser credential stores, SSH and GnuPG keys |
+| Collection | 5 | Screen, camera and microphone capture from the command line, clipboard read by a script, sensitive folder archived |
+| Stealth | 5 | `DYLD_INSERT_LIBRARIES`, task port and ptrace injection, hidden files, shell history deleted |
+| Discovery | 5 | Security software enumeration, scripted system profiling, network service scanning, SIP status |
+| Initial Access | 4 | Account changes: user added to the admin group, root account enabled, guest account enabled |
 | Command and Control | 3 | Download then stdin shell, unsigned binary from temp connecting out, interpreter to a public IP on an uncommon port |
 | Privilege Escalation | 3 | Setuid bits, sudoers changes, TCC database tampering |
-| Discovery | 2 | Security software enumeration, scripted system profiling |
-| Collection | 1 | Non-interactive screen capture |
+| Exfiltration | 3 | `rclone` to a remote, upload with `curl` or `wget` over plain HTTP or FTP, a file split into pieces |
+| Lateral Movement | 2 | Remote Login (SSH) or Screen Sharing enabled from the command line |
 
-The SigmaHQ macOS set adds account changes, SIP and Time Machine tampering, Office child processes and run-only AppleScript.
+The SigmaHQ macOS set also covers Time Machine tampering, Office child processes and run-only AppleScript.
 
 </details>
 
