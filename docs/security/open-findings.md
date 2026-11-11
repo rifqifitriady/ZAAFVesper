@@ -163,10 +163,7 @@ Notes (not findings of their own):
 - If an exec record is lost (ring buffer full) the process keeps the image of the previous exec until the next one.
 - F4: the kernel 7.0 preemption model is unverified; the busy flag does not depend on it.
 
-Follow-up for the integrator (rules are frozen in this workstream; judge CK-08): `rules/defense_impairment_sensor_degraded.yml`
-(1.2.0) describes `ebpf_events_dropped` as lost ring-buffer records only. The condition now also covers records skipped
-because a per-CPU buffer was busy, programs the kernel skipped for recursion, and DNS datagrams lost before they were
-reported. The description should say so (version 1.2.1, description text only); an edit made on `feat/linux-ebpf` was reverted.
+Done after the merge (10 Nov 2026): `rules/defense_impairment_sensor_degraded.yml` is at version 1.2.1 and its description covers the eBPF, Sysmon and `elegia_dir_full` conditions.
 
 ## v0.4 response on Windows and Linux (WS E, 9 Nov 2026)
 

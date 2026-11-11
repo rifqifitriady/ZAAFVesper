@@ -2,6 +2,23 @@
 
 All releases are pre-release. Since v0.3 the sensor is validated live as root on throw-away GitHub runners, not on your own machine. Open risks are in [docs/security/open-findings.md](docs/security/open-findings.md).
 
+## v0.4 · 10 Nov 2026 · Reach
+
+Four workstreams (#9 to #12), each with an independent security review and an engineering-judge pass, merged in the order E, F, H, G. The live validation of the merged tree on throw-away GitHub runners (macOS, Windows, Linux with eBPF, response, ZAAFElegia) all passed.
+
+- **Containment on Windows and Linux ([#12](https://github.com/rifqifitriady/ZAAFVesper/pull/12)).**
+  - `isolate_process` (Windows Firewall rules; an nftables table on Linux), `quarantine_file` into a locked vault, `remove_persistence` (Run values, services, scheduled tasks; systemd units, cron, shell rc files) and `suspend`, with the same guard rails as macOS.
+  - Limit: under the shipped systemd unit the Linux file actions are refused (private mount namespace); see `packaging/linux/README.md`.
+- **Linux eBPF source ([#11](https://github.com/rifqifitriady/ZAAFVesper/pull/11)).**
+  - `--source ebpf` (default on Linux) reads exec, file, network, DNS, ptrace and module events from the kernel without Sysmon. Ubuntu 24.04 fired 16 of 16 rules, Ubuntu 26.04 fired 13 of 16, the same as Sysmon.
+  - Known limits: a single ring buffer (F11, v0.5), validated on arm64 6.8 and GitHub's 7.0 kernels only. `bpf/vmlinux_min.h` is hand-written, an owner-accepted deviation.
+- **Detection expansion ([#10](https://github.com/rifqifitriady/ZAAFVesper/pull/10)).** From 63 to 107 ATT&CK techniques: 136 rules, 704 test scenarios. New `coverage --report --attack` and `sigma convert --atomics`. Seven SigmaHQ exclusions that test attacker-controlled text are documented as known weaknesses.
+- **ZAAFElegia integration ([#9](https://github.com/rifqifitriady/ZAAFVesper/pull/9)).**
+  - A versioned record format (`zaafvesper.elegia/1`) with a published JSON schema; `--elegia-dir` writes rotating segment files (up to 8 GiB, never deleting a segment younger than 7 days; a full directory stops capture and raises `elegia_dir_full`).
+  - Four correlation rules for ZAAFElegia's M2, and an end-to-end CI job that builds ZAAFElegia at a pinned commit. No ZAAFElegia M2 owner has confirmed the format yet.
+- **Fixed on the way:** tests that read the host's DNS resolver or depended on fixed pids; `rules/defense_impairment_sensor_degraded.yml` 1.2.1 now describes the eBPF, Sysmon and ZAAFElegia conditions.
+- **Not run live:** 21 rules and 25 Atomic tests that cannot run on a runner, the eBPF object on x86, kernels below 6.8, ZAAFElegia under a LaunchDaemon as root.
+
 ## v0.3 · 9 Nov 2026 · Prove it live
 
 Four workstreams (#5, #6, #7, #8) used throw-away GitHub Actions runners as a root test lab. These are GitHub runners, not your own Mac.
