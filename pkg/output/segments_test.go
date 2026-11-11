@@ -157,11 +157,48 @@ func TestSegmentsPruneAndCrashRecovery(t *testing.T) {
 	if len(open) != 0 || len(closed) == 0 {
 		t.Fatalf("after restart: closed %v open %v", closed, open)
 	}
-	// Foreign files are never touched.
-	_ = os.WriteFile(filepath.Join(dir, "notes.ndjson"), []byte("x\n"), 0o600)
-	_ = s2.Rotate()
-	if _, err := os.Stat(filepath.Join(dir, "notes.ndjson")); err != nil {
-		t.Fatal("a foreign file was removed")
+}
+
+// Files whose names do not match the writer's own pattern are never removed or
+// renamed, not by the start-up scan and not by a prune. The foreign files exist
+// before the scan, and a tiny KeepBytes forces real pruning, so the test fails
+// if scan or prune acted on any name.
+func TestSegmentsForeignFilesSurviveScanAndPrune(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "elegia")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	foreign := map[string]string{
+		"notes.ndjson":                  "a\n",
+		"events-notatimestamp.ndjson":   "b\n",
+		"events-20261109T120000.ndjson": "c\n", // wrong width
+		"events-x.ndjson.part.bak":      "d\n",
+		"readme.txt":                    "e\n",
+	}
+	for n, c := range foreign {
+		if err := os.WriteFile(filepath.Join(dir, n), []byte(c), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	clk := &fakeClock{t: time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)}
+	s, err := OpenSegments(dir, SegmentConfig{MaxBytes: 10, KeepBytes: 250, MinKeep: -1, Now: clk.now}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for i := 0; i < 10; i++ {
+		_, _ = s.Write([]byte(fmt.Sprintf(`{"i":%d,"pad":"%s"}`+"\n", i, strings.Repeat("y", 80))))
+		_ = s.Rotate()
+		clk.add(time.Second)
+	}
+	if s.Stats()["pruned"] == 0 {
+		t.Fatalf("nothing was pruned, so the test proves nothing: %v", s.Stats())
+	}
+	for n, c := range foreign {
+		b, err := os.ReadFile(filepath.Join(dir, n))
+		if err != nil || string(b) != c {
+			t.Fatalf("foreign file %s touched: %q %v", n, b, err)
+		}
 	}
 }
 
