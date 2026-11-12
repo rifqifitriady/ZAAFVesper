@@ -13,7 +13,7 @@ import (
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/filter/ql"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // argMapper maps every Sigma field F to evt.arg[F], so the conformance

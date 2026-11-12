@@ -8,7 +8,7 @@ import (
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/filter/ql"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // FieldMapper resolves Sigma field names for one log source.

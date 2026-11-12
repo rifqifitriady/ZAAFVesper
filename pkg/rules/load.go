@@ -12,7 +12,7 @@ import (
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/config"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/filter/ql"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // MaxRuleFileSize bounds a rule or fixture file read from disk.

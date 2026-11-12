@@ -16,7 +16,7 @@ import (
 	"github.com/rifqifitriady/ZAAFVesper/pkg/config"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/rules"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/sigma"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // maxSigmaFiles bounds how many files one conversion reads.

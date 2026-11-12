@@ -11,7 +11,7 @@ import (
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/rules"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/sigmamap"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // CategoryMapper maps fields through one pkg/sigmamap category.

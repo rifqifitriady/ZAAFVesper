@@ -11,7 +11,7 @@ import (
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/filter/ql"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/rules"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 const baseRule = `title: Test rule
