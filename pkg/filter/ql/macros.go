@@ -10,7 +10,7 @@ import (
 
 	"github.com/rifqifitriady/ZAAFVesper/pkg/event"
 	"github.com/rifqifitriady/ZAAFVesper/pkg/nofollow"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // MaxMacroFileSize bounds a macro file read from disk.
